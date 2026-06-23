@@ -1,0 +1,22 @@
+# ===== lychee 链接校验配置 =====
+# 仅校验内部相对链接 + 外部 URL 可达；容忍偶发抖动（重试 + 容忍反爬/需登录站）。
+# 与 .github/markdownlint.json 同级，由 lint.yml 的 links job 引用。
+
+# 重试与超时：把偶发 5xx 从「每次 PR 都可能红」降到「真正持续失效才红」。
+max_retries = 3
+timeout = 20
+
+# 视为可达的状态码：
+#   200/301/302 = 正常；403 = 需登录/反爬（如部分文档站）；999 = LinkedIn 等反爬墙。
+accept = [200, 301, 302, 403, 429, 999]
+
+# 排除：徽章（shields.io 无需校验）、本地地址、Apple 文档锚点（常误报）。
+exclude = [
+  "^https://img\\.shields\\.io",
+  "^https?://localhost",
+  "^https?://127\\.0\\.0\\.1",
+  "^https?://.*\\.apple\\.com.*#",
+]
+
+# 失败也输出友好摘要。
+no_progress = true

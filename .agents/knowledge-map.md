@@ -33,3 +33,4 @@
 | 配置 schema 迁移（容错解码） | `Sources/TimeoutEngine/Models.swift` + `ConfigStore.swift` |
 | Google 日历 EventKit 门控 | `Sources/TimeoutIntegrations/LiveCalendarProvider.swift` |
 | .app 装配 + 图标生成 + 签名 | `Makefile` |
+| CI/CD 工作流（测试 / 文档门禁 / 发布） | `.github/workflows/` |

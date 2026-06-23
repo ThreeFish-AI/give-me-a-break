@@ -1,0 +1,13 @@
+{
+  "$comment": "Timeout 文档 markdownlint 配置：放宽中文文档与 IEEE 引用相关的噪音规则，保留结构性规则（标题层级/列表/行尾空格等）作为实质门禁。",
+  "default": true,
+  "MD013": false,
+  "MD024": { "siblings_only": true },
+  "MD033": false,
+  "MD034": false,
+  "MD036": false,
+  "MD040": false,
+  "MD041": false,
+  "MD042": false,
+  "MD060": false
+}

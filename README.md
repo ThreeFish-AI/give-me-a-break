@@ -3,6 +3,7 @@
 > macOS 菜单栏强制作息应用——在自定义工作时段内执行「工作 / 强制休息」节律，休息时**遮罩全部显示器**并**播放舒缓音效**（内置粉噪音 + 可选 QQ 音乐联动）；接入 **Google 日历**会议，会议计为工作时间但**休息自然后延**。
 
 [![macOS](https://img.shields.io/badge/macOS-14%2B-000000)]() [![Swift](https://img.shields.io/badge/Swift-SPM-F05138)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![CI](https://github.com/ThreeFish-AI/timeout/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ThreeFish-AI/timeout/actions/workflows/ci.yml) [![Lint](https://github.com/ThreeFish-AI/timeout/actions/workflows/lint.yml/badge.svg?branch=master)](https://github.com/ThreeFish-AI/timeout/actions/workflows/lint.yml)
 
 ## 设计哲学
 

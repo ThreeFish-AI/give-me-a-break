@@ -1,0 +1,15 @@
+# Dependabot：监控 GitHub Actions 第三方 action 的版本升级（便于跟进 SHA pin 更新）。
+# 本项目 SPM 零运行时依赖，故不配 swift ecosystem；github-actions ecosystem 价值最高——
+# 工作流中的 action 均以 commit SHA pin，Dependabot 能识别并提出更新 SHA 的新 PR。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - ci
+      - dependencies
+    commit-message:
+      prefix: "chore(ci)"

@@ -1,0 +1,4 @@
+{
+  "$comment": "headless Chromium 启动参数；CI 无特权环境需禁用 sandbox，否则 puppeteer 启动失败。",
+  "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+}

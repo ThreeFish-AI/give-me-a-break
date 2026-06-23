@@ -1,0 +1,81 @@
+# Timeout — 文档质量门禁（链接 / Markdown / Mermaid / 知识索引）。
+# 维度边界（正交分解）：只负责文档与约定校验，跑在 ubuntu-latest（文档校验零 macOS 依赖，省约 10× 额度）。
+# 复用驱动（Reuse-Driven）：链接→lychee、Markdown→markdownlint-cli2、Mermaid→mmdc，均业界事实标准；
+#   仅「知识索引同步」一处项目特有语义自写最小脚本（scripts/check_knowledge_map.sh）。
+name: Lint
+
+on:
+  push:
+    branches: [master, "feature/**"]
+    paths:
+      - "**/*.md"
+      - ".agents/**"
+      - "scripts/check_knowledge_map.sh"
+      - ".github/lychee.toml"
+      - ".github/markdownlint.json"
+      - ".github/mmdc-puppeteer-config.json"
+      - ".github/workflows/lint.yml"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - ".agents/**"
+      - "scripts/check_knowledge_map.sh"
+      - ".github/lychee.toml"
+      - ".github/markdownlint.json"
+      - ".github/mmdc-puppeteer-config.json"
+      - ".github/workflows/lint.yml"
+
+concurrency:
+  group: lint-${{ github.event_name == 'pull_request' && github.event.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Link check (lychee)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1d1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          args: --config .github/lychee.toml --no-progress '**/*.md'
+          fail: true
+
+  markdown:
+    name: Markdown lint (markdownlint-cli2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1d1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: DavidAnson/markdownlint-cli2-action@ded1f9488f68a970bc66ea5619e13e9b52e601cd # v23.2.0
+        with:
+          globs: '**/*.md'
+          config: '.github/markdownlint.json'
+
+  mermaid:
+    name: Mermaid render check (mmdc)
+    runs-on: ubuntu-latest
+    # 容错：puppeteer/chromium 在 headless CI 偶发脆弱，完备但不阻塞；稳定性确立后可移除此行。
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1d1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+      - name: Render all mermaid blocks（验证语法 + 主题 + classDef）
+        # 全量预渲染成 SVG：渲染成功 = 语法/主题/色彩引用全有效的充分证明（覆盖 AGENTS.md Mermaid 规范三条）。
+        run: |
+          set -euo pipefail
+          for f in README.md docs/timeout-design.md .agents/browser-validation.md; do
+            npx -y -p @mermaid-js/mermaid-cli mmdc -i "$f" -o "/tmp/$(basename "$f" .md).svg" \
+              -c .github/mmdc-puppeteer-config.json
+          done
+
+  knowledge-map:
+    name: Knowledge map sync (custom)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1d1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Verify knowledge-map.md relative links
+        run: bash scripts/check_knowledge_map.sh

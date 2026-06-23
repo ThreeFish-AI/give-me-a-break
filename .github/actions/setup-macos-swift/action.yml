@@ -1,0 +1,36 @@
+# 复用基建：macOS runner 上的 Swift 环境探测 + SwiftPM 分层缓存。
+# 单一事实源（Single Source of Truth）——CI 的 test/build job 与 Release workflow 都调用本 action。
+# 边界：本 action 不含 checkout（单一职责）；调用方须先 actions/checkout。
+name: Setup macOS + Swift (cached)
+description: 探测 Swift 工具链并按 OS/版本/Package.swift 分层缓存 SwiftPM（调用方需先 checkout）。
+
+runs:
+  using: composite
+  steps:
+    - name: Detect Swift toolchain
+      id: toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        swift --version
+        # 精确提取 "Apple Swift version X.Y" 中的 X.Y（避开首行 swift-driver version 的数字干扰）。
+        SWIFT_VER="$(swift --version | grep -oiE 'swift version [0-9]+\.[0-9]+' | head -n1 | grep -oE '[0-9]+\.[0-9]+')" || SWIFT_VER="unknown"
+        echo "swift-version=${SWIFT_VER}" >> "$GITHUB_OUTPUT"
+        # 可观测反馈（Evidence-Based）：README 要求 swift >= 6.0，runner image 漂移时给出 warning（不阻断）。
+        ACTUAL_MAJOR="${SWIFT_VER%%.*}"
+        if [ "${ACTUAL_MAJOR}" != "unknown" ] && [ "${ACTUAL_MAJOR}" -lt 6 ]; then
+          echo "::warning::Runner Swift major (${ACTUAL_MAJOR}) < README baseline (6.0)，请核对工具链对齐。"
+        fi
+
+    - name: Cache SwiftPM
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        # 零依赖纯 SPM：只缓存真正命中的两条路径（不缓存 xcodebuild 的 DerivedData / SourcePackages）。
+        path: |
+          ~/Library/Caches/org.swift.swiftpm
+          .build
+        # Package.swift 即依赖图唯一事实源（零依赖、无 Package.resolved）；Swift 版本纳入 key 防 runner 升级后 .build 二进制不兼容。
+        key: ${{ runner.os }}-swiftpm-${{ steps.toolchain.outputs.swift-version }}-${{ hashFiles('Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-swiftpm-${{ steps.toolchain.outputs.swift-version }}-
+          ${{ runner.os }}-swiftpm-

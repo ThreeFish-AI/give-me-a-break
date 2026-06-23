@@ -1,0 +1,93 @@
+# Timeout — CI 持续集成核心流水线（test + build）。
+# 维度边界（正交分解）：本 workflow 只负责测试与编译验证。
+#   - 文档/链接/Mermaid 门禁由 .github/workflows/lint.yml 负责，互不耦合。
+#   - 发布（装配/签名/公证/Release）由 .github/workflows/release.yml 负责；本 workflow build job
+#     仅验证 release 编译，并通过 artifact 预留产物。
+# 单一事实源：环境准备统一委托 .github/actions/setup-macos-swift。
+name: CI
+
+on:
+  push:
+    branches: [master, "feature/**"]
+    paths:
+      - "Sources/**"
+      - "tests/**"
+      - "scripts/**"
+      - "Resources/**"
+      - "Package.swift"
+      - "Makefile"
+      - ".github/workflows/ci.yml"
+      - ".github/actions/setup-macos-swift/**"
+  pull_request:
+    branches: [master, "feature/**"]
+    paths:
+      - "Sources/**"
+      - "tests/**"
+      - "scripts/**"
+      - "Resources/**"
+      - "Package.swift"
+      - "Makefile"
+      - ".github/workflows/ci.yml"
+      - ".github/actions/setup-macos-swift/**"
+
+# 取消旧运行：PR 用 issue number 保证同 PR 内串行去重；push 用 ref。
+# 同 PR/分支新 push 抢占 in-progress 运行，节省 macOS runner 额度（最贵档位之一）。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.number || github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：CI 无写 repo 需求（artifact 上传走 GITHUB_TOKEN 隐式授权）。
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (TimeoutTests runner)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1d1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup macOS + Swift (cached)
+        uses: ./.github/actions/setup-macos-swift
+
+      - name: Run tests
+        # make test → swift run TimeoutTests；自建运行器，失败时 exit(1)（tests/main.swift 末行）。
+        # TimeoutTests 仅依赖纯 Foundation 的 TimeoutEngine，无系统权限、无 GUI，CI 安全可跑。
+        run: make test
+
+      - name: Upload build artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-debug-${{ github.run_id }}
+          path: .build/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  build:
+    name: Build (release compile check)
+    runs-on: macos-14
+    # 串行而非并行（省 macOS 额度）：test job 的 swift run 已隐含编译 Engine+Tests；
+    # build job 验证 release 全量编译（含 TimeoutIntegrations/Timeout），缓存全热下秒级完成。
+    # 若需 fail-fast（编译错误立即暴露），可删除本行改并行。
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1d1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup macOS + Swift (cached)
+        uses: ./.github/actions/setup-macos-swift
+
+      - name: Build (release)
+        # make build → swift build -c release。注：不调 make app，其 icon 步骤依赖 NSImage 离屏渲染，
+        # 在 headless runner 高风险失败；图标装配留给 release.yml（macos runner 有 window server）。
+        run: make build
+
+      - name: Upload release binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: timeout-binary-${{ github.sha }}
+          path: .build/release/Timeout
+          if-no-files-found: error
+          retention-days: 7
