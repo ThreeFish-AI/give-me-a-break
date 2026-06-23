@@ -9,6 +9,7 @@
 |---|---|
 | [README.md](../README.md) | Timeout 应用主文档：构建/运行/权限/配置/架构 |
 | [docs/timeout-design.md](../docs/timeout-design.md) | 设计文档：FSM 状态机 + 数据模型 + 测试矩阵 + IEEE 引用 |
+| [docs/windows-port-design.md](../docs/windows-port-design.md) | Windows 移植技术方案：跨平台不可行性循证 + C#/.NET WPF 架构 + 全屏遮罩妥协设计 |
 | [AGENTS.md](../AGENTS.md) | AI Agent 协作规约（工程行为准则） |
 
 ## 协作支撑

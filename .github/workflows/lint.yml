@@ -67,7 +67,7 @@ jobs:
         # 全量预渲染成 SVG：渲染成功 = 语法/主题/色彩引用全有效的充分证明（覆盖 AGENTS.md Mermaid 规范三条）。
         run: |
           set -euo pipefail
-          for f in README.md docs/timeout-design.md .agents/browser-validation.md; do
+          for f in README.md docs/timeout-design.md docs/windows-port-design.md .agents/browser-validation.md; do
             npx -y -p @mermaid-js/mermaid-cli mmdc -i "$f" -o "/tmp/$(basename "$f" .md).svg" \
               -p .github/mmdc-puppeteer-config.json
           done
