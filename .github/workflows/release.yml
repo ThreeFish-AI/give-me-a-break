@@ -97,7 +97,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KC"
           echo "==> 可用签名 identity（排障）："
           security find-identity -v -p codesigning "$KC"
-          codesign --force --deep --options runtime \
+          codesign --force --deep --options runtime --timestamp \
             --entitlements Resources/TimeoutRelease.entitlements \
             --keychain "$KC" -s "$SIGNING_IDENTITY" Timeout.app
           rm -f "$CERT_FILE"
@@ -114,8 +114,8 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP"
           # ditto 保留 bundle 符号链接/权限；zip 会破坏符号链接致签名失效。
-          ditto -c -k --keepParent "$GITHUB_WORKSPACE/Timeout.app" "Timeout-${RELEASE_VERSION}.zip"
-          xcrun notarytool submit "Timeout-${RELEASE_VERSION}.zip" \
+          ditto -c -k --keepParent "$GITHUB_WORKSPACE/Timeout.app" "Timeout-${RELEASE_VERSION}-macos.zip"
+          xcrun notarytool submit "Timeout-${RELEASE_VERSION}-macos.zip" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
@@ -129,10 +129,10 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          if [ ! -f "Timeout-${RELEASE_VERSION}.zip" ]; then
-            ditto -c -k --keepParent "$GITHUB_WORKSPACE/Timeout.app" "Timeout-${RELEASE_VERSION}.zip"
+          if [ ! -f "Timeout-${RELEASE_VERSION}-macos.zip" ]; then
+            ditto -c -k --keepParent "$GITHUB_WORKSPACE/Timeout.app" "Timeout-${RELEASE_VERSION}-macos.zip"
           fi
-          echo "RELEASE_ZIP=$RUNNER_TEMP/Timeout-${RELEASE_VERSION}.zip" >> "$GITHUB_ENV"
+          echo "RELEASE_ZIP=$RUNNER_TEMP/Timeout-${RELEASE_VERSION}-macos.zip" >> "$GITHUB_ENV"
 
       # ⑥ Verification Before Done —— 发布前自证三件套（AGENTS.md「交付前验证定式」）。
       - name: Verify codesign integrity（always，ad-hoc 也校验结构完整性）
@@ -165,9 +165,9 @@ jobs:
           body: |
             ## Timeout ${{ env.RELEASE_VERSION }}
 
-            **下载**：`Timeout-${{ env.RELEASE_VERSION }}.zip`
+            **下载**：`Timeout-${{ env.RELEASE_VERSION }}-macos.zip`
 
             ### 安装
             解压后将 `Timeout.app` 拖入 `/Applications`；首次启动需在「系统设置 → 隐私与安全性」授权辅助功能与媒体控制权限。
 
-            ${{ env.NOTARIZED == 'true' && '> ✅ 已通过 Apple 公证（Notarized）+ Developer ID 签名，Gatekeeper 可直接放行。' || '> ⚠️ 此版本为 ad-hoc 签名（未签名/未公证）。首次打开需右键 → 打开，或执行 `xattr -dr com.apple.quarantine /Applications/Timeout.app` 放行，仅供内测。' }}
+            ${{ env.NOTARIZED == 'true' && '> ✅ 已通过 Apple 公证（Notarized）+ Developer ID 签名，Gatekeeper 可直接放行。' || '> ⚠️ 此版本为 ad-hoc 签名（未签名/未公证）。首次打开会被 Gatekeeper 拦截，请执行 `xattr -dr com.apple.quarantine /Applications/Timeout.app` 放行（macOS 15.1 Sequoia 起「右键→打开」已失效），仅供内测。' }}

@@ -38,7 +38,7 @@ app: build icon
 	@cp $(ICON_ICNS) $(APP_BUNDLE)/Contents/Resources/AppIcon.icns
 	@printf 'APPL????' > $(APP_BUNDLE)/Contents/PkgInfo
 	@echo "==> ad-hoc 签名（Hardened Runtime + entitlements）"
-	@codesign --force --deep --options runtime --entitlements $(ENTITLEMENTS) -s - $(APP_BUNDLE)
+	@codesign --force --deep --options runtime --timestamp --entitlements $(ENTITLEMENTS) -s - $(APP_BUNDLE)
 	@xattr -dr com.apple.quarantine $(APP_BUNDLE) 2>/dev/null || true
 	@echo "==> 完成：./$(APP_BUNDLE)"
 
