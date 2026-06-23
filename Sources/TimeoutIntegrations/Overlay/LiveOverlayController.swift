@@ -15,6 +15,7 @@ final class LiveOverlayController: OverlayController {
     private var escMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var currentDeadline: Date?
+    private var lastEscAt: Date?  // 双击 Esc 直退检测：上次 Esc 时刻
     private var viewModel: OverlayViewModel?  // 确认态共享源（取代原 alertShowing）
 
     var isShown: Bool { !panels.isEmpty }
@@ -49,6 +50,7 @@ final class LiveOverlayController: OverlayController {
         }
         panels.removeAll()
         currentDeadline = nil
+        lastEscAt = nil  // 干净初始态，防下次 show 残留双击计时
         viewModel?.isConfirming = false
         viewModel = nil  // 干净初始态，防下次 show 残留确认态
         NSLog("[Timeout][overlay] dismiss")
@@ -93,9 +95,15 @@ final class LiveOverlayController: OverlayController {
     private func installEscMonitor() {
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.keyCode == 53 else { return event }  // 53 = Esc
-            // 确认态 Esc = 取消确认返回倒计时；倒计时态 Esc = 进入确认态
-            if let vm = self.viewModel {
-                vm.isConfirming.toggle()
+            let now = Date()
+            if let last = self.lastEscAt, now.timeIntervalSince(last) < 0.4 {
+                // 双击 Esc → 直接退出休息（复用「直接退出」按钮同款安全退出路径）
+                self.lastEscAt = nil  // 消费，防三连击的第三次被当作新一轮首击
+                self.confirmEarlyExit()
+            } else {
+                // 单击 Esc = 进入/取消确认（保留既有语义）
+                self.lastEscAt = now
+                self.viewModel?.isConfirming.toggle()
             }
             return nil  // 消费该事件
         }

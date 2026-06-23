@@ -47,7 +47,7 @@ struct OverlayContentView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.teal)
 
-            Text("休息一下")
+            Text("Give me a break")
                 .font(.system(size: 34, weight: .light, design: .rounded))
                 .foregroundStyle(.white.opacity(0.85))
 
@@ -59,7 +59,7 @@ struct OverlayContentView: View {
                     .contentTransition(.numericText())
             }
 
-            Text("按 Esc 可提前结束")
+            Text("双击 Esc 直接结束休息")
                 .font(.system(size: 16))
                 .foregroundStyle(.white.opacity(0.45))
         }
