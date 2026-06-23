@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 允许 Apple Events 自动化（仅当未来启用 sdef 通用回退时实际触发；QQ 音乐走 CGEvent 媒体键，不需要此权限） -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    <!-- 故意不含 com.apple.security.app-sandbox：沙盒会阻断 CGEvent 媒体键与 Apple Events，与需求冲突 -->
+    <!-- 故意不含 com.apple.security.cs.disable-library-validation：仅链接 Apple 系统库，无需禁用 -->
+</dict>
+</plist>
