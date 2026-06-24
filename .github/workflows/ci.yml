@@ -18,6 +18,8 @@ on:
       - "Makefile"
       - ".github/workflows/ci.yml"
       - ".github/actions/setup-macos-swift/**"
+      - "windows/**"
+      - "shared/**"
   pull_request:
     branches: [master, "feature/**"]
     paths:
@@ -29,6 +31,8 @@ on:
       - "Makefile"
       - ".github/workflows/ci.yml"
       - ".github/actions/setup-macos-swift/**"
+      - "windows/**"
+      - "shared/**"
 
 # 取消旧运行：PR 用 issue number 保证同 PR 内串行去重；push 用 ref。
 # 同 PR/分支新 push 抢占 in-progress 运行，节省 macOS runner 额度（最贵档位之一）。
@@ -91,3 +95,131 @@ jobs:
           path: .build/release/Timeout
           if-no-files-found: error
           retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Windows · C# net8.0 逻辑层测试（Phase 0 核心 + Phase 1 Win32 互操作层）。
+  # 测 windows/TimeoutEngine.sln（不含 net8.0-windows 壳）。Swift Sources/ 零改动。
+  dotnet-test:
+    name: Test (C# net8.0 · Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup .NET 8
+        # NOTE: 暂用 tag，待人工/Dependabot SHA-pin 对齐仓库其余 action 规范。
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run tests (net8.0 core + Win32 logic layer)
+        # 引擎核心 25 + Win32 互操作 12（粉噪音/空闲回绕/媒体键）。本地已验证 37 通过。
+        # 两端共用 shared/ 黄金 fixture 保证 FSM 不漂移。
+        run: dotnet test windows/TimeoutEngine.sln -c Release --nologo
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Windows · Swift 纯核心跨平台编译冒烟（零成本技术储备探针，非阻断）
+  # 验证纯 Foundation 的 TimeoutEngine 可在 Windows 原生编译——为 C# 重写提供「核心本可跨平台」的对照证据。
+  # continue-on-error：Swift-on-Windows 工具链仍在成熟期，失败不阻断 PR（详见 docs/windows-port-design.md §2）。
+  swift-core-smoke:
+    name: Smoke (Swift core on Windows · 探针)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Swift
+        # NOTE: Swift-on-Windows 安装 action 由 Swift.org Windows Workgroup 维护；探针性质，非阻断。
+        uses: compnerd/swift-actions/setup-swift@master
+
+      - name: Build pure-Foundation core (TimeoutEngine only)
+        # 仅编译 TimeoutEngine（纯 Foundation）；TimeoutIntegrations/Timeout 依赖 AppKit，Windows 物理不可用。
+        run: swift build --target TimeoutEngine -c release
+
+  # ────────────────────────────────────────────────────────────────────────
+  # macOS · C# net8.0 逻辑层测试（Phase 1）：证明 Win32 互操作层 + 引擎核心真跨平台可编译可测。
+  # 与 dotnet-test(windows) 跑同一批 net8.0 测试，双端一致 = 跨平台成立。本地可复现（无 Windows 也能验证）。
+  dotnet-test-mac:
+    name: Test (C# net8.0 · macOS 跨平台)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run tests (net8.0 core + Win32 logic layer)
+        # 仅 net8.0 sln（不含 net8.0-windows 壳），macOS 可编译。
+        run: dotnet test windows/TimeoutEngine.sln -c Release --nologo
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Windows · Phase 1 WPF 壳编译（L2）：验证 net8.0-windows 工程可编译、publish 出 exe。
+  # P/Invoke 声明 / WPF XAML / NAudio·H.NotifyIcon 依赖版本的暴露点。macOS 无法本地验证，必经 CI。
+  dotnet-build-shell:
+    name: Build (WPF shell · net8.0-windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build shell (release)
+        run: dotnet build windows/TimeoutShell/TimeoutShell.csproj -c Release --nologo
+      - name: Publish self-contained (win-x64)
+        run: dotnet publish windows/TimeoutShell/TimeoutShell.csproj -c Release -r win-x64 --self-contained -o ./publish --nologo
+      - name: Upload shell artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: timeout-shell-${{ github.sha }}
+          path: ./publish/
+          if-no-files-found: error
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Windows · Phase 1 headless 烟测（L3）：壳启动不崩 + 引擎装配闭环。
+  # TIMEOUT_HEADLESS 跳过托盘/WASAPI 真实实例化（无 shell/无设备）；TIMEOUT_DEBUG 极速配置触发相位转移。
+  # 能证：装配成功 + 无未处理异常。不能证：托盘可见/出声/QQ音乐响应（归用户真机验收）。
+  dotnet-smoke-shell:
+    name: Smoke (WPF shell headless · run 6s)
+    runs-on: windows-latest
+    needs: dotnet-build-shell
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        run: dotnet publish windows/TimeoutShell/TimeoutShell.csproj -c Release -r win-x64 --self-contained -o ./publish --nologo
+      - name: Headless run (expect装配成功 + 无未处理异常)
+        shell: pwsh
+        run: |
+          $env:TIMEOUT_HEADLESS = "1"
+          $env:TIMEOUT_DEBUG = "1"
+          $p = Start-Process -FilePath ".\publish\TimeoutShell.exe" -PassThru -NoNewWindow -RedirectStandardOutput shell-out.log -RedirectStandardError shell-err.log
+          Start-Sleep -Seconds 6
+          if (-not $p.HasExited) {
+            Write-Host "进程存活 6s（headless 应 5s 自退）→ 强制结束（视为正常）"
+            Stop-Process -Id $p.Id -Force
+          } else {
+            Write-Host "进程已自退，ExitCode=$($p.ExitCode)"
+          }
+          Write-Host "===== STDOUT ====="; Get-Content shell-out.log -ErrorAction SilentlyContinue
+          Write-Host "===== STDERR ====="; Get-Content shell-err.log -ErrorAction SilentlyContinue
+          $log = Get-Content shell-out.log -Raw -ErrorAction SilentlyContinue
+          if (-not $log) { Write-Error "无 stdout 日志，进程可能启动即崩"; exit 1 }
+          if ($log -notmatch "装配完成") { Write-Error "未见装配完成日志，装配阶段异常"; exit 1 }
+          if ($log -notmatch "启动完成") { Write-Error "未见启动完成日志"; exit 1 }
+          $err = Get-Content shell-err.log -Raw -ErrorAction SilentlyContinue
+          if ($err -match "Unhandled|Exception:") { Write-Error "stderr 含未处理异常：$err"; exit 1 }
+          Write-Host "headless 烟测通过：装配成功 + 无未处理异常"
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          Write-Host "===== STDOUT ====="; Get-Content shell-out.log -ErrorAction SilentlyContinue
+          Write-Host "===== STDERR ====="; Get-Content shell-err.log -ErrorAction SilentlyContinue
