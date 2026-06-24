@@ -26,8 +26,8 @@
     <PackageReference Include="NAudio" Version="2.2.1" />
     <!-- H.NotifyIcon.Wpf 2.2.0（壳专属）：WPF 友好托盘，样板少 -->
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.2.0" />
-    <!-- System.Drawing.Common 8.0.0（壳专属）：托盘 Icon（SystemIcons.Application 占位，真 icon 留真机验收） -->
-    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <!-- System.Drawing.Common 9.0.0（壳专属）：托盘 Icon；>=9.0.0 满足 H.NotifyIcon 2.2.0 的传递依赖（避 NU1605 降级） -->
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

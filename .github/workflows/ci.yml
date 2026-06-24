@@ -118,26 +118,6 @@ jobs:
         run: dotnet test windows/TimeoutEngine.sln -c Release --nologo
 
   # ────────────────────────────────────────────────────────────────────────
-  # Windows · Swift 纯核心跨平台编译冒烟（零成本技术储备探针，非阻断）
-  # 验证纯 Foundation 的 TimeoutEngine 可在 Windows 原生编译——为 C# 重写提供「核心本可跨平台」的对照证据。
-  # continue-on-error：Swift-on-Windows 工具链仍在成熟期，失败不阻断 PR（详见 docs/windows-port-design.md §2）。
-  swift-core-smoke:
-    name: Smoke (Swift core on Windows · 探针)
-    runs-on: windows-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Setup Swift
-        # NOTE: Swift-on-Windows 安装 action 由 Swift.org Windows Workgroup 维护；探针性质，非阻断。
-        uses: compnerd/swift-actions/setup-swift@master
-
-      - name: Build pure-Foundation core (TimeoutEngine only)
-        # 仅编译 TimeoutEngine（纯 Foundation）；TimeoutIntegrations/Timeout 依赖 AppKit，Windows 物理不可用。
-        run: swift build --target TimeoutEngine -c release
-
-  # ────────────────────────────────────────────────────────────────────────
   # macOS · C# net8.0 逻辑层测试（Phase 1）：证明 Win32 互操作层 + 引擎核心真跨平台可编译可测。
   # 与 dotnet-test(windows) 跑同一批 net8.0 测试，双端一致 = 跨平台成立。本地可复现（无 Windows 也能验证）。
   dotnet-test-mac:

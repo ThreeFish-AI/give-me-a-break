@@ -14,9 +14,9 @@ Timeout 当前为纯 Swift（SPM，macOS 14+）实现，采用三目标正交分
 维护者希望：在 GitHub Release 页同时提供 macOS 与 Windows 两套安装包，让不同 OS 用户自行选择。本方案的循证结论如下：
 
 > **结论 1（Q2 可行性）**：**无法「顺便」编译 Windows 版**。Swift 语言本身可在 Windows 上官方编译<sup>[[1]](#ref1)</sup>，但 `TimeoutIntegrations` 依赖的 AppKit / CoreGraphics / EventKit / AVFoundation 等 Apple 专有框架在 Windows 上**物理不存在**（逐项已验证），`import AppKit` 在 Windows 工具链直接编译失败。
-
+>
 > **结论 2（Q2 务实路径）**：唯一可行的跨平台资产是纯 Foundation 的 `TimeoutEngine`。完整 Windows 桌面应用须**重写（非移植）整个集成层**，推荐 **C#/.NET 8 WPF 原生重写 + 共享纯逻辑核心**，工作量集中在一个核心难点——全屏强制遮罩。
-
+>
 > **结论 3（Q1 macOS 发布）**：与 Windows 移植解耦。macOS 发布链路已就绪（`release.yml`，打 tag 即发布），详见 [README §构建与运行](../README.md#构建与运行)与本仓库 commit `fix(release)` 的 `--timestamp` 修复。
 
 ## 2. 跨平台不可行性循证
@@ -236,9 +236,9 @@ Phase 1（最小可运行 Windows 壳，无遮罩）已实现，验证策略为 
 - **[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** 三层验证：**L1** 双平台 `dotnet-test`(windows) + `dotnet-test-mac`(macos-14) 跑 net8.0 测试（37 测试，证明真跨平台）；**L2** `dotnet-build-shell` 编译+publish WPF 壳；**L3** `dotnet-smoke-shell` headless 烟测（`TIMEOUT_HEADLESS` 跳过托盘/WASAPI，`TIMEOUT_DEBUG` 极速配置触发相位转移）。
 
 > **诚实披露（CI 能证 / 不能证）**：L1-L3 能证「壳启动不崩 + 引擎装配闭环 + 配置落盘 %APPDATA% + P/Invoke 声明 JIT 执行无 EntryPointNotFound」。**不能证**：托盘图标可见（CI 无 explorer shell）、WASAPI 出声（无设备）、媒体键触发 QQ 音乐（无 QQ 音乐/Now Playing）、全屏遮罩（Phase 2）——这些归用户 Windows 真机验收。QQ 音乐候选进程名（`QQMusic`/`QQMusicTray`）需用户实测校准。
-
+>
 > **依赖**：粉噪音自写 Kellet（对齐 macOS + 零依赖 + 可测）；NAudio 2.2.1（壳内 WASAPI 播放）；H.NotifyIcon.Wpf 2.2.0（壳内托盘）。均不污染 net8.0 工程。toggle 语义继承（`VK_MEDIA_PLAY_PAUSE` 与 macOS `NX_KEYTYPE_PLAY` 同构，正在播时发键反暂停是已知限制）。下一阶段见 §10 Phase 2（全屏强制遮罩，§5 核心难点）。
-
+>
 > **评估建议**：Phase 0–1 风险可控、可独立交付价值，建议先行以验证整体可行性；Phase 2（全屏遮罩）是「继续投入 vs 放弃 Windows」的真正决策点——其妥协（taskbar 偶现、SAS 逃生）是否可接受，决定了 Windows 版能否达到与 macOS 版同等的「软强制」体验。
 
 ## References
@@ -267,4 +267,4 @@ Phase 1（最小可运行 Windows 壳，无遮罩）已实现，验证策略为 
 
 <a id="ref12"></a>[12] Stack Overflow, "Win32 full screen and hiding the taskbar," *stackoverflow.com*, 2024. [Online]. Available: https://stackoverflow.com/questions/2382464/win32-full-screen-and-hiding-taskbar
 
-<a id="ref13"></a>[13] Microsoft, "Code Signing Certificates and SmartScreen Reputation," *Microsoft Learn*, 2024. [Online]. Available: https://learn.microsoft.com/windows/security/application-security/application-control/app-control-for-business/deployment/manage-trust
+<a id="ref13"></a>[13] Microsoft, "SmartScreen reputation for Windows app developers," *Microsoft Learn*, 2025. [Online]. Available: https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation
