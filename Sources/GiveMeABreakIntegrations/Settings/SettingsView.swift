@@ -51,6 +51,7 @@ struct SettingsView: View {
                 workWindowsSection
                 rhythmSection
                 soundSection
+                workLogSection
             }
             .formStyle(.grouped)
 
@@ -177,6 +178,19 @@ struct SettingsView: View {
             Text("休息音效")
         } footer: {
             Text("白噪音由应用内置合成，可靠且不依赖外部播放器；QQ 音乐联动经系统媒体键控制，需安装并授权辅助功能。")
+        }
+    }
+
+    // MARK: - 工作日志（休息前记录）
+
+    private var workLogSection: some View {
+        Section {
+            Toggle("休息前记录工作日志", isOn: $draft.workLogEnabled)
+                .accessibilityHint("自然休息前弹出输入框，记录这段时间的工作内容与成果")
+        } header: {
+            Text("工作日志")
+        } footer: {
+            Text("累满工作时长的自然休息前，会弹出输入框让你花 30 秒写下刚完成的与下一步，让大脑真正放下。可在每次秒跳、60 秒后自动放行，或在此关闭。「立即休息」不弹。记录可在菜单「工作日志…」查看，生成今日/本周/本月报告。")
         }
     }
 
