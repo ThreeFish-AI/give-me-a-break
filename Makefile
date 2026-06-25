@@ -1,13 +1,13 @@
-# Timeout — 构建与分发（无需 Xcode，仅 Command Line Tools）
+# Give me a break — 构建与分发（无需 Xcode，仅 Command Line Tools）
 # 个人用途：ad-hoc 签名 + Hardened Runtime；公开分发见下方 notarize 注释。
 
-BUNDLE_ID   := com.aurelius.timeout
-APP_NAME    := Timeout
+BUNDLE_ID   := com.aurelius.givemeabreak
+APP_NAME    := GiveMeABreak
 CONFIG      := release
 BUILD_DIR   := .build
 BIN         := $(BUILD_DIR)/$(CONFIG)/$(APP_NAME)
 APP_BUNDLE  := $(APP_NAME).app
-ENTITLEMENTS:= Resources/TimeoutRelease.entitlements
+ENTITLEMENTS:= Resources/GiveMeABreakRelease.entitlements
 INFO_PLIST  := Resources/Info.plist
 ICON_SCRIPT := scripts/generate_icon.swift
 ICONSET     := Resources/AppIcon.iconset
@@ -27,7 +27,7 @@ icon:
 	@swift $(ICON_SCRIPT) A
 	@iconutil -c icns $(ICONSET) -o $(ICON_ICNS)
 
-## 装配 Timeout.app 并 ad-hoc 签名（Hardened Runtime + entitlements）
+## 装配 GiveMeABreak.app 并 ad-hoc 签名（Hardened Runtime + entitlements）
 app: build icon
 	@echo "==> 装配 $(APP_BUNDLE)"
 	@rm -rf $(APP_BUNDLE)
@@ -52,11 +52,11 @@ run-debug:
 
 ## 单元测试（无权限，CI 可跑；自建运行器，CLT 无 XCTest）
 test:
-	swift run TimeoutTests
+	swift run GiveMeABreakTests
 
 ## 集成测试（需权限/真机，本地手跑）
 test-integration:
-	swift test --filter TimeoutIntegrationTests
+	swift test --filter GiveMeABreakIntegrationTests
 
 clean:
 	swift package clean

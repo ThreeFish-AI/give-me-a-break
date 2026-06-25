@@ -1,7 +1,7 @@
 import AppKit
-import TimeoutEngine
+import GiveMeABreakEngine
 
-private let bundleId = "com.aurelius.timeout"
+private let bundleId = "com.aurelius.givemeabreak"
 
 /// 应用根装配点：装配引擎 + 心跳 + 系统采样 + 三大 controller，并注册睡眠/唤醒观察者。
 /// 启动加载持久化 config/state；运行期节流持久化状态；退出时落盘。
@@ -9,7 +9,7 @@ final public class AppRoot {
     public static let shared = AppRoot()
 
     private var statusItem: StatusItemController?
-    private var engine: LiveTimeoutEngine?
+    private var engine: LiveGiveMeABreakEngine?
     private var overlayController: LiveOverlayController?
     private var calendarProvider: LiveCalendarProvider?
     private var heartbeat: HeartbeatTimer?
@@ -31,7 +31,7 @@ final public class AppRoot {
         do {
             store = try ConfigStore(directory: dir)
         } catch {
-            NSLog("[Timeout] 持久化目录初始化失败，本次运行不落盘：\(error)")
+            NSLog("[GiveMeABreak] 持久化目录初始化失败，本次运行不落盘：\(error)")
             store = nil
         }
         configStore = store
@@ -48,7 +48,7 @@ final public class AppRoot {
         calendar.bootstrap()  // 触发日历权限请求（用户手动授予）
         self.calendarProvider = calendar
 
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: SystemClock(),
             calendarProvider: calendar,
             overlay: overlay,
@@ -87,19 +87,19 @@ final public class AppRoot {
                 guard let self else { return }
                 if let store = self.configStore {
                     do { try store.saveConfig(newConfig) }
-                    catch { NSLog("[Timeout] 配置保存失败：\(error.localizedDescription)") }
+                    catch { NSLog("[GiveMeABreak] 配置保存失败：\(error.localizedDescription)") }
                 }
                 self.engine?.updateConfig(newConfig)
-                NSLog("[Timeout] 配置已应用：\(newConfig.workWindows.count) 个工作窗口 / 工作 \(Int(newConfig.workIntervalSeconds/60))min / 休息 \(Int(newConfig.restDurationSeconds/60))min / 白噪音\(newConfig.ambientSoundEnabled ? "开" : "关") / QQ音乐\(newConfig.controlQQMusic ? "开" : "关")")
+                NSLog("[GiveMeABreak] 配置已应用：\(newConfig.workWindows.count) 个工作窗口 / 工作 \(Int(newConfig.workIntervalSeconds/60))min / 休息 \(Int(newConfig.restDurationSeconds/60))min / 白噪音\(newConfig.ambientSoundEnabled ? "开" : "关") / QQ音乐\(newConfig.controlQQMusic ? "开" : "关")")
             },
             onToggleLogin: { LoginService.setEnabled($0) }
         )
 
         registerSleepObservers()
-        NSLog("[Timeout] 引擎启动 phase=\(engine.state.phase.rawValue) accum=\(Int(engine.state.workAccumulatedSeconds))s")
+        NSLog("[GiveMeABreak] 引擎启动 phase=\(engine.state.phase.rawValue) accum=\(Int(engine.state.workAccumulatedSeconds))s")
 
         // 调试：启动即打开设置窗（便于截图验证 UI）
-        if ProcessInfo.processInfo.environment["TIMEOUT_SHOW_SETTINGS"] != nil {
+        if ProcessInfo.processInfo.environment["GIVEMEABREAK_SHOW_SETTINGS"] != nil {
             openSettings()
         }
     }
@@ -123,15 +123,15 @@ final public class AppRoot {
 
     // MARK: - 调试配置
 
-    /// TIMEOUT_DEBUG=1 时使用极速配置（8s 工作 / 15s 休息 / 全天窗口 / 禁用 AFK）便于手动验证遮罩与音乐。
+    /// GIVEMEABREAK_DEBUG=1 时使用极速配置（8s 工作 / 15s 休息 / 全天窗口 / 禁用 AFK）便于手动验证遮罩与音乐。
     private func debugConfigOrLoaded(store: ConfigStore?) -> DayPlanConfig {
-        if ProcessInfo.processInfo.environment["TIMEOUT_DEBUG"] != nil {
+        if ProcessInfo.processInfo.environment["GIVEMEABREAK_DEBUG"] != nil {
             var c = DayPlanConfig.defaultConfig
             c.workIntervalSeconds = 8
             c.restDurationSeconds = 15
             c.afkThresholdSeconds = 999_999
             c.workWindows = [WorkWindow(start: TimeOfDay(hours: 0), end: TimeOfDay(hours: 23, minutes: 59))]
-            NSLog("[Timeout] DEBUG 模式：8s 工作 / 15s 休息 / 全天窗口")
+            NSLog("[GiveMeABreak] DEBUG 模式：8s 工作 / 15s 休息 / 全天窗口")
             return c
         }
         return store?.loadConfig() ?? .defaultConfig
@@ -150,7 +150,7 @@ final public class AppRoot {
 
     // MARK: - 菜单栏倒计时文案
 
-    private func statusText(for phase: EnginePhase, engine: LiveTimeoutEngine?) -> String {
+    private func statusText(for phase: EnginePhase, engine: LiveGiveMeABreakEngine?) -> String {
         guard let engine else { return "🍅" }
         switch phase {
         case .working:
@@ -175,13 +175,13 @@ final public class AppRoot {
             self?.sensors?.isAsleep = true
             self?.engine?.handleSleep()
             self?.heartbeat?.suspend()
-            NSLog("[Timeout] 系统睡眠：挂起心跳")
+            NSLog("[GiveMeABreak] 系统睡眠：挂起心跳")
         }
         let did = nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.sensors?.isAsleep = false
             self?.heartbeat?.resume()
             self?.engine?.handleWake()
-            NSLog("[Timeout] 系统唤醒：恢复心跳 + 重置对账基点")
+            NSLog("[GiveMeABreak] 系统唤醒：恢复心跳 + 重置对账基点")
         }
         sleepObservers = [will, did]
     }

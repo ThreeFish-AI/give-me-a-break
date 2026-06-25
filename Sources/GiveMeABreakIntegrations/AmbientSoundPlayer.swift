@@ -30,9 +30,9 @@ final class AmbientSoundPlayer {
             player.scheduleBuffer(buffer, at: nil, options: [.loops])  // 无缝循环
             player.play()
             isPlaying = true
-            NSLog("[Timeout][ambient] 粉噪音已启动")
+            NSLog("[GiveMeABreak][ambient] 粉噪音已启动")
         } catch {
-            NSLog("[Timeout][ambient] AVAudioEngine 启动失败：\(error.localizedDescription)")
+            NSLog("[GiveMeABreak][ambient] AVAudioEngine 启动失败：\(error.localizedDescription)")
         }
     }
 
@@ -41,7 +41,7 @@ final class AmbientSoundPlayer {
         player.stop()      // 停止调度并清空已调度 buffer（便于下次重新 schedule）
         engine.pause()     // 暂停而非 stop+reset，便于快速重启
         isPlaying = false
-        NSLog("[Timeout][ambient] 粉噪音已停止")
+        NSLog("[GiveMeABreak][ambient] 粉噪音已停止")
     }
 
     func setVolume(_ volume: Float) {

@@ -30,7 +30,7 @@ public final class ConfigStore {
             let decoded = try JSONDecoder().decode(DayPlanConfig.self, from: data)
             return migrate(decoded)
         } catch {
-            NSLog("[Timeout] config 解码失败，回退默认：\(error)")
+            NSLog("[GiveMeABreak] config 解码失败，回退默认：\(error)")
             return .defaultConfig
         }
     }
@@ -50,7 +50,7 @@ public final class ConfigStore {
         do {
             try write(state, to: stateURL)
         } catch {
-            NSLog("[Timeout] 引擎状态持久化失败：\(error)")
+            NSLog("[GiveMeABreak] 引擎状态持久化失败：\(error)")
         }
     }
 
@@ -67,7 +67,7 @@ public final class ConfigStore {
     /// （解码层 init(from:) 已对缺失字段容错补默认，故此处无需逐字段迁移分支）。
     private func migrate(_ config: DayPlanConfig) -> DayPlanConfig {
         guard config.schemaVersion <= DayPlanConfig.currentSchemaVersion else {
-            NSLog("[Timeout] config schemaVersion(\(config.schemaVersion)) 高于本版本(\(DayPlanConfig.currentSchemaVersion))，回退默认")
+            NSLog("[GiveMeABreak] config schemaVersion(\(config.schemaVersion)) 高于本版本(\(DayPlanConfig.currentSchemaVersion))，回退默认")
             return .defaultConfig
         }
         var c = config

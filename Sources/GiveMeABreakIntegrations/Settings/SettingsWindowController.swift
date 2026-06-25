@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TimeoutEngine
+import GiveMeABreakEngine
 
 /// 设置窗口控制器：NSWindow + NSHostingController 承载 SwiftUI SettingsView。
 /// 每次 show 以当前引擎配置作为初始草稿；应用 → 持久化 + 热更新引擎。
@@ -30,7 +30,7 @@ final class SettingsWindowController {
         if window == nil {
             let hosting = NSHostingController(rootView: view)
             let w = NSWindow(contentViewController: hosting)
-            w.title = "Timeout 设置"
+            w.title = "Give me a break 设置"
             w.titlebarAppearsTransparent = false
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]  // 允许用户调整窗口大小
             w.contentMinSize = NSSize(width: 480, height: 460)                // 约束最小尺寸，避免拉得太小

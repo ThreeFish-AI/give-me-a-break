@@ -1,6 +1,6 @@
 import AppKit
 import CoreGraphics
-import TimeoutEngine
+import GiveMeABreakEngine
 
 /// 休息音效控制器（双轨）：
 /// 1. **内置粉噪音**（`AmbientSoundPlayer`）——可靠、零依赖，保证休息必有舒缓音效；
@@ -34,7 +34,7 @@ final class LiveMusicController: MusicController {
         ambient.stop()                       // 幂等：未播放时 no-op
         if config.controlQQMusic {
             postMediaKey(16)                 // NX_KEYTYPE_PLAY toggle → 暂停（保留队列/进度）
-            NSLog("[Timeout][music] 发送 pause 媒体键（toggle，保留队列）")
+            NSLog("[GiveMeABreak][music] 发送 pause 媒体键（toggle，保留队列）")
         }
     }
 
@@ -45,10 +45,10 @@ final class LiveMusicController: MusicController {
         let installed = FileManager.default.fileExists(atPath: qqMusicAppURL.path)
         let running = NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == qqMusicBundleId }
         // 诊断日志（解答「为何 QQ 音乐没反应」）：Console.app 可见
-        NSLog("[Timeout][music] QQ 音乐：installed=\(installed) trusted=\(isTrusted) running=\(running)")
+        NSLog("[GiveMeABreak][music] QQ 音乐：installed=\(installed) trusted=\(isTrusted) running=\(running)")
 
         guard isTrusted else {
-            NSLog("[Timeout][music] Accessibility 未授权，CGEvent 媒体键将被系统丢弃；请在系统设置授权（粉噪音仍会播放）")
+            NSLog("[GiveMeABreak][music] Accessibility 未授权，CGEvent 媒体键将被系统丢弃；请在系统设置授权（粉噪音仍会播放）")
             launchQQMusicIfNeeded()
             return
         }
@@ -57,7 +57,7 @@ final class LiveMusicController: MusicController {
         // 已知限制：NX_KEYTYPE_PLAY 是 toggle——若 QQ 音乐此刻正在播放，此键反而会暂停。
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             self?.postMediaKey(16)
-            NSLog("[Timeout][music] 发送 play 媒体键")
+            NSLog("[GiveMeABreak][music] 发送 play 媒体键")
         }
     }
 
@@ -65,14 +65,14 @@ final class LiveMusicController: MusicController {
         let running = NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == qqMusicBundleId }
         guard !running else { return }
         guard FileManager.default.fileExists(atPath: qqMusicAppURL.path) else {
-            NSLog("[Timeout][music] 未找到 /Applications/QQMusic.app，跳过启动")
+            NSLog("[GiveMeABreak][music] 未找到 /Applications/QQMusic.app，跳过启动")
             return
         }
         let cfg = NSWorkspace.OpenConfiguration()
         cfg.activates = false
         NSWorkspace.shared.openApplication(at: qqMusicAppURL, configuration: cfg) { _, error in
-            if let error { NSLog("[Timeout][music] 启动 QQ 音乐失败：\(error.localizedDescription)") }
-            else { NSLog("[Timeout][music] 已拉起 QQ 音乐") }
+            if let error { NSLog("[GiveMeABreak][music] 启动 QQ 音乐失败：\(error.localizedDescription)") }
+            else { NSLog("[GiveMeABreak][music] 已拉起 QQ 音乐") }
         }
     }
 

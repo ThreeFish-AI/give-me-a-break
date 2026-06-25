@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleName</key>
-    <string>Timeout</string>
+    <string>Give me a break</string>
     <key>CFBundleDisplayName</key>
-    <string>Timeout</string>
+    <string>Give me a break</string>
     <key>CFBundleIdentifier</key>
-    <string>com.aurelius.timeout</string>
+    <string>com.aurelius.givemeabreak</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleExecutable</key>
-    <string>Timeout</string>
+    <string>GiveMeABreak</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIconName</key>
@@ -31,10 +31,10 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Timeout 读取您的日历以在会议期间推迟休息（仅 Google/CalDAV 日历生效）。</string>
+    <string>Give me a break 读取您的日历以在会议期间推迟休息（仅 Google/CalDAV 日历生效）。</string>
     <key>NSCalendarsUsageDescription</key>
-    <string>Timeout 读取您的日历以在会议期间推迟休息。</string>
+    <string>Give me a break 读取您的日历以在会议期间推迟休息。</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Timeout 在播放器不支持媒体键时用于暂停音乐（可选回退）。</string>
+    <string>Give me a break 在播放器不支持媒体键时用于暂停音乐（可选回退）。</string>
 </dict>
 </plist>

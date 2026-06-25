@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TimeoutEngine
+import GiveMeABreakEngine
 
 /// 全屏遮罩控制器：为每个 NSScreen 创建一个 borderless NSPanel，置于 CGShieldingWindowLevel
 /// （压过菜单栏/Dock/全屏/系统屏保），collectionBehavior 覆盖全 Space。软强制：Esc → 遮罩内嵌确认视图。
@@ -33,7 +33,7 @@ final class LiveOverlayController: OverlayController {
         installEscMonitor()
         observeScreens()
         NSApp.activate(ignoringOtherApps: true)
-        NSLog("[Timeout][overlay] show：\(panels.count) 屏，deadline=\(restDeadline)")
+        NSLog("[GiveMeABreak][overlay] show：\(panels.count) 屏，deadline=\(restDeadline)")
     }
 
     func dismiss() {
@@ -53,7 +53,7 @@ final class LiveOverlayController: OverlayController {
         lastEscAt = nil  // 干净初始态，防下次 show 残留双击计时
         viewModel?.isConfirming = false
         viewModel = nil  // 干净初始态，防下次 show 残留确认态
-        NSLog("[Timeout][overlay] dismiss")
+        NSLog("[GiveMeABreak][overlay] dismiss")
     }
 
     // MARK: - Panel 构造
@@ -138,7 +138,7 @@ final class LiveOverlayController: OverlayController {
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
-        NSLog("[Timeout][overlay] 屏幕变化，重建 \(panels.count) 屏")
+        NSLog("[GiveMeABreak][overlay] 屏幕变化，重建 \(panels.count) 屏")
     }
 
     private func removeScreenObserver() {

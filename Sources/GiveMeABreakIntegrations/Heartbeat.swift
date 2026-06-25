@@ -1,5 +1,5 @@
 import Foundation
-import TimeoutEngine
+import GiveMeABreakEngine
 
 /// 基于 DispatchSourceTimer 的心跳实现（wall-clock，1Hz）。
 /// suspend/resume/cancel 顺序敏感（cancel 前必须 resume，双 suspend 崩溃）→ 状态守卫协调。

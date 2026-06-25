@@ -1,5 +1,5 @@
 import Foundation
-import TimeoutEngine
+import GiveMeABreakEngine
 
 // MARK: - Mocks
 
@@ -57,7 +57,7 @@ private func fullDayConfig(interval: TimeInterval, rest: TimeInterval) -> DayPla
 }
 
 /// 以 step（默认 60s）粒度驱动引擎 tick。step ≤ maxDelta(60) 保证不触发限幅损失。
-func runTicks(_ engine: LiveTimeoutEngine, clock: MockClock, seconds: TimeInterval, step: TimeInterval = 60) {
+func runTicks(_ engine: LiveGiveMeABreakEngine, clock: MockClock, seconds: TimeInterval, step: TimeInterval = 60) {
     var elapsed: TimeInterval = 0
     while elapsed < seconds {
         let s = min(step, seconds - elapsed)
@@ -78,7 +78,7 @@ func runEngineWiringCases() {
         calProv.timeline = MeetingTimeline(busyIntervals: [
             DateRange(start: t0.addingTimeInterval(m(30)), end: t0.addingTimeInterval(m(60))),
         ])
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),
@@ -108,7 +108,7 @@ func runEngineWiringCases() {
         let t0 = Date(timeIntervalSince1970: 0)
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(10), rest: m(2)),
@@ -133,7 +133,7 @@ func runEngineWiringCases() {
         let t0 = Date(timeIntervalSince1970: 0)
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),
@@ -159,7 +159,7 @@ func runEngineWiringCases() {
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
         // 模拟崩溃：持久化状态为 working/累加 1500s/lastTickAt=t0
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),
@@ -174,7 +174,7 @@ func runEngineWiringCases() {
         let t0 = Date(timeIntervalSince1970: 0)
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),
@@ -191,7 +191,7 @@ func runEngineWiringCases() {
         let t0 = Date(timeIntervalSince1970: 0)
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),
@@ -219,7 +219,7 @@ func runEngineWiringCases() {
         let t0 = Date(timeIntervalSince1970: 0)
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),
@@ -251,7 +251,7 @@ func runEngineWiringCases() {
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
         let config = DayPlanConfig(workWindows: [], workIntervalSeconds: m(50), restDurationSeconds: m(2))
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: config, initialState: EngineState(phase: .offDuty, lastTickAt: t0)
@@ -279,7 +279,7 @@ func runEngineWiringCases() {
         let t0 = Date(timeIntervalSince1970: 0)
         let clock = MockClock(t0)
         let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
-        let engine = LiveTimeoutEngine(
+        let engine = LiveGiveMeABreakEngine(
             clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
             overlay: overlay, music: music, systemState: sys,
             config: fullDayConfig(interval: m(50), rest: m(10)),

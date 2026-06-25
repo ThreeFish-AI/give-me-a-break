@@ -7,7 +7,7 @@ enum AccessibilityChecker {
     static func bootstrap() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
-        NSLog("[Timeout] Accessibility 受信状态：\(trusted)（媒体键控制 QQ 音乐需此项）")
+        NSLog("[GiveMeABreak] Accessibility 受信状态：\(trusted)（媒体键控制 QQ 音乐需此项）")
     }
 
     static var isTrusted: Bool { AXIsProcessTrusted() }

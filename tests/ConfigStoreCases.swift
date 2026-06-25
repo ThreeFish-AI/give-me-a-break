@@ -1,12 +1,12 @@
 import Foundation
-import TimeoutEngine
+import GiveMeABreakEngine
 
 private var dirCounter = 0
 
 private func makeTempDir() -> URL {
     dirCounter += 1
     let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("timeout-test-\(dirCounter)-\(ProcessInfo.processInfo.processIdentifier)")
+        .appendingPathComponent("givemeabreak-test-\(dirCounter)-\(ProcessInfo.processInfo.processIdentifier)")
     try? FileManager.default.removeItem(at: dir)
     return dir
 }

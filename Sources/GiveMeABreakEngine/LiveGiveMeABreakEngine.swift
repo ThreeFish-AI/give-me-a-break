@@ -5,7 +5,7 @@ import Foundation
 ///
 /// 仅依赖协议（Clock/CalendarProvider/OverlayController/MusicController/SystemStateProvider），
 /// 无 AppKit，可用 mock + 虚拟时钟单元测试。
-public final class LiveTimeoutEngine {
+public final class LiveGiveMeABreakEngine {
     private let clock: Clock
     private let calendar: Calendar
     private let calendarProvider: CalendarProvider
@@ -130,7 +130,7 @@ public final class LiveTimeoutEngine {
     /// 菜单「立即休息」：设置强制标志，下一 tick（或 AppRoot 立即 tick）无视工作窗口/会议进入休息。
     public func forceRestNow() {
         forcedRest = true
-        NSLog("[Timeout] 用户触发立即休息（无视工作窗口）")
+        NSLog("[GiveMeABreak] 用户触发立即休息（无视工作窗口）")
     }
 
     /// 设置 UI 应用新配置（工作窗口/间隔/音乐开关）。

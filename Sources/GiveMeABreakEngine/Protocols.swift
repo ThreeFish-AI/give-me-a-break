@@ -43,7 +43,7 @@ public protocol SystemStateProvider: AnyObject {
     func idleSeconds() -> TimeInterval
 }
 
-// MARK: - 心跳抽象（实现见 LiveTimeoutEngine / Heartbeat）
+// MARK: - 心跳抽象（实现见 LiveGiveMeABreakEngine / Heartbeat）
 
 public protocol Heartbeat: AnyObject {
     func start(interval: TimeInterval, handler: @escaping () -> Void)

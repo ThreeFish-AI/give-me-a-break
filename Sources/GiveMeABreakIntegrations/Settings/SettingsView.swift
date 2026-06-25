@@ -1,5 +1,5 @@
 import SwiftUI
-import TimeoutEngine
+import GiveMeABreakEngine
 
 // MARK: - TimeOfDay ↔ Date 桥接（DatePicker hourAndMinute 需要 Date）
 
@@ -64,14 +64,14 @@ struct SettingsView: View {
 
     private var generalSection: some View {
         Section {
-            Toggle("开机时自动启动 Timeout", isOn: Binding(
+            Toggle("开机时自动启动 Give me a break", isOn: Binding(
                 get: { loginEnabled },
                 set: { newValue in
                     loginEnabled = newValue
                     onToggleLogin(newValue)   // 即时生效，不走 draft（符合登录项语义）
                 }
             ))
-            .accessibilityHint("登录后自动在后台运行 Timeout")
+            .accessibilityHint("登录后自动在后台运行 Give me a break")
         } header: {
             Text("一般")
         } footer: {

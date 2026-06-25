@@ -22,8 +22,8 @@ final class StatusItemController {
     private func configureMenu(loginEnabled: Bool) {
         let menu = NSMenu()
 
-        // 标题行：叶子品牌图标（teal、非 template 免疫禁用态灰化）+ 「Timeout」；禁用态呈标题观感。
-        let header = NSMenuItem(title: "Timeout", action: nil, keyEquivalent: "")
+        // 标题行：叶子品牌图标（teal、非 template 免疫禁用态灰化）+ 「Give me a break」；禁用态呈标题观感。
+        let header = NSMenuItem(title: "Give me a break", action: nil, keyEquivalent: "")
         header.image = Self.leafHeaderImage()
         header.isEnabled = false
         menu.addItem(header)
@@ -48,7 +48,7 @@ final class StatusItemController {
 
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "退出 Timeout", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "退出 Give me a break", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         quit.image = Self.menuSymbol("xmark.circle", description: "退出")
         menu.addItem(quit)
@@ -70,7 +70,7 @@ final class StatusItemController {
         let cfg = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
             .applying(.init(scale: .medium))
             .applying(.init(hierarchicalColor: .systemTeal))
-        let img = NSImage(systemSymbolName: "leaf.fill", accessibilityDescription: "Timeout")?
+        let img = NSImage(systemSymbolName: "leaf.fill", accessibilityDescription: "Give me a break")?
             .withSymbolConfiguration(cfg)
         img?.isTemplate = false
         return img

@@ -1,5 +1,5 @@
 import Foundation
-import TimeoutEngine
+import GiveMeABreakEngine
 
 // MARK: - 忠实模拟 1Hz 心跳：advance → transition → sideEffects，记录非空副作用跃迁
 

@@ -1,6 +1,6 @@
 import EventKit
 import Foundation
-import TimeoutEngine
+import GiveMeABreakEngine
 
 /// 日历提供者：EventKit 读取 Google（CalDAV）日历的忙碌事件，合并为时间线。
 /// 缓存 + 限流（≥60s）+ EKEventStoreChanged 推送（debounce），避免引擎 1Hz tick 频繁查询。
@@ -25,9 +25,9 @@ final class LiveCalendarProvider: CalendarProvider {
                     NotificationCenter.default.addObserver(self, selector: #selector(self.storeChanged),
                                                             name: .EKEventStoreChanged, object: self.store)
                     self.triggerRefresh()
-                    NSLog("[Timeout][calendar] 已获得日历完全访问权限")
+                    NSLog("[GiveMeABreak][calendar] 已获得日历完全访问权限")
                 } else {
-                    NSLog("[Timeout][calendar] 日历访问未授权（\(error?.localizedDescription ?? "用户拒绝")）；会议推迟降级为无会议")
+                    NSLog("[GiveMeABreak][calendar] 日历访问未授权（\(error?.localizedDescription ?? "用户拒绝")）；会议推迟降级为无会议")
                 }
             }
         }
@@ -75,6 +75,6 @@ final class LiveCalendarProvider: CalendarProvider {
         lastRefresh = now
         lock.unlock()
 
-        NSLog("[Timeout][calendar] 刷新：\(events.count) 事件 → \(busy.count) Google 忙碌 → \(merged.count) 合并区间")
+        NSLog("[GiveMeABreak][calendar] 刷新：\(events.count) 事件 → \(busy.count) Google 忙碌 → \(merged.count) 合并区间")
     }
 }

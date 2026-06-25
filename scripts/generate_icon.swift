@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 // scripts/generate_icon.swift
-// 生成 Timeout.app 图标：leaf.fill 叶子 + 渐变 squircle 背景（统一休息遮罩的「绿叶」视觉）。
+// 生成 GiveMeABreak.app 图标：leaf.fill 叶子 + 渐变 squircle 背景（统一休息遮罩的「绿叶」视觉）。
 // 用法: swift scripts/generate_icon.swift [variant]
 //   variant: A（默认，teal 渐变背景 + 白叶，高对比、小尺寸清晰）
 //            B（深色背景 + teal 叶，忠于遮罩原貌）
@@ -78,7 +78,7 @@ func renderPNG(_ pt: CGFloat) -> Data {
                            end: CGPoint(x: rect.midX, y: rect.minY), options: [])
 
     // 3) 居中叶子（染色：复制 alpha 形状后用目标色 sourceAtop 填充）
-    guard let base = NSImage(systemSymbolName: "leaf.fill", accessibilityDescription: "Timeout") else {
+    guard let base = NSImage(systemSymbolName: "leaf.fill", accessibilityDescription: "Give me a break") else {
         fputs("错误：leaf.fill 不可用（需在有图形会话的 Mac 上运行）\n", stderr)
         exit(1)
     }

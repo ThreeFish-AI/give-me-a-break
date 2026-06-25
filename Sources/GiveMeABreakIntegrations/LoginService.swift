@@ -9,9 +9,9 @@ enum LoginService {
         do {
             if enabled { try SMAppService.mainApp.register() }
             else { try SMAppService.mainApp.unregister() }
-            NSLog("[Timeout] 开机自启：\(enabled ? "已启用" : "已关闭")")
+            NSLog("[GiveMeABreak] 开机自启：\(enabled ? "已启用" : "已关闭")")
         } catch {
-            NSLog("[Timeout] 开机自启设置失败：\(error.localizedDescription)")
+            NSLog("[GiveMeABreak] 开机自启设置失败：\(error.localizedDescription)")
         }
     }
 }
