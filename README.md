@@ -15,6 +15,7 @@
 - **全屏遮罩**：休息时遮罩所有显示器（`CGShieldingWindowLevel`，压过菜单栏/Dock/全屏），按 Esc 需**二次确认**才可提前结束（软强制，留逃生阀）。
 - **休息音效**：进入休息播放内置**粉噪音**（AVAudioEngine 实时合成，零音频文件、不依赖外部播放器，可靠）；可选联动 QQ 音乐（经系统 Now Playing 路由的 CGEvent 媒体键）。结束休息自动停止。两者均可在设置中开关。
 - **Google 日历门控**：会议计为工作时间，但休息推迟到会议结束。例：工作 30min 后接 30min 会议 → 连续工作 60min，会议结束才开始 10min 休息。
+- **工作日志（认知闭合仪式）**：自然休息前弹一个轻量输入框，花 30 秒写下「刚刚完成了什么 + 可选下一步」，让大脑真正放下再休息（循证：Leroy 注意力残留 / Stubblebine 插值日记）。记录按时间段落盘，菜单「工作日志…」一键生成今日/本周/月报 Markdown，支持复制与导出。永不阻塞休息：回车提交 / Esc 跳过 / 60s 自动放行；默认开启、可在设置关闭；「立即休息」不弹。
 - **健壮性**：AFK/睡眠暂停累加（不回灌）、崩溃恢复（fast-forward）、多屏热插拔、状态持久化。
 
 ## 架构总览
@@ -71,11 +72,11 @@ open GiveMeABreak.app
 make test
 ```
 
-**快速验证遮罩/音乐**（⚠️ 会遮罩你的屏幕约 15 秒）：
+**快速验证遮罩/音乐/工作日志**（⚠️ 会遮罩你的屏幕约 15 秒）：
 
 ```bash
 GIVEMEABREAK_DEBUG=1 .build/release/GiveMeABreak
-# → 8s 工作 → 全屏遮罩 + 拉起 QQ 音乐 → 15s 后自动退出遮罩 + 暂停音乐
+# → 8s 工作 → 工作日志输入框（DEBUG 旁路 15min 门控）→ 回车/跳过 → 全屏遮罩 + 拉起 QQ 音乐 → 15s 后自动退出遮罩 + 暂停音乐
 ```
 
 ## 权限授予（首次运行，全部由你在系统设置手动完成）
@@ -102,7 +103,7 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "workWindows": [
     { "start": { "hours": 9 }, "end": { "hours": 12 } },
     { "start": { "hours": 13, "minutes": 40 }, "end": { "hours": 18 } }
@@ -111,11 +112,14 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
   "restDurationSeconds": 600,
   "afkThresholdSeconds": 180,
   "ambientSoundEnabled": true,
-  "controlQQMusic": true
+  "controlQQMusic": true,
+  "workLogEnabled": true
 }
 ```
 
-可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单提供「立即休息 / 设置 / 退出」；「开机自启」已迁入设置窗口的「一般」分组。
+工作日志单独持久化为 `work-log.json`（同目录），schema 见 [shared/work-log.schema.json](./shared/work-log.schema.json)；报告生成（今日/本周/月报 Markdown）见菜单「工作日志…」。
+
+可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单提供「立即休息 / 设置 / 工作日志 / 退出」；「开机自启」已迁入设置窗口的「一般」分组。
 
 ## 验证
 

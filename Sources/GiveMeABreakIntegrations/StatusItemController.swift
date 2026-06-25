@@ -7,14 +7,17 @@ final class StatusItemController {
     private let onForceRest: () -> Void
     private let onSetLaunchAtLogin: (Bool) -> Void
     private let onOpenSettings: () -> Void
+    private let onOpenWorkLog: () -> Void
 
     init(onForceRest: @escaping () -> Void,
          loginEnabled: Bool,
          onSetLaunchAtLogin: @escaping (Bool) -> Void,
-         onOpenSettings: @escaping () -> Void) {
+         onOpenSettings: @escaping () -> Void,
+         onOpenWorkLog: @escaping () -> Void) {
         self.onForceRest = onForceRest
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
         self.onOpenSettings = onOpenSettings
+        self.onOpenWorkLog = onOpenWorkLog
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         configureMenu(loginEnabled: loginEnabled)
     }
@@ -37,6 +40,11 @@ final class StatusItemController {
         settings.target = self
         settings.image = Self.menuSymbol("gearshape", description: "设置")
         menu.addItem(settings)
+
+        let workLog = NSMenuItem(title: "工作日志…", action: #selector(openWorkLog), keyEquivalent: "l")
+        workLog.target = self
+        workLog.image = Self.menuSymbol("list.bullet.rectangle", description: "工作日志")
+        menu.addItem(workLog)
 
         menu.addItem(.separator())
 
@@ -86,6 +94,8 @@ final class StatusItemController {
     @objc private func forceRest() { onForceRest() }
 
     @objc private func openSettings() { onOpenSettings() }
+
+    @objc private func openWorkLog() { onOpenWorkLog() }
 
     @objc private func toggleLogin(_ sender: NSMenuItem) {
         let newState = sender.state != .on

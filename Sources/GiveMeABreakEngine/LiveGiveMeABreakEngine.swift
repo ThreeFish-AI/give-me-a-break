@@ -17,6 +17,10 @@ public final class LiveGiveMeABreakEngine {
     private var persistHandler: ((EngineState) -> Void)?
     /// 用户「立即休息」标志：下个 tick 无视工作窗口/会议进入休息，休息自然结束即清除。
     private var forcedRest = false
+    /// 「即将进入休息」回调（遮罩升起前）。由 AppRoot 接管：弹工作日志提示，完成后调
+    /// `completeDeferredRest(now:)` 真正升起遮罩。仅自然休息（非 forcedRest）触发。
+    /// nil 时（如既有单测）→ 不拦截，副作用即时分发，行为与历史逐字节一致。
+    public var onPreBreak: ((PreBreakContext) -> Void)?
 
     public init(clock: Clock,
                 calendar: Calendar = .current,
@@ -76,14 +80,41 @@ public final class LiveGiveMeABreakEngine {
         let eff = sideEffects(from: oldPhase, to: s.phase)
         state = s
 
-        if eff.showOverlay, let restStart = s.restStartedAt {
+        // 工作日志拦截：自然休息（非 forcedRest）且启用且已注册回调 → 延迟遮罩/音乐，
+        // 改由 onPreBreak → completeDeferredRest 在用户提交/跳过后升起。forcedRest 与未启用时不拦截。
+        let willDeferForWorkLog = onPreBreak != nil
+            && config.workLogEnabled
+            && eff.showOverlay
+            && !forcedRest
+
+        if eff.showOverlay, let restStart = s.restStartedAt, !willDeferForWorkLog {
             overlay.show(restDeadline: restStart.addingTimeInterval(config.restDurationSeconds))
         }
         if eff.dismissOverlay { overlay.dismiss() }
-        if eff.startMusic { music.startPlayback() }
+        if eff.startMusic && !willDeferForWorkLog { music.startPlayback() }
         if eff.pauseMusic { music.pausePlayback() }
 
+        if willDeferForWorkLog, let restStart = s.restStartedAt {
+            onPreBreak?(PreBreakContext(restStartedAt: restStart, workAccumulatedSeconds: s.workAccumulatedSeconds))
+        }
+
         persistHandler?(state)
+    }
+
+    /// 完成「延迟的休息」：工作日志提示结束后由 AppRoot 调用，真正升起遮罩 + 播放音乐。
+    ///
+    /// 这是继 `requestEarlyRestExit` 之后第二个「绕过 tick 直接改 state」的路径，
+    /// 遵循 issue #6 铁律——与 tick 不变量逐一对齐：
+    /// - guard `phase == .resting`（仅休息态可补发；若提示期间休息已被 tick 自然结束则放弃）；
+    /// - `restStartedAt = now`：rebase，使休息从「现在」起算满时长（不被提示耗时侵蚀）；
+    /// - `lastTickAt = now`：rebase 对账基点，使恢复心跳后首 tick delta≈0，不回灌提示耗时；
+    /// - 不改 phase、不清 forcedRest（该标志仅在离开 .resting 时清，此处保持不变）。
+    public func completeDeferredRest(now: Date) {
+        guard state.phase == .resting, state.restStartedAt != nil else { return }
+        state.restStartedAt = now
+        state.lastTickAt = now
+        overlay.show(restDeadline: now.addingTimeInterval(config.restDurationSeconds))
+        music.startPlayback()
     }
 
     // MARK: - 睡眠 / 唤醒 / 崩溃恢复

@@ -50,7 +50,7 @@ public struct WorkWindow: Codable, Equatable, Hashable, Sendable {
 // MARK: - 一日计划配置
 
 public struct DayPlanConfig: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var workWindows: [WorkWindow]
@@ -64,6 +64,9 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     public var ambientSoundEnabled: Bool
     /// 休息时经 CGEvent 媒体键联动 QQ 音乐（需安装并授权辅助功能），默认开。
     public var controlQQMusic: Bool
+    /// 进入（自然触发）休息前，弹轻量输入框记录这段工作内容与成果（工作日志），默认开。
+    /// 仅对累满工作时长的自然休息生效；「立即休息」不弹。详见 WorkLogStore / WorkLogReport。
+    public var workLogEnabled: Bool
 
     public init(
         schemaVersion: Int = DayPlanConfig.currentSchemaVersion,
@@ -75,7 +78,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         restDurationSeconds: TimeInterval = 10 * 60,
         afkThresholdSeconds: TimeInterval = 180,
         ambientSoundEnabled: Bool = true,
-        controlQQMusic: Bool = true
+        controlQQMusic: Bool = true,
+        workLogEnabled: Bool = true
     ) {
         self.schemaVersion = schemaVersion
         self.workWindows = workWindows
@@ -84,6 +88,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         self.afkThresholdSeconds = afkThresholdSeconds
         self.ambientSoundEnabled = ambientSoundEnabled
         self.controlQQMusic = controlQQMusic
+        self.workLogEnabled = workLogEnabled
     }
 
     public static var defaultConfig: DayPlanConfig { DayPlanConfig() }
@@ -92,7 +97,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, workWindows, workIntervalSeconds, restDurationSeconds
-        case afkThresholdSeconds, ambientSoundEnabled, controlQQMusic
+        case afkThresholdSeconds, ambientSoundEnabled, controlQQMusic, workLogEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -105,6 +110,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         afkThresholdSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .afkThresholdSeconds) ?? d.afkThresholdSeconds
         ambientSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .ambientSoundEnabled) ?? true
         controlQQMusic = try c.decodeIfPresent(Bool.self, forKey: .controlQQMusic) ?? true
+        workLogEnabled = try c.decodeIfPresent(Bool.self, forKey: .workLogEnabled) ?? true
     }
 }
 
@@ -222,5 +228,81 @@ public struct EngineSnapshot: Equatable, Sendable {
         self.activeMeeting = activeMeeting
         self.workAccumulatedSeconds = workAccumulatedSeconds
         self.workIntervalSeconds = workIntervalSeconds
+    }
+}
+
+// MARK: - 工作日志（休息前记录 + 周期报告）
+
+/// 一段工作周期的记录（休息前由用户简述「完成了什么 + 可选下一步」）。
+/// `startedAt` ≈ 休息触发时刻向前回溯的周期起点（restStartedAt − workAccumulatedSeconds）；
+/// `endedAt` = 进入休息那一刻（即 `restStartedAt`）；`durationSeconds` = 该周期累计专注时长。
+/// 由 `WorkLogStore` 持久化、`renderWorkLogReport` 聚合为日报/周报/月报。
+public struct WorkLogEntry: Codable, Equatable, Sendable {
+    public static let currentModelVersion = 1
+
+    public var id: String
+    public var startedAt: Date
+    public var endedAt: Date
+    /// 用户简述「这段时间完成了什么 / 成果」。空串视为该次未记录（实际不入库）。
+    public var summary: String
+    /// 可选「下一步第一个动作」（Leroy ready-to-resume plan，认知闭合）。
+    public var nextAction: String?
+    /// 本周期累计专注时长（秒，来自引擎 workAccumulatedSeconds）。
+    public var durationSeconds: TimeInterval
+    public var modelVersion: Int
+
+    public init(
+        id: String = UUID().uuidString,
+        startedAt: Date,
+        endedAt: Date,
+        summary: String,
+        nextAction: String? = nil,
+        durationSeconds: TimeInterval,
+        modelVersion: Int = WorkLogEntry.currentModelVersion
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.summary = summary
+        self.nextAction = nextAction?.isEmpty == false ? nextAction : nil
+        self.durationSeconds = durationSeconds
+        self.modelVersion = modelVersion
+    }
+
+    // MARK: - Codable（容错解码：旧/缺字段补默认，与 DayPlanConfig 范式一致）
+
+    private enum CodingKeys: String, CodingKey {
+        case id, startedAt, endedAt, summary, nextAction, durationSeconds, modelVersion
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date(timeIntervalSince1970: 0)
+        endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt) ?? startedAt
+        summary = try c.decodeIfPresent(String.self, forKey: .summary) ?? ""
+        let na = try c.decodeIfPresent(String.self, forKey: .nextAction)
+        nextAction = (na?.isEmpty == false) ? na : nil
+        durationSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .durationSeconds) ?? 0
+        modelVersion = try c.decodeIfPresent(Int.self, forKey: .modelVersion) ?? WorkLogEntry.currentModelVersion
+    }
+}
+
+/// 「即将进入休息」的转换上下文：由引擎在副作用分发处（遮罩升起前）回调 AppRoot，
+/// AppRoot 据此决定是否弹工作日志提示。纯数据，零 UI 依赖。
+public struct PreBreakContext: Equatable, Sendable {
+    /// 进入休息时刻（即 `EngineState.restStartedAt`）= 本工作周期结束点。
+    public let restStartedAt: Date
+    /// 本周期累计专注时长（秒）。
+    public let workAccumulatedSeconds: TimeInterval
+
+    public init(restStartedAt: Date, workAccumulatedSeconds: TimeInterval) {
+        self.restStartedAt = restStartedAt
+        self.workAccumulatedSeconds = workAccumulatedSeconds
+    }
+
+    /// 近似周期起点（回溯累计专注时长；AFK 冻结期不计入，故为近似值，报告场景足够）。
+    public var approxPeriodStartedAt: Date {
+        restStartedAt.addingTimeInterval(-workAccumulatedSeconds)
     }
 }

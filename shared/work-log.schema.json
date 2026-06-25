@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "./work-log.schema.json",
+  "title": "Give me a break WorkLog entries",
+  "description": "Give me a break 工作日志条目数组权威定义（休息前用户记录「完成了什么 + 可选下一步」）。Swift Codable 与未来 C# System.Text.Json 双向兼容；持久化为 ~/Library/Application Support/com.aurelius.givemeabreak/work-log.json（Windows: %APPDATA%\\com.aurelius.givemeabreak\\work-log.json）。Date 序列化为 Foundation 默认（timeIntervalSinceReferenceDate, Double）。报告生成见 WorkLogReport（今日/本周/本月/全部 Markdown，确定性幂等）。",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "startedAt", "endedAt", "summary", "durationSeconds"],
+    "properties": {
+      "id": { "type": "string", "description": "条目唯一 id（UUID 字符串）" },
+      "startedAt": { "type": "number", "description": "工作周期起点（restStartedAt − workAccumulatedSeconds 的近似回溯值），Foundation Double（timeIntervalSinceReferenceDate）" },
+      "endedAt": { "type": "number", "description": "工作周期结束点 = 进入休息时刻（restStartedAt）" },
+      "summary": { "type": "string", "description": "用户简述「这段时间完成了什么 / 成果」" },
+      "nextAction": { "type": ["string", "null"], "description": "可选「下一步第一个动作」（Leroy ready-to-resume plan）；空串规约为 null" },
+      "durationSeconds": { "type": "number", "minimum": 0, "description": "本周期累计专注时长（秒，来自引擎 workAccumulatedSeconds）" },
+      "modelVersion": { "type": "integer", "default": 1, "description": "条目结构版本，当前为 1；缺省补 1" }
+    }
+  }
+}

@@ -18,6 +18,13 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
+    // 工作日志（休息前记录 + 周期报告）
+    private var workLogStore: WorkLogStore?
+    private var workLogPromptController: WorkLogPromptWindowController?
+    private var workLogReportController: WorkLogReportWindowController?
+    /// 连续跳过计数（会话内；≥3 则下次静默并自愈，对抗提示疲劳）。
+    private var consecutiveSkips: Int = 0
+
     private var lastSavedPhase: EnginePhase?
     private var lastSaveAt: Date = .distantPast
 
@@ -35,6 +42,18 @@ final public class AppRoot {
             store = nil
         }
         configStore = store
+
+        // 工作日志存储（复用同一 Application Support 目录；独立 work-log.json）
+        let workLog: WorkLogStore?
+        do {
+            workLog = try WorkLogStore(directory: dir)
+        } catch {
+            NSLog("[GiveMeABreak] 工作日志目录初始化失败，本次运行不记录：\(error)")
+            workLog = nil
+        }
+        workLogStore = workLog
+        workLogPromptController = WorkLogPromptWindowController()
+        if let workLog { workLogReportController = WorkLogReportWindowController(store: workLog) }
 
         let config = debugConfigOrLoaded(store: store)
         let sensors = SystemSensors()
@@ -59,6 +78,7 @@ final public class AppRoot {
         )
         engine.fastForward()  // 启动崩溃恢复
         engine.setPersistHandler { [weak self] state in self?.handlePersist(state) }
+        engine.onPreBreak = { [weak self] ctx in self?.handlePreBreak(ctx) }  // 工作日志：休息前拦截
         self.engine = engine
         lastSavedPhase = engine.state.phase
 
@@ -69,7 +89,8 @@ final public class AppRoot {
             },
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            onOpenSettings: { [weak self] in self?.openSettings() },
+            onOpenWorkLog: { [weak self] in self?.openWorkLog() }
         )
 
         let heartbeat = HeartbeatTimer(queue: .main)  // 主队列：副作用（overlay/music）均 UI 安全
@@ -119,6 +140,60 @@ final public class AppRoot {
     func openSettings() {
         guard let config = engine?.config else { return }
         settingsController?.show(currentConfig: config, loginEnabled: LoginService.isEnabled)
+    }
+
+    // MARK: - 工作日志
+
+    /// 打开「工作日志」报告窗口（菜单入口）。
+    func openWorkLog() {
+        workLogReportController?.show()
+    }
+
+    /// 引擎在自然休息、遮罩升起前回调。决定弹提示还是直接放行——**任何分支都必最终进入休息**。
+    private func handlePreBreak(_ ctx: PreBreakContext) {
+        let now = Date()
+        let debug = ProcessInfo.processInfo.environment["GIVEMEABREAK_DEBUG"] != nil
+
+        // 周期过短（< 15min 且非 DEBUG，如碎片休息/调试 8s 周期）→ 不值得反思，直接放行
+        if ctx.workAccumulatedSeconds < 900 && !debug {
+            engine?.completeDeferredRest(now: now)
+            return
+        }
+        // 连续跳过衰减：≥3 次连续跳过则本次静默并自愈（下次重新提示），对抗提示疲劳
+        if consecutiveSkips >= 3 {
+            consecutiveSkips = 0
+            engine?.completeDeferredRest(now: now)
+            return
+        }
+        guard let store = workLogStore, let prompt = workLogPromptController else {
+            engine?.completeDeferredRest(now: now)  // 无存储/控制器兜底：绝不卡住
+            return
+        }
+
+        // 弹提示：冻结心跳，使休息倒计时不被提示耗时侵蚀（提示结束 completeDeferredRest rebase）
+        heartbeat?.suspend()
+        prompt.present(
+            workDurationSeconds: ctx.workAccumulatedSeconds,
+            onSubmit: { [weak self] summary, nextAction in
+                store.append(WorkLogEntry(
+                    startedAt: ctx.approxPeriodStartedAt,
+                    endedAt: ctx.restStartedAt,
+                    summary: summary,
+                    nextAction: nextAction,
+                    durationSeconds: ctx.workAccumulatedSeconds))
+                self?.afterPrompt(submitted: true)
+            },
+            onSkip: { [weak self] in
+                self?.afterPrompt(submitted: false)
+            }
+        )
+    }
+
+    /// 提示结束（提交/跳过/60s 超时统一）：落 bookkeeping + rebase 进休息 + 恢复心跳。
+    private func afterPrompt(submitted: Bool) {
+        if submitted { consecutiveSkips = 0 } else { consecutiveSkips += 1 }
+        engine?.completeDeferredRest(now: Date())
+        heartbeat?.resume()
     }
 
     // MARK: - 调试配置

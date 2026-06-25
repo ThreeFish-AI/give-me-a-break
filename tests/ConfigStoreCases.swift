@@ -90,11 +90,12 @@ func runConfigStoreCases() {
         try! rewritten.write(to: cfgURL)
 
         let loaded = store.loadConfig()
-        expectEqual(loaded.schemaVersion, 2, "迁移后版本号应规范化为当前版本 2")
+        expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "迁移后版本号应规范化为当前版本")
         expectEqual(loaded.workIntervalSeconds, 2400, "原工作时长应保留")
         expectEqual(loaded.afkThresholdSeconds, 240, "原 AFK 阈值应保留")
         expectEqual(loaded.workWindows.count, 1, "原工作窗口应保留")
         expectEqual(loaded.ambientSoundEnabled, true, "缺失的 ambientSoundEnabled 应补默认 true")
         expectEqual(loaded.controlQQMusic, true, "缺失的 controlQQMusic 应补默认 true")
+        expectEqual(loaded.workLogEnabled, true, "缺失的 workLogEnabled（v3 新增）应补默认 true")
     }
 }

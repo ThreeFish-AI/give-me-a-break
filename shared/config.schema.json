@@ -9,8 +9,8 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "description": "配置 schema 版本。当前为 2；高于此版本两端回退默认，低于则规范化后升级。",
-      "const": 2
+      "description": "配置 schema 版本。当前为 3；高于此版本两端回退默认，低于则规范化后升级。",
+      "const": 3
     },
     "workWindows": {
       "type": "array",
@@ -31,6 +31,7 @@
     "afkThresholdSeconds": { "type": "number", "default": 180, "minimum": 0, "description": "系统空闲超过此值视为 AFK，暂停累加（秒），默认 180" },
     "ambientSoundEnabled": { "type": "boolean", "default": true, "description": "休息时播放内置粉噪音，默认开" },
     "controlQQMusic": { "type": "boolean", "default": true, "description": "休息时联动 QQ 音乐媒体键，默认开" },
+    "workLogEnabled": { "type": "boolean", "default": true, "description": "自然休息前弹轻量输入框记录工作内容与成果（工作日志），默认开。仅自然休息触发；「立即休息」不弹。记录见 work-log.json，报告见菜单「工作日志…」。v3 新增。" },
     "graphClientId": { "type": ["string", "null"], "default": null, "description": "Microsoft Graph 日历门控 Azure 应用 client id（用户在 Azure portal 注册公共客户端应用，允许设备码 flow）。空=禁用日历门控，降级为无会议（Phase 3）。" }
   }
 }

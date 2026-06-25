@@ -301,6 +301,98 @@ func runEngineWiringCases() {
         expect(music.lastConfig != nil, "init 后应已同步配置到播放器")
         expectEqual(music.lastConfig?.workIntervalSeconds, m(8), "updateConfig 应热同步到播放器")
     }
+
+    // MARK: - 工作日志：pre-break 拦截 + completeDeferredRest（回归 issue #6「绕 tick 改 state」不变量）
+
+    test("自然休息：onPreBreak 触发，遮罩/音乐延迟，completeDeferredRest 后升起") {
+        let t0 = Date(timeIntervalSince1970: 0)
+        let clock = MockClock(t0)
+        let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
+        let engine = LiveGiveMeABreakEngine(
+            clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
+            overlay: overlay, music: music, systemState: sys,
+            config: fullDayConfig(interval: m(50), rest: m(10)),
+            initialState: EngineState(phase: .working, lastTickAt: t0)
+        )
+        var captured: [PreBreakContext] = []
+        engine.onPreBreak = { captured.append($0) }
+
+        runTicks(engine, clock: clock, seconds: m(50))  // → 自然触发休息
+        expectEqual(engine.state.phase, .resting)
+        expectEqual(captured.count, 1, "自然休息应回调 onPreBreak 一次")
+        expectEqual(overlay.showCount, 0, "提示期间遮罩应延迟（未升起）")
+        expectEqual(music.startCount, 0, "提示期间音乐应延迟")
+        expect(approx(captured[0].workAccumulatedSeconds, m(50), 1), "ctx 应携带累计专注时长")
+
+        // 用户提交提示 → completeDeferredRest 真正升起遮罩并 rebase restStartedAt
+        let submitAt = clock.now().addingTimeInterval(30)  // 提示耗时 30s
+        engine.completeDeferredRest(now: submitAt)
+        expectEqual(overlay.showCount, 1, "completeDeferredRest 后遮罩应升起")
+        expectEqual(music.startCount, 1, "completeDeferredRest 后音乐应播放")
+        expect(approx(engine.state.restStartedAt!.timeIntervalSince(submitAt), 0, 0.001), "restStartedAt 应 rebase 到提交时刻")
+
+        // 后续 tick 不重复升起遮罩（回归 issue #6：绕 tick 改 state 后须稳定）
+        let showBefore = overlay.showCount
+        runTicks(engine, clock: clock, seconds: m(2))
+        expectEqual(overlay.showCount, showBefore, "completeDeferredRest 后不应重复显示遮罩")
+        expectEqual(engine.state.phase, .resting)
+    }
+
+    test("强制休息：onPreBreak 不触发，遮罩直显") {
+        let t0 = Date(timeIntervalSince1970: 0)
+        let clock = MockClock(t0)
+        let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
+        let engine = LiveGiveMeABreakEngine(
+            clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
+            overlay: overlay, music: music, systemState: sys,
+            config: fullDayConfig(interval: m(50), rest: m(10)),
+            initialState: EngineState(phase: .working, lastTickAt: t0)
+        )
+        var captured: [PreBreakContext] = []
+        engine.onPreBreak = { captured.append($0) }
+
+        engine.forceRestNow()
+        runTicks(engine, clock: clock, seconds: 2)
+        expectEqual(engine.state.phase, .resting, "forceRestNow 应进入休息")
+        expectEqual(captured.count, 0, "强制休息不应触发工作日志提示")
+        expectEqual(overlay.showCount, 1, "强制休息应直显遮罩（不延迟）")
+    }
+
+    test("workLogEnabled=false：onPreBreak 不触发，遮罩直显") {
+        let t0 = Date(timeIntervalSince1970: 0)
+        let clock = MockClock(t0)
+        let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
+        var cfg = fullDayConfig(interval: m(50), rest: m(10))
+        cfg.workLogEnabled = false
+        let engine = LiveGiveMeABreakEngine(
+            clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
+            overlay: overlay, music: music, systemState: sys,
+            config: cfg, initialState: EngineState(phase: .working, lastTickAt: t0)
+        )
+        var captured: [PreBreakContext] = []
+        engine.onPreBreak = { captured.append($0) }
+
+        runTicks(engine, clock: clock, seconds: m(50))
+        expectEqual(captured.count, 0, "关闭工作日志时不应触发 onPreBreak")
+        expectEqual(overlay.showCount, 1, "应直显遮罩（回退旧行为）")
+    }
+
+    test("onPreBreak=nil：行为与历史一致（零回归）") {
+        let t0 = Date(timeIntervalSince1970: 0)
+        let clock = MockClock(t0)
+        let overlay = MockOverlay(), music = MockMusic(), calProv = StubCalendar(), sys = MockSystemState()
+        let engine = LiveGiveMeABreakEngine(
+            clock: clock, calendar: utcCalendar(), calendarProvider: calProv,
+            overlay: overlay, music: music, systemState: sys,
+            config: fullDayConfig(interval: m(50), rest: m(10)),
+            initialState: EngineState(phase: .working, lastTickAt: t0)
+        )
+        // 不设置 onPreBreak（保持 nil）
+        runTicks(engine, clock: clock, seconds: m(50))
+        expectEqual(engine.state.phase, .resting)
+        expectEqual(overlay.showCount, 1, "无 onPreBreak 时遮罩应即时升起（历史行为）")
+        expectEqual(music.startCount, 1)
+    }
 }
 
 private func minutes__(_ m: TimeInterval) -> TimeInterval { m * 60 }
