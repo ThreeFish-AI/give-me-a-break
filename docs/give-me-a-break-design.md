@@ -66,7 +66,7 @@ evaluate(now) 按顺序短路求值，首个匹配决定目标态：
 
 | 契约 | 实现 | 关键 API | 权限 |
 |---|---|---|---|
-| **遮罩** | `LiveOverlayController` | 每 `NSScreen` 一个 borderless `NSPanel`，`level=CGShieldingWindowLevel()`<sup>[[3]](#ref3)</sup>，`collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications]`；Esc 经本地事件监听→`NSAlert` 二次确认 | 无（遮罩本身不需 TCC） |
+| **遮罩** | `LiveOverlayController` | 每 `NSScreen` 一个 borderless `NSPanel`，`level=CGShieldingWindowLevel()`<sup>[[3]](#ref3)</sup>（⚠️ 该 C 函数 Apple 已弃用，现代等价 `.screenSaver` / `CGWindowLevelForKey(.shieldingWindowLevelKey)`，同屏蔽层级；`LiveOverlayController.swift:73` 待平滑替换为 `.screenSaver`），`collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications]`；Esc 经本地事件监听→`NSAlert` 二次确认 | 无（遮罩本身不需 TCC） |
 | **音乐** | `LiveMusicController` | `NSWorkspace` 拉起 QQ 音乐 + CGEvent 合成 `NX_KEYTYPE_PLAY`(=16) 媒体键（`subtype=8` NX_SUBTYPE_AUX_CONTROL_BUTTONS）<sup>[[4]](#ref4)</sup>，OS 路由到 Now Playing 应用 | **Accessibility（必需）** |
 | **日历** | `LiveCalendarProvider` | 单一 `EKEventStore`<sup>[[5]](#ref5)</sup>，`requestFullAccessToEvents()`，过滤 `sourceType==.calDAV`<sup>[[6]](#ref6)</sup> + busy，`EKEventStoreChanged` 推送 + 限流回退 | **完全日历访问** |
 
@@ -149,9 +149,9 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ## References
 
-<a id="ref1"></a>[1] Apple Inc., "NSWindow.Level and CGShieldingWindowLevel," *Core Graphics Reference*, 2024.
+<a id="ref1"></a>[1] Apple Inc., "NSWindow.Level.screenSaver — Window Levels," *AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct/screensaver
 <a id="ref2"></a>[2] Apple Inc., "NSWorkspace willSleepNotification / didWakeNotification," *AppKit Reference*, 2024.
-<a id="ref3"></a>[3] Apple Inc., "CGShieldingWindowLevel / NSWindow collectionBehavior," *Core Graphics & AppKit Reference*, 2024.
+<a id="ref3"></a>[3] Apple Inc., "CGShieldingWindowLevel()（已弃用；等价 `CGWindowLevelForKey(kCGShieldingWindowLevelKey)` = `NSWindow.Level.screenSaver`，同屏蔽层级）/ NSWindow collectionBehavior," *Core Graphics & AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgshieldingwindowlevel()
 <a id="ref4"></a>[4] Apple Inc., "NX_KEYTYPE_PLAY and AUX_CONTROL_BUTTONS," *IOKit HID Event Types (ev_keymap.h)*, 2024.
 <a id="ref5"></a>[5] Apple Inc., "EKEventStore / requestFullAccessToEvents / EKEventStoreChanged," *EventKit Framework Reference*, 2024.
 <a id="ref6"></a>[6] Apple Inc., "EKSource sourceType (.calDAV)," *EventKit Reference*, 2024.
