@@ -169,7 +169,7 @@ jobs:
 
       - name: Setup .NET 8
         # NOTE: 暂用 tag，待人工/Dependabot SHA-pin 对齐仓库其余 action 规范。
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
