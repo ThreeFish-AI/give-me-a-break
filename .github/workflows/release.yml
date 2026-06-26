@@ -206,17 +206,17 @@ jobs:
     steps:
       - name: Download markers
         # NOTE: 暂用 tag，待 SHA-pin。
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: markers
 
       - name: Download macOS zip
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: macos-zip
 
       - name: Download Windows zip
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: windows-zip
 
