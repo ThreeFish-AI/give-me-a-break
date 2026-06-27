@@ -20,7 +20,7 @@ private extension TimeOfDay {
     }
 }
 
-/// 设置视图：三页签分类（通用 / 作息 / 休息），draft-apply 模式。
+/// 设置视图：四页签分类（通用 / 作息 / 休息音效 / 工作日志），draft-apply 模式。
 /// 「开机自启」即时生效（非 draft）；其余随底部「应用」一次性提交所有页签的草稿。
 struct SettingsView: View {
     @State private var draft: DayPlanConfig
@@ -31,7 +31,7 @@ struct SettingsView: View {
     private let onCancel: () -> Void
     private let onToggleLogin: (Bool) -> Void
 
-    private enum SettingsTab: Hashable { case general, schedule, rest }
+    private enum SettingsTab: Hashable { case general, schedule, sound, workLog }
 
     init(initial: DayPlanConfig,
          loginEnabled: Bool,
@@ -71,14 +71,21 @@ struct SettingsView: View {
                 .tabItem { Label("作息", systemImage: "clock") }
                 .tag(SettingsTab.schedule)
 
-                // 休息：休息音效 + 工作日志（休息前后发生什么）
+                // 休息音效：休息时听什么（自定义音频 / 白噪音 / QQ 音乐）
                 Form {
                     soundSection
+                }
+                .formStyle(.grouped)
+                .tabItem { Label("休息音效", systemImage: "music.note") }
+                .tag(SettingsTab.sound)
+
+                // 工作日志：休息前的小结书写（开关 / 永久等待 / 等待时长）
+                Form {
                     workLogSection
                 }
                 .formStyle(.grouped)
-                .tabItem { Label("休息", systemImage: "moon.stars") }
-                .tag(SettingsTab.rest)
+                .tabItem { Label("工作日志", systemImage: "note.text") }
+                .tag(SettingsTab.workLog)
             }
 
             Divider()
