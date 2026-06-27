@@ -91,7 +91,9 @@ struct SettingsView: View {
             Divider()
             footerButtons
         }
-        .frame(minWidth: 500, idealWidth: 560, minHeight: 420, idealHeight: 540)
+        // 宽度固定、高度随当前页签内容自适应（窗口侧以 preferredContentSize 跟随，免滚动条/多余留白）。
+        .frame(width: 560)
+        .fixedSize(horizontal: false, vertical: true)
         .confirmationDialog("确定恢复全部设置为默认值？",
                             isPresented: $showingResetConfirm,
                             titleVisibility: .visible) {
@@ -106,18 +108,18 @@ struct SettingsView: View {
 
     private var generalSection: some View {
         Section {
-            Toggle("开机时自动启动 Give me a break", isOn: Binding(
+            Toggle("开机时自动启动", isOn: Binding(
                 get: { loginEnabled },
                 set: { newValue in
                     loginEnabled = newValue
                     onToggleLogin(newValue)   // 即时生效，不走 draft（符合登录项语义）
                 }
             ))
-            .accessibilityHint("登录后自动在后台运行 Give me a break")
+            .accessibilityHint("登录系统后在后台自动启动并守护作息")
         } header: {
             Text("一般")
         } footer: {
-            Text("也可在「系统设置 → 通用 → 登录项」管理。")
+            Text("如需关闭，也可在「系统设置 → 通用 → 登录项」中管理。")
         }
     }
 
@@ -132,7 +134,7 @@ struct SettingsView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Give me a break").font(.headline)
-                    Text("v\(appVersion) · 菜单栏强制作息守护")
+                    Text("v\(appVersion) · 菜单栏强制作息守护 · macOS 14+")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -163,7 +165,7 @@ struct SettingsView: View {
         } header: {
             Text("工作时段（每日重复）")
         } footer: {
-            Text("这些时间段每天都会生效，期间累计工作时间。时段可跨午夜（如 22:00–02:00）。")
+            Text("仅在这些时段内累计工作时间并触发休息；每天自动重复。时段可跨午夜（如 22:00–02:00）。")
         }
     }
 
@@ -205,15 +207,15 @@ struct SettingsView: View {
     private var rhythmSection: some View {
         Section {
             inlineStepper("工作时长", value: minutesBinding(\.workIntervalSeconds),
-                          range: 5...240, step: 5, hint: "每累计工作这么久，就触发一次休息")
+                          range: 5...240, step: 5, hint: "累计工作达到此时长，触发一次强制休息")
             inlineStepper("休息时长", value: minutesBinding(\.restDurationSeconds),
-                          range: 1...60, step: 1, hint: "每次休息的持续时长")
+                          range: 1...60, step: 1, hint: "每次强制休息的持续时长")
             inlineStepper("离开判定（AFK 阈值）", value: minutesBinding(\.afkThresholdSeconds),
-                          range: 1...60, step: 1, hint: "连续无键鼠操作超过此值，视为已离开座位，暂停工作计时")
+                          range: 1...60, step: 1, hint: "无键鼠操作超过此时长即判定离座，暂停累计工作时间")
         } header: {
             Text("节律")
         } footer: {
-            Text("AFK = Away From Keyboard。离开判定在你短暂离座时暂停累计工作时间，避免误触发休息。")
+            Text("AFK（Away From Keyboard）即离座判定：人不在时暂停计时，避免误触发休息。")
         }
     }
 
@@ -239,14 +241,14 @@ struct SettingsView: View {
     private var soundSection: some View {
         Section {
             restMusicRow
-            Toggle("休息时播放舒缓白噪音", isOn: $draft.ambientSoundEnabled)
-                .accessibilityHint("内置粉噪音，无需安装任何播放器；当上方设置了休息音乐时将被取代")
+            Toggle("休息时播放柔和粉噪音", isOn: $draft.ambientSoundEnabled)
+                .accessibilityHint("应用实时合成、开箱即用；设置上方休息音乐后由其取代，音乐加载失败时回退至此")
             Toggle("联动 QQ 音乐", isOn: $draft.controlQQMusic)
-                .accessibilityHint("需安装 QQ 音乐并授予辅助功能权限")
+                .accessibilityHint("需已安装 QQ 音乐并授予辅助功能权限")
         } header: {
             Text("休息音效")
         } footer: {
-            Text("设置「休息音乐」后，休息时将循环播放你选择的本地音频文件（mp3/m4a/aac/wav/flac 等），取代内置白噪音；若文件不存在或格式不支持，会回退到白噪音。文件不被打包或分发，仅以本地路径引用——移动或删除该文件会导致回退。白噪音由应用内置合成，可靠且不依赖外部播放器；QQ 音乐联动经系统媒体键控制，需安装并授权辅助功能。")
+            Text("休息时声音优先级：休息音乐 → 柔和粉噪音。设置「休息音乐」后循环播放所选本地音频（mp3/m4a/aac/wav/flac 等）取代粉噪音；文件缺失、格式不支持或被移动删除时，若已开启「柔和粉噪音」则回退之，否则静默。音频仅以本地路径引用、不打包不分发。\n粉噪音由应用实时合成，可靠且不依赖外部播放器；QQ 音乐为可叠加联动，经系统媒体键控制，需安装并授予辅助功能权限。")
         }
     }
 
@@ -266,10 +268,10 @@ struct SettingsView: View {
                     .accessibilityLabel("当前休息音乐：\((p as NSString).lastPathComponent)")
                 Button("清除") { draft.restMusicPath = nil }
                     .buttonStyle(.borderless)
-                    .accessibilityHint("清除自定义休息音乐，回退到内置白噪音")
+                    .accessibilityHint("清除自定义休息音乐，回退到内置粉噪音")
             }
             Button(draft.restMusicPath?.isEmpty ?? true ? "选择文件…" : "更换…") { pickRestMusicFile() }
-                .accessibilityHint("选择本地音频文件（mp3/m4a/aac/wav/flac）作为休息音乐，取代白噪音")
+                .accessibilityHint("选择本地音频文件（mp3/m4a/aac/wav/flac）作为休息音乐，取代粉噪音")
         }
     }
 
@@ -294,19 +296,19 @@ struct SettingsView: View {
     private var workLogSection: some View {
         Section {
             Toggle("休息前记录工作日志", isOn: $draft.workLogEnabled)
-                .accessibilityHint("自然休息前弹出输入框，记录这段时间的工作内容与成果")
+                .accessibilityHint("自然休息前弹出输入框，记录刚完成的工作与成果，让大脑真正放下")
             if draft.workLogEnabled {
                 Toggle("永久等待（不自动跳过、不自动进入休息）", isOn: waitForeverBinding)
-                    .accessibilityHint("开启后小结窗不会自动消失，需手动「记录并休息」「跳过」或关闭窗口")
+                    .accessibilityHint("开启后小结窗不自动消失，需手动「记录并休息」「跳过」或关窗")
                 if draft.workLogPromptTimeoutSeconds > 0 {
                     inlineStepper("自动放行等待时长", value: minutesBinding(\.workLogPromptTimeoutSeconds),
-                                  range: 1...30, step: 1, hint: "小结窗弹出后，超过此时长未操作即自动跳过进入休息")
+                                  range: 1...30, step: 1, hint: "小结窗弹出后超过此时长未操作，自动跳过并进入休息")
                 }
             }
         } header: {
             Text("工作日志")
         } footer: {
-            Text("累满工作时长的自然休息前，会弹出输入框让你花 30 秒写下刚完成的与下一步，让大脑真正放下。可设定等待时长后自动放行（默认 3 分钟），或开启「永久等待」让窗口停留至手动操作，或在上方关闭整个环节。「立即休息」不弹。记录可在菜单「工作日志…」查看，生成今日/本周/本月报告。")
+            Text("自然休息前花 30 秒写下「刚完成什么 + 下一步」，完成认知闭合再休息。永不阻塞：回车提交 / Esc 或关窗跳过 / 到点自动放行（默认 3 分钟，可调，或设「永久等待」），也可在上方整体关闭；「立即休息」不弹。记录落盘，可在菜单「工作日志…」生成今日 / 本周 / 本月报告。")
         }
     }
 
