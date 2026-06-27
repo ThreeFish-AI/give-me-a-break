@@ -42,6 +42,24 @@ func runWorkLogCases() {
         expectEqual(loaded[1].nextAction, nil, "空 nextAction 应规约为 nil")
     }
 
+    test("补录工作日志：追加过去时段条目，按 startedAt 升序落库") {
+        let store = try! WorkLogStore(directory: makeTempDir())
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        // 已有一条较晚的记录
+        store.append(WorkLogEntry(startedAt: t0.addingTimeInterval(3600), endedAt: t0.addingTimeInterval(4200),
+                                  summary: "上午的活", durationSeconds: 600))
+        // 补录一条更早的漏记时段（模拟菜单「补录工作日志」落库路径）
+        store.append(WorkLogEntry(startedAt: t0, endedAt: t0.addingTimeInterval(600),
+                                  summary: "更早漏掉的", nextAction: "接着调", durationSeconds: 600))
+
+        let loaded = store.loadEntries()
+        expectEqual(loaded.count, 2)
+        expectEqual(loaded[0].summary, "更早漏掉的", "补录的更早条目应按 startedAt 排到最前")
+        expectEqual(loaded[1].summary, "上午的活")
+        expectEqual(loaded[0].startedAt, t0)
+        expectEqual(loaded[0].nextAction, "接着调", "补录条目的可选「下一步」应保留")
+    }
+
     test("WorkLogStore 缺失/损坏文件 → 空列表") {
         let dir = makeTempDir()
         let store = try! WorkLogStore(directory: dir)

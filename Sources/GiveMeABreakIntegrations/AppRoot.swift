@@ -18,10 +18,11 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
-    // 工作日志（休息前记录 + 周期报告）
+    // 工作日志（休息前记录 + 周期报告 + 补录漏掉的时段）
     private var workLogStore: WorkLogStore?
     private var workLogPromptController: WorkLogPromptWindowController?
     private var workLogReportController: WorkLogReportWindowController?
+    private var workLogBackfillController: WorkLogBackfillWindowController?
     /// 连续跳过计数（会话内；≥3 则下次静默并自愈，对抗提示疲劳）。
     private var consecutiveSkips: Int = 0
 
@@ -54,6 +55,9 @@ final public class AppRoot {
         workLogStore = workLog
         workLogPromptController = WorkLogPromptWindowController()
         if let workLog { workLogReportController = WorkLogReportWindowController(store: workLog) }
+        workLogBackfillController = WorkLogBackfillWindowController(onSave: { [weak self] entry in
+            self?.workLogStore?.append(entry)   // 补录条目按 startedAt 排序并入 work-log.json
+        })
 
         let config = debugConfigOrLoaded(store: store)
         let sensors = SystemSensors()
@@ -90,7 +94,8 @@ final public class AppRoot {
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
             onOpenSettings: { [weak self] in self?.openSettings() },
-            onOpenWorkLog: { [weak self] in self?.openWorkLog() }
+            onOpenWorkLog: { [weak self] in self?.openWorkLog() },
+            onOpenBackfillWorkLog: { [weak self] in self?.openBackfillWorkLog() }
         )
 
         let heartbeat = HeartbeatTimer(queue: .main)  // 主队列：副作用（overlay/music）均 UI 安全
@@ -147,6 +152,13 @@ final public class AppRoot {
     /// 打开「工作日志」报告窗口（菜单入口）。
     func openWorkLog() {
         workLogReportController?.show()
+    }
+
+    /// 打开「补录工作日志」窗口（菜单入口）：默认起始取上一条日志的 endedAt（填补最近缺口），无则回退 50 分钟前。
+    func openBackfillWorkLog() {
+        let lastEnd = workLogStore?.loadEntries().last?.endedAt
+        let defaultStart = lastEnd ?? Date().addingTimeInterval(-50 * 60)
+        workLogBackfillController?.show(defaultStart: defaultStart)
     }
 
     /// 引擎在自然休息、遮罩升起前回调。决定弹提示还是直接放行——**任何分支都必最终进入休息**。

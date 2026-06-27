@@ -8,16 +8,19 @@ final class StatusItemController {
     private let onSetLaunchAtLogin: (Bool) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenWorkLog: () -> Void
+    private let onOpenBackfillWorkLog: () -> Void
 
     init(onForceRest: @escaping () -> Void,
          loginEnabled: Bool,
          onSetLaunchAtLogin: @escaping (Bool) -> Void,
          onOpenSettings: @escaping () -> Void,
-         onOpenWorkLog: @escaping () -> Void) {
+         onOpenWorkLog: @escaping () -> Void,
+         onOpenBackfillWorkLog: @escaping () -> Void) {
         self.onForceRest = onForceRest
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
         self.onOpenSettings = onOpenSettings
         self.onOpenWorkLog = onOpenWorkLog
+        self.onOpenBackfillWorkLog = onOpenBackfillWorkLog
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         configureMenu(loginEnabled: loginEnabled)
     }
@@ -45,6 +48,11 @@ final class StatusItemController {
         workLog.target = self
         workLog.image = Self.menuSymbol("list.bullet.rectangle", description: "工作日志")
         menu.addItem(workLog)
+
+        let backfill = NSMenuItem(title: "补录工作日志…", action: #selector(openBackfillWorkLog), keyEquivalent: "")
+        backfill.target = self
+        backfill.image = Self.menuSymbol("square.and.pencil", description: "补录工作日志")
+        menu.addItem(backfill)
 
         menu.addItem(.separator())
 
@@ -96,6 +104,8 @@ final class StatusItemController {
     @objc private func openSettings() { onOpenSettings() }
 
     @objc private func openWorkLog() { onOpenWorkLog() }
+
+    @objc private func openBackfillWorkLog() { onOpenBackfillWorkLog() }
 
     @objc private func toggleLogin(_ sender: NSMenuItem) {
         let newState = sender.state != .on
