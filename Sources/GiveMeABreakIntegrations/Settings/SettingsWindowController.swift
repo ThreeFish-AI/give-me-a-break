@@ -33,10 +33,10 @@ final class SettingsWindowController {
             w.title = "Give me a break 设置"
             w.titlebarAppearsTransparent = false
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]  // 允许用户调整窗口大小
-            w.contentMinSize = NSSize(width: 480, height: 460)                // 约束最小尺寸，避免拉得太小
-            // 初始尺寸：尽量一次显示全部 Section（含「休息音效」），免首次需滚动；
+            w.contentMinSize = NSSize(width: 500, height: 420)                // 约束最小尺寸，避免拉得太小
+            // 初始尺寸：页签化后每页内容更短；尽量一次显示当前页签的全部 Section，免首次需滚动。
             // NSHostingController 默认用 fittingSize（≈min），idealHeight 不生效，故显式设定。
-            w.setContentSize(NSSize(width: 560, height: 680))
+            w.setContentSize(NSSize(width: 560, height: 600))
             w.isReleasedWhenClosed = false
             window = w
         } else {

@@ -20,14 +20,18 @@ private extension TimeOfDay {
     }
 }
 
-/// 设置视图：一般 / 工作时段 / 节律 / 休息音效 四 Section（draft-apply 模式）。
-/// 「开机自启」即时生效（非 draft，符合登录项语义）；其余随「应用」提交。
+/// 设置视图：三页签分类（通用 / 作息 / 休息），draft-apply 模式。
+/// 「开机自启」即时生效（非 draft）；其余随底部「应用」一次性提交所有页签的草稿。
 struct SettingsView: View {
     @State private var draft: DayPlanConfig
     @State private var loginEnabled: Bool
+    @State private var selectedTab: SettingsTab = .general
+    @State private var showingResetConfirm: Bool = false
     private let onApply: (DayPlanConfig) -> Void
     private let onCancel: () -> Void
     private let onToggleLogin: (Bool) -> Void
+
+    private enum SettingsTab: Hashable { case general, schedule, rest }
 
     init(initial: DayPlanConfig,
          loginEnabled: Bool,
@@ -48,19 +52,47 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Form {
-                generalSection
-                workWindowsSection
-                rhythmSection
-                soundSection
-                workLogSection
+            TabView(selection: $selectedTab) {
+                // 通用：开机自启 + 关于
+                Form {
+                    generalSection
+                    aboutSection
+                }
+                .formStyle(.grouped)
+                .tabItem { Label("通用", systemImage: "gearshape") }
+                .tag(SettingsTab.general)
+
+                // 作息：工作时段 + 节律（何时工作、工作多久休息一次）
+                Form {
+                    workWindowsSection
+                    rhythmSection
+                }
+                .formStyle(.grouped)
+                .tabItem { Label("作息", systemImage: "clock") }
+                .tag(SettingsTab.schedule)
+
+                // 休息：休息音效 + 工作日志（休息前后发生什么）
+                Form {
+                    soundSection
+                    workLogSection
+                }
+                .formStyle(.grouped)
+                .tabItem { Label("休息", systemImage: "moon.stars") }
+                .tag(SettingsTab.rest)
             }
-            .formStyle(.grouped)
 
             Divider()
             footerButtons
         }
-        .frame(minWidth: 480, idealWidth: 560, minHeight: 460, idealHeight: 580)
+        .frame(minWidth: 500, idealWidth: 560, minHeight: 420, idealHeight: 540)
+        .confirmationDialog("确定恢复全部设置为默认值？",
+                            isPresented: $showingResetConfirm,
+                            titleVisibility: .visible) {
+            Button("恢复默认", role: .destructive) { draft = .defaultConfig }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将重置工作时段、节律、休息音效与工作日志为初始值（不影响开机自启）。")
+        }
     }
 
     // MARK: - 一般（开机自启：即时生效）
@@ -80,6 +112,33 @@ struct SettingsView: View {
         } footer: {
             Text("也可在「系统设置 → 通用 → 登录项」管理。")
         }
+    }
+
+    // MARK: - 关于（版本信息，平衡「通用」页签）
+
+    private var aboutSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "cup.and.saucer.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Give me a break").font(.headline)
+                    Text("v\(appVersion) · 菜单栏强制作息守护")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 2)
+        } header: {
+            Text("关于")
+        }
+    }
+
+    private var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
     }
 
     // MARK: - 工作时段
@@ -248,13 +307,14 @@ struct SettingsView: View {
 
     private var footerButtons: some View {
         HStack {
-            Button("恢复默认") { draft = .defaultConfig }
-                .help("将工作时段、节律与音效恢复为初始值（不影响开机自启）")
+            Button("恢复默认") { showingResetConfirm = true }
+                .help("将工作时段、节律、休息音效与工作日志恢复为初始值（不影响开机自启）")
             Spacer()
             Button("取消") { onCancel() }
                 .keyboardShortcut(.cancelAction)
             Button("应用") { onApply(draft) }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)   // 唯一主操作（primary-action），全局提交所有页签草稿
                 .disabled(hasInvalidWindow)
         }
         .padding(16)
