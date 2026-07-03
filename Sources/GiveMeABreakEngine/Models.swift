@@ -50,7 +50,7 @@ public struct WorkWindow: Codable, Equatable, Hashable, Sendable {
 // MARK: - 一日计划配置
 
 public struct DayPlanConfig: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     public var schemaVersion: Int
     public var workWindows: [WorkWindow]
@@ -75,6 +75,13 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     /// 退出休息（自然结束）后，弹轻量输入框记录这段休息里做的微运动（运动记录），默认开。
     /// 仅对休息倒计时自然走完生效；提前结束（Esc）与被会议/下班打断均不弹。详见 ExerciseStore / CombinedReport。
     public var exerciseLogEnabled: Bool
+    /// 运动录入提示窗的自动放行等待时长（秒），默认 180（3 分钟）。到点未操作即等同跳过，防窗口悬空。
+    /// 哨兵值 `0` 表示「永久等待」——不调度定时器，须用户手动操作。仅作用于 `exerciseLogEnabled` 开启时的运动提示窗。
+    /// v7 新增（与 `workLogPromptTimeoutSeconds` 对称，默认值亦一致）。
+    public var exercisePromptTimeoutSeconds: TimeInterval
+    /// 用户可挑选的运动类型注册表（运动录入 Picker 数据源），默认取 `defaultExerciseTypes`。
+    /// 可在设置「运动记录」页增删；录入时输入的自定义类型保存后自动追加（去重、保序）。v7 新增。
+    public var exerciseTypes: [String]
     /// 休息模式自定义音频文件的本地绝对路径（AVAudioPlayer 支持格式：mp3/m4a/aac/wav/flac/aiff 等）。
     /// 设置后休息时循环播放该文件，**取代内置粉噪音**；为 nil/空则回退粉噪音（受 `ambientSoundEnabled` 控制）。
     /// 文件由用户本地提供，**不打包、不分发**；App 非沙盒，故直接以路径引用（文件移动/删除会导致回退）。
@@ -94,6 +101,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         workLogEnabled: Bool = true,
         workLogPromptTimeoutSeconds: TimeInterval = 180,
         exerciseLogEnabled: Bool = true,
+        exercisePromptTimeoutSeconds: TimeInterval = 180,
+        exerciseTypes: [String] = defaultExerciseTypes,
         restMusicPath: String? = nil
     ) {
         self.schemaVersion = schemaVersion
@@ -106,6 +115,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         self.workLogEnabled = workLogEnabled
         self.workLogPromptTimeoutSeconds = workLogPromptTimeoutSeconds
         self.exerciseLogEnabled = exerciseLogEnabled
+        self.exercisePromptTimeoutSeconds = exercisePromptTimeoutSeconds
+        self.exerciseTypes = exerciseTypes
         self.restMusicPath = restMusicPath
     }
 
@@ -116,7 +127,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, workWindows, workIntervalSeconds, restDurationSeconds
         case afkThresholdSeconds, ambientSoundEnabled, controlQQMusic, workLogEnabled
-        case workLogPromptTimeoutSeconds, exerciseLogEnabled, restMusicPath
+        case workLogPromptTimeoutSeconds, exerciseLogEnabled, exercisePromptTimeoutSeconds
+        case exerciseTypes, restMusicPath
     }
 
     public init(from decoder: Decoder) throws {
@@ -133,6 +145,10 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         // 显式存在的 0（永久等待）非 nil 故会被保留，不会被误补默认 180（迁移测试钉死此行为）。
         workLogPromptTimeoutSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .workLogPromptTimeoutSeconds) ?? d.workLogPromptTimeoutSeconds
         exerciseLogEnabled = try c.decodeIfPresent(Bool.self, forKey: .exerciseLogEnabled) ?? true
+        // 同 workLogPromptTimeoutSeconds：显式 0（永久等待）需保留。
+        exercisePromptTimeoutSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .exercisePromptTimeoutSeconds) ?? d.exercisePromptTimeoutSeconds
+        // 旧配置（v6 及以前）无此字段 → 回退出厂默认列表；空数组显式保留（用户主动清空也尊重）。
+        exerciseTypes = try c.decodeIfPresent([String].self, forKey: .exerciseTypes) ?? d.exerciseTypes
         restMusicPath = try c.decodeIfPresent(String.self, forKey: .restMusicPath)
     }
 }
