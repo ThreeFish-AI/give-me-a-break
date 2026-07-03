@@ -40,37 +40,49 @@ final class StatusItemController {
         header.isEnabled = false
         menu.addItem(header)
 
+        // 分组（文案统一 2~4 字；「…」尾缀遵循 macOS「打开窗口」约定，不计入字数）：
+        //  即时动作 ┃ 查看（报告）┃ 录入（补录）┃ 偏好 ┃ 退出
+        menu.addItem(.separator())
+
+        // 即时动作
         let rest = NSMenuItem(title: "立即休息", action: #selector(forceRest), keyEquivalent: "r")
         rest.target = self
         rest.image = Self.menuSymbol("moon.zzz", description: "立即休息")
         menu.addItem(rest)
 
-        let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
-        settings.target = self
-        settings.image = Self.menuSymbol("gearshape", description: "设置")
-        menu.addItem(settings)
+        menu.addItem(.separator())
 
+        // 查看
         let workLog = NSMenuItem(title: "工作日志…", action: #selector(openWorkLog), keyEquivalent: "l")
         workLog.target = self
         workLog.image = Self.menuSymbol("list.bullet.rectangle", description: "工作日志")
         menu.addItem(workLog)
-
-        let backfill = NSMenuItem(title: "补录工作日志…", action: #selector(openBackfillWorkLog), keyEquivalent: "")
-        backfill.target = self
-        backfill.image = Self.menuSymbol("square.and.pencil", description: "补录工作日志")
-        menu.addItem(backfill)
 
         let combined = NSMenuItem(title: "综合报告…", action: #selector(openCombinedReport), keyEquivalent: "")
         combined.target = self
         combined.image = Self.menuSymbol("chart.bar.doc.horizontal", description: "综合报告")
         menu.addItem(combined)
 
-        let backfillExercise = NSMenuItem(title: "补录运动记录…", action: #selector(openBackfillExercise), keyEquivalent: "")
+        menu.addItem(.separator())
+
+        // 录入（补录）
+        let backfill = NSMenuItem(title: "补录工作…", action: #selector(openBackfillWorkLog), keyEquivalent: "")
+        backfill.target = self
+        backfill.image = Self.menuSymbol("square.and.pencil", description: "补录工作")
+        menu.addItem(backfill)
+
+        let backfillExercise = NSMenuItem(title: "补录运动…", action: #selector(openBackfillExercise), keyEquivalent: "")
         backfillExercise.target = self
-        backfillExercise.image = Self.menuSymbol("figure.run", description: "补录运动记录")
+        backfillExercise.image = Self.menuSymbol("figure.run", description: "补录运动")
         menu.addItem(backfillExercise)
 
         menu.addItem(.separator())
+
+        // 偏好
+        let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        settings.image = Self.menuSymbol("gearshape", description: "设置")
+        menu.addItem(settings)
 
         let login = NSMenuItem(title: "开机自启", action: #selector(toggleLogin(_:)), keyEquivalent: "")
         login.target = self
@@ -80,6 +92,7 @@ final class StatusItemController {
 
         menu.addItem(.separator())
 
+        // 退出
         let quit = NSMenuItem(title: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         quit.image = Self.menuSymbol("xmark.circle", description: "退出")

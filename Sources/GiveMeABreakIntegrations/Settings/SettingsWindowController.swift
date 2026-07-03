@@ -38,10 +38,13 @@ final class SettingsWindowController {
             onToggleLogin: { [weak self] v in self?.onToggleLogin(v) }
         )
 
+        // 每次重建 NSHostingController（非复用 rootView）：强制 SwiftUI 视为新视图树，`@State`（draft）
+        // 干净初始化为当前 config——规避「重开设置仍显示上次未提交草稿」（root 身份不变致 @State 残留）。
+        let hosting = NSHostingController(rootView: view)
+        // 让控制器按 SwiftUI 内容理想尺寸更新 preferredContentSize；窗口据此自适应。
+        hosting.sizingOptions = [.preferredContentSize]
+
         if window == nil {
-            let hosting = NSHostingController(rootView: view)
-            // 让控制器按 SwiftUI 内容理想尺寸更新 preferredContentSize；窗口据此自适应。
-            hosting.sizingOptions = [.preferredContentSize]
             let w = NSWindow(contentViewController: hosting)
             w.title = "Give me a break 设置"
             w.titlebarAppearsTransparent = false
@@ -50,11 +53,7 @@ final class SettingsWindowController {
             w.isReleasedWhenClosed = false
             window = w
 
-            // 内容理想尺寸变化 → 异步重排，确保我方为最终裁决者（覆盖系统隐式跟随）。
-            sizeObservation = hosting.observe(\.preferredContentSize, options: [.new]) { [weak self] _, _ in
-                DispatchQueue.main.async { self?.layoutWindowToContent(initialCenter: false) }
-            }
-            // 用户手动移动窗口后更新锚点，使后续伸缩沿用新位置。
+            // 用户手动移动窗口后更新锚点，使后续伸缩沿用新位置（窗口生命周期内仅注册一次）。
             moveObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didMoveNotification, object: w, queue: .main
             ) { [weak self] _ in
@@ -63,8 +62,13 @@ final class SettingsWindowController {
                 self.anchorCenterX = f.midX
             }
         } else {
-            // 窗口复用：刷新 view（同步最新登录态）；重开视为重新居中。
-            (window?.contentViewController as? NSHostingController<SettingsView>)?.rootView = view
+            window?.contentViewController = hosting
+        }
+
+        // 内容理想尺寸变化 → 异步重排，确保我方为最终裁决者（覆盖系统隐式跟随）。
+        // 每次 show 重建了 hosting，KVO 亦随之重绑到新实例。
+        sizeObservation = hosting.observe(\.preferredContentSize, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.layoutWindowToContent(initialCenter: false) }
         }
 
         // accessory app 需主动激活 + 强制前置（用户从菜单点击时 app 已激活，此处兜底）。

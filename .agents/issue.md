@@ -94,3 +94,11 @@
   - **双平台/多 job 的同类校验逻辑必须收敛为共享 action，禁止各 job 内联复制**——否则行为漂移（本次 Windows 漏校验即此反模式）。
   - macOS runner 选型须关注弃用时间线（参考 [actions/runner-images](https://github.com/actions/runner-images/issues/13518)），优先 `macos-15`+。
 - **同类影响**：所有 tag-driven 多平台 release workflow；所有"双 job 独立解析同一事实源"的反模式；GitHub Actions macOS runner 版本时效性。
+
+## #9 NSHostingController.rootView 复用致 SwiftUI `@State` 跨弹窗残留（跳过=复用上次记录）
+
+- **表因**：用户报告「工作日志跳过」后，下次小结窗仍显示上次输入的内容（视觉=复用上次记录、疑似跳过仍写库）。
+- **根因**：四个窗口控制器（WorkLog 提示/补录、Exercise 提示/补录）+ 报告/设置控制器在**稳定的 `NSHostingController`** 上反复赋值 `rootView = view`。SwiftUI 在 root 视图**身份不变**时**保留 `@State`**（`@State` 存于 SwiftUI 内部存储、按视图身份键控，身份不变即不重置）。于是「输入文字 → 跳过/关窗」后 `@State` 残留，下次弹窗文字仍在。代码层 skip 路径**确实不写库**——纯视觉残留，但用户感知为「数据被复用」。
+- **处理方式**：每次 `present`/`show` **重建 `NSHostingController`**（窗口复用、控制器替换：`window?.contentViewController = NSHostingController(rootView: view)`），强制 SwiftUI 视为新视图树、`@State` 归零。Settings 控制器额外重建 KVO（`preferredContentSize` 观测绑到新 hosting）；report 控制器同步处理。
+- **后续防范**：**任何 `NSHostingController`/`UIHostingController` 反复替换 rootView 的场景，必须重建 hosting 控制器或用 `.id(token)` 强制身份变更**，否则 `@State`/`@FocusState` 残留。复用窗口可以，但「视图身份」不可隐式复用。
+- **同类影响**：所有 AppKit+SwiftUI 混合的复用窗口（菜单栏 accessory app 尤甚）；任何「重开窗口显示旧草稿/旧输入」的疑似 bug 先查此根因，而非查持久化层。

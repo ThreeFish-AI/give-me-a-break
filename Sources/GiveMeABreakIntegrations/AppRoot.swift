@@ -78,10 +78,28 @@ final public class AppRoot {
         exerciseStore = exercise
         exercisePromptController = ExercisePromptWindowController()
         exerciseBackfillController = ExerciseBackfillWindowController(onSave: { [weak self] entry in
-            self?.exerciseStore?.append(entry)
+            guard let self else { return }
+            self.exerciseStore?.append(entry)              // 落库 exercise-log.json
+            self.learnCustomExerciseTypes(from: entry.sets) // 自定义类型自动记住 → config.exerciseTypes
         })
         if let exercise, let workLog {
-            combinedReportController = CombinedReportWindowController(workStore: workLog, exerciseStore: exercise)
+            combinedReportController = CombinedReportWindowController(
+                workStore: workLog,
+                exerciseStore: exercise,
+                exerciseTypesProvider: { [weak self] in
+                    self?.engine?.config.exerciseTypes ?? defaultExerciseTypes
+                },
+                onSaveExercise: { [weak self] entry in
+                    guard let self else { return }
+                    self.exerciseStore?.append(entry)
+                    self.learnCustomExerciseTypes(from: entry.sets)
+                },
+                onUpdateExercise: { [weak self] entry in
+                    guard let self else { return }
+                    self.exerciseStore?.update(entry)
+                    self.learnCustomExerciseTypes(from: entry.sets)
+                }
+            )
         }
 
         let config = debugConfigOrLoaded(store: store)
@@ -204,11 +222,14 @@ final public class AppRoot {
         combinedReportController?.show()
     }
 
-    /// 打开「补录运动记录」窗口（菜单入口）：默认起始取上一条记录的 endedAt，无则回退 10 分钟前。
+    /// 打开「补录运动记录」窗口（菜单入口）：默认时段为 `[now − restDuration, now]`（「补刚才那段休息做的运动」），
+    /// 而非沿用上一条记录的 endedAt（那是「紧接续写」语义，属报告内「加一条」按钮）。
     func openBackfillExercise() {
-        let lastEnd = exerciseStore?.loadEntries().last?.endedAt
-        let defaultStart = lastEnd ?? Date().addingTimeInterval(-10 * 60)
-        exerciseBackfillController?.show(defaultStart: defaultStart)
+        let rest = engine?.config.restDurationSeconds ?? 600
+        let range = exerciseBackfillDefaultRange(now: Date(), restDurationSeconds: rest)
+        exerciseBackfillController?.show(defaultStart: range.start,
+                                         defaultEnd: range.end,
+                                         exerciseTypes: exerciseTypes)
     }
 
     /// 引擎在休息自然结束、回到工作时回调。决定弹运动录入窗还是静默放行——不阻塞、不冻结心跳。
@@ -227,12 +248,15 @@ final public class AppRoot {
         prompt.present(
             restStartedAt: ctx.restStartedAt,
             restEndedAt: ctx.restEndedAt,
+            exerciseTypes: exerciseTypes,
+            timeoutSeconds: engine?.config.exercisePromptTimeoutSeconds ?? 180,
             onSubmit: { [weak self] sets, note in
                 store.append(ExerciseEntry(
                     startedAt: ctx.restStartedAt,
                     endedAt: ctx.restEndedAt,
                     sets: sets,
                     note: note))
+                self?.learnCustomExerciseTypes(from: sets)   // 自定义类型自动记住
                 self?.consecutiveExerciseSkips = 0
             },
             onSkip: { [weak self] in
@@ -287,6 +311,28 @@ final public class AppRoot {
         if submitted { consecutiveSkips = 0 } else { consecutiveSkips += 1 }
         engine?.completeDeferredRest(now: Date())
         heartbeat?.resume()
+    }
+
+    // MARK: - 运动类型注册表（config.exerciseTypes 的运行期读取 + 自定义项自动记住）
+
+    /// 当前生效的运动类型注册表（Picker 数据源）；引擎无配置时回退出厂默认。
+    private var exerciseTypes: [String] { engine?.config.exerciseTypes ?? defaultExerciseTypes }
+
+    /// 保存一条运动记录后，把其中的自定义类型（不在注册表内的）追加进 `config.exerciseTypes` 并持久化。
+    /// 纯计算交由 `appendedExerciseTypes`（可单测）；此处只负责「写 config + 热更新引擎」副作用。
+    /// 无新增类型时该纯函数返回 nil，本方法即跳过写盘（避免无谓 I/O）。
+    private func learnCustomExerciseTypes(from sets: [ExerciseSet]) {
+        guard let engine = engine, let store = configStore else { return }
+        var config = engine.config
+        guard let updated = appendedExerciseTypes(current: config.exerciseTypes, sets: sets) else { return }
+        config.exerciseTypes = updated
+        do {
+            try store.saveConfig(config)
+        } catch {
+            NSLog("[GiveMeABreak] 运动类型注册表持久化失败：\(error.localizedDescription)")
+        }
+        engine.updateConfig(config)
+        NSLog("[GiveMeABreak] 运动类型注册表已更新：\(updated.count) 项")
     }
 
     // MARK: - 调试配置

@@ -13,6 +13,8 @@ enum ExerciseEntryFormMode {
 
 struct ExerciseEntryFormView: View {
     private let mode: ExerciseEntryFormMode
+    /// Picker 数据源（配置注册表，v7 起来自 `DayPlanConfig.exerciseTypes`）。
+    private let types: [String]
     private let onSubmit: (ExerciseEntry) -> Void
     private let onCancel: () -> Void
 
@@ -23,9 +25,11 @@ struct ExerciseEntryFormView: View {
     @State private var noteExpanded: Bool
 
     init(mode: ExerciseEntryFormMode,
+         types: [String],
          onSubmit: @escaping (ExerciseEntry) -> Void,
          onCancel: @escaping () -> Void) {
         self.mode = mode
+        self.types = types
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         switch mode {
@@ -33,15 +37,17 @@ struct ExerciseEntryFormView: View {
             let safeStart = defaultStart < defaultEnd ? defaultStart : defaultEnd.addingTimeInterval(-60)
             _start = State(initialValue: safeStart)
             _end = State(initialValue: defaultEnd)
-            _drafts = State(initialValue: [ExerciseSetDraft()])
+            _drafts = State(initialValue: [ExerciseSetDraft(selection: types.first ?? defaultExerciseTypes.first ?? "")])
             _note = State(initialValue: "")
             _noteExpanded = State(initialValue: false)
         case .edit(let entry):
             let safeStart = entry.startedAt < entry.endedAt ? entry.startedAt : entry.endedAt.addingTimeInterval(-60)
             _start = State(initialValue: safeStart)
             _end = State(initialValue: entry.endedAt)
-            let restored = entry.sets.map { ExerciseSetDraft(from: $0) }
-            _drafts = State(initialValue: restored.isEmpty ? [ExerciseSetDraft()] : restored)
+            let restored = entry.sets.map { ExerciseSetDraft(from: $0, types: types) }
+            _drafts = State(initialValue: restored.isEmpty
+                ? [ExerciseSetDraft(selection: types.first ?? defaultExerciseTypes.first ?? "")]
+                : restored)
             _note = State(initialValue: entry.note ?? "")
             _noteExpanded = State(initialValue: entry.note?.isEmpty == false)
         }
@@ -91,7 +97,7 @@ struct ExerciseEntryFormView: View {
             }
 
             // 运动组编辑器（与录入提示窗共用）
-            ExerciseSetsEditor(drafts: $drafts)
+            ExerciseSetsEditor(types: types, drafts: $drafts)
 
             // 可选备注
             if noteExpanded {
