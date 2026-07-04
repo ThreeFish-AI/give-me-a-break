@@ -195,9 +195,5 @@ dotnet publish windows/GiveMeABreakShell/GiveMeABreakShell.csproj -c Release -r 
 ---
 
 <div align="center">
-
-## License
-
-MIT © [ThreeFish-AI](https://github.com/ThreeFish-AI)
-
+  <sub>Built with 🧠, ❤️, and an absurd amount of coffee by <a href="https://github.com/ThreeFish-AI">ThreeFish-AI</a> · Released under the <a href="./LICENSE">MIT License</a>.</sub>
 </div>
