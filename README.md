@@ -121,7 +121,7 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
 
 ```json
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "workWindows": [
     { "start": { "hours": 9 }, "end": { "hours": 12 } },
     { "start": { "hours": 13, "minutes": 40 }, "end": { "hours": 18 } }
@@ -136,17 +136,20 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
   "workLogPromptTimeoutSeconds": 180,
   "exerciseLogEnabled": true,
   "exercisePromptTimeoutSeconds": 180,
-  "exerciseTypes": ["胯下击掌", "提膝击掌", "深蹲", "俯卧撑"]
+  "exerciseTypes": ["胯下击掌", "提膝击掌", "深蹲", "俯卧撑"],
+  "agent": { "claudeExecutablePath": null, "claudeSettingsEditorBundleId": null }
 }
 ```
 
+> **Agentic AI（v8 新增，功能预留）**：`agent` 子块为后续 Agentic AI 功能预留的配置——`claudeExecutablePath` 覆盖 Claude Code 可执行文件路径（`null`/空即自动从系统 `PATH` 探测，推荐）；`claudeSettingsEditorBundleId` 记住「Claude 设置」快捷打开所用编辑器的 bundle id（`null` 即系统默认关联应用）。二者仅持久化 + 设置界面可视化编辑，**当前尚未接入任何 Claude Code 调用**。
+
 工作日志单独持久化为 `work-log.json`（同目录），schema 见 [shared/work-log.schema.json](./shared/work-log.schema.json)；报告生成（今日/本周/月报 Markdown）见菜单「工作日志…」。运动记录单独持久化为 `exercise-log.json`（同目录）；与工作日志合成的综合报告（周/月/季/年 Markdown）见菜单「综合报告…」。
 
-可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单按动作分组：**立即休息** ┃ **工作日志 · 综合报告**（查看）┃ **补录工作 · 补录运动**（录入）┃ **设置 · 开机自启** ┃ **退出**（文案统一 2~4 字）；「开机自启」已迁入设置窗口的「一般」分组。
+可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。设置窗口按功能域分页：**通用 · 作息 · 休息音效 · 工作日志 · 运动记录 · Agentic AI**;其中「Agentic AI」页为后续 Agentic AI 功能预留——配置 Claude Code 可执行文件路径覆盖，并可在选定编辑器（自动探测已安装的 VS Code / Cursor 等）中一键打开 `~/.claude/settings.json`。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单按动作分组：**立即休息** ┃ **工作日志 · 综合报告**（查看）┃ **补录工作 · 补录运动**（录入）┃ **设置 · 开机自启** ┃ **退出**（文案统一 2~4 字）；「开机自启」已迁入设置窗口的「一般」分组。
 
 ## 验证
 
-- **单元测试**：`make test`（83 用例，<1s）覆盖 FSM 谓词优先级、工作示例（30+30→60→10）、AFK 冻结、睡眠不回灌、fast-forward、区间合并、工作日志记录/报告/补录、运动记录/综合报告（周/月/季/年）、运动类型注册表与补录默认时段纯函数、onPostBreak 触发不变量、配置迁移（v3→v7）等。详见 [设计文档](./docs/give-me-a-break-design.md#测试矩阵)。
+- **单元测试**：`make test`（87 用例，<1s）覆盖 FSM 谓词优先级、工作示例（30+30→60→10）、AFK 冻结、睡眠不回灌、fast-forward、区间合并、工作日志记录/报告/补录、运动记录/综合报告（周/月/季/年）、运动类型注册表与补录默认时段纯函数、onPostBreak 触发不变量、配置迁移（v3→v8，含 v7→v8 Agentic AI 设置容错迁移）等。详见 [设计文档](./docs/give-me-a-break-design.md#测试矩阵)。
 - **端到端**（真机，三权限 + QQ 音乐 + Google 账户）：`GIVEMEABREAK_DEBUG=1` 观察遮罩/音乐周期；正常时段等待 50min 触发；日历建会议验证推迟。
 
 ## 已知限制（透明披露）

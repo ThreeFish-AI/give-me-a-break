@@ -74,10 +74,13 @@ evaluate(now) 按顺序短路求值，首个匹配决定目标态：
 
 ```swift
 struct EngineState { phase; workAccumulatedSeconds; lastTickAt; restStartedAt; modelVersion }  // 单一事实源，Codable 持久化
-struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; schemaVersion }
+struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; …; agent: AgentSettings; schemaVersion }
+struct AgentSettings { claudeExecutablePath: String?; claudeSettingsEditorBundleId: String? }  // v8 · Agentic AI 正交子结构
 struct MeetingTimeline { busyIntervals: [DateRange]; generatedAt }  // 合并后的不相交忙碌区间
 func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（背靠背会议视为连续）
 ```
+
+> **Agentic AI 配置（v8，groundwork）**：`AgentSettings` 为「Agentic AI」功能域预留的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移。仅承载纯 Foundation 的 `String?` 字段——引擎不消费（携带即忽略，同 `restMusicPath`）；编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`，与本模型正交解耦。当前仅持久化 + 设置 UI，未接入实际 Claude Code 调用。
 
 崩溃恢复：启动加载持久化 `EngineState`，`fastForward(sanityLimit:)` 依间隔决策——短中断（≤300s）按工作态推进计入累加；长中断仅对账基点不回灌（`U11` 断言）。
 
@@ -89,11 +92,11 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 - **工作示例** U1：30+30 会议→60 工作→10 休息（纯函数 + 引擎接线双重断言）。
 - **边缘 case**：U2 会议恰在阈值点不触发瞬间休息；U3 背靠背会议跨接缝；U4 会议跨窗口边界→offDuty 优先；U7 休息被会议打断→abort-and-reset；U9 同态幂等（showOverlay 仅一次）。
 - **健壮性**：U10 advance 限幅；U5 AFK 冻结累加器；U6 睡眠不回灌；U11 fast-forward 短推进/长冻结。
-- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移。
+- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移（含 v7→v8 `agent`/AgentSettings 缺字段补默认、子字段容错、往返一致）。
 
 ## 6. 已验证 / 待实机核实
 
-✅ 已无头验证：编译链接、47 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）。
+✅ 已无头验证：编译链接、87 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）。
 ⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点。
 
 ## 7. 工作日志（休息前记录 + 周期报告）
