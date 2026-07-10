@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+### 核心改进
+
+- **设置窗口新增「Agentic AI」页签（Claude Code 配置 · 功能预留）**。为后续引入 Agentic AI 相关功能预留配置入口，与既有「每功能域一页签」结构一致：
+  - **Claude Code 可执行文件路径**：可键入 / 浏览选择自定义路径，非可执行时行内橙色警示（非阻塞）；「使用系统 Claude Code」一键复位为**自动从系统 PATH 探测**（推荐）。
+  - **Claude 设置快捷打开**：split-button「在 X 中打开」一键打开 `~/.claude/settings.json`，右侧下拉自动探测已安装编辑器（VS Code / Cursor / Zed / Sublime / Xcode 等，含图标）并**持久化所选编辑器**,另有「系统默认」与「其他应用…」;文件不存在时在访达中定位 `~/.claude`。
+  - 事实性适配：本 App **不打包 Claude Code**,故文案采「PATH 自动探测」而非上游「bundled version」措辞;**当前仅落地 UI + 持久化,未接入任何 Claude Code 实际调用**。
+
+### 工程
+
+- 配置 schema 7→8：`DayPlanConfig` 新增正交子结构 `agent: AgentSettings`（`claudeExecutablePath` / `claudeSettingsEditorBundleId`,默认全 `nil`）,容错解码平滑迁移（旧 v7 缺 `agent` 补默认、子字段缺失补 `nil`、显式值尊重）。子结构仅纯 Foundation 字段落于 Engine 层、引擎携带即忽略;AppKit 编辑器探测/打开逻辑正交隔离于集成层新 `ClaudeSettingsLauncher`。
+- 单元测试 83→87（+4：v7→v8 迁移补默认 / `agent` 往返 / `AgentSettings` 部分字段容错 / 默认全 nil），全绿 < 1s。无新依赖、无回归。
+
 ## v0.1.2 — 2026-07-04（GA · UI/UX 深度优化 · 菜单分组 / 运动类型注册表 / 跳过残留修复）
 
 继 v0.1.1 后的体验打磨版本：状态栏菜单重排、运动类型可个性化持久、运动补录时间自动贴合休息区间，并修复一处「跳过看似复用上次记录」的 SwiftUI 状态残留 bug。沿「最小干预、循证工程」原则，无新依赖、零回归（83 单测全绿、复制 / 导出 Markdown 与 v0.1.1 逐字节一致）。

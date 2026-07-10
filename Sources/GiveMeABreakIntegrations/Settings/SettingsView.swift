@@ -27,11 +27,13 @@ struct SettingsView: View {
     @State private var loginEnabled: Bool
     @State private var selectedTab: SettingsTab = .general
     @State private var showingResetConfirm: Bool = false
+    /// 已安装的候选编辑器（Agentic AI 页「在…中打开」下拉数据源）；视图出现时探测一次。
+    @State private var installedEditors: [ClaudeSettingsLauncher.InstalledEditor] = []
     private let onApply: (DayPlanConfig) -> Void
     private let onCancel: () -> Void
     private let onToggleLogin: (Bool) -> Void
 
-    private enum SettingsTab: Hashable { case general, schedule, sound, workLog, exercise }
+    private enum SettingsTab: Hashable { case general, schedule, sound, workLog, exercise, agenticAI }
 
     init(initial: DayPlanConfig,
          loginEnabled: Bool,
@@ -94,11 +96,20 @@ struct SettingsView: View {
                 .formStyle(.grouped)
                 .tabItem { Label("运动记录", systemImage: "figure.run") }
                 .tag(SettingsTab.exercise)
+
+                // Agentic AI：Claude Code 相关配置（为后续 Agentic AI 功能预留的 groundwork）
+                Form {
+                    agenticAISection
+                }
+                .formStyle(.grouped)
+                .tabItem { Label("Agentic AI", systemImage: "sparkles") }
+                .tag(SettingsTab.agenticAI)
             }
 
             Divider()
             footerButtons
         }
+        .onAppear { installedEditors = ClaudeSettingsLauncher.availableEditors() }
         // 宽度固定、高度随当前页签内容自适应（窗口侧以 preferredContentSize 跟随，免滚动条/多余留白）。
         .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
@@ -108,7 +119,7 @@ struct SettingsView: View {
             Button("恢复默认", role: .destructive) { draft = .defaultConfig }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("将重置工作时段、节律、休息音效、工作日志与运动记录为初始值（不影响开机自启）。")
+            Text("将重置工作时段、节律、休息音效、工作日志、运动记录与 Agentic AI 设置为初始值（不影响开机自启）。")
         }
     }
 
@@ -379,6 +390,144 @@ struct SettingsView: View {
             .help(canDelete ? "删除该运动项" : "至少保留一项运动")
             .accessibilityLabel("删除第 \(i + 1) 个运动项")
         }
+    }
+
+    // MARK: - Agentic AI（Claude Code 配置 · 为后续 Agentic AI 功能预留）
+
+    private var agenticAISection: some View {
+        Group {
+            // Claude Code 可执行文件路径：可编辑文本框 + 浏览 + 「使用系统 Claude Code」复位。
+            Section {
+                claudeExecutableRow
+            } header: {
+                Text("Claude Code 可执行文件路径")
+            } footer: {
+                Text("自定义 Claude Code 可执行文件路径。留空则自动从系统 PATH 探测（推荐）。此为 Agentic AI 功能预留配置，当前尚未接入实际调用。")
+            }
+
+            // Claude 设置：快捷在选定编辑器中打开 ~/.claude/settings.json。
+            Section {
+                claudeSettingsRow
+            } header: {
+                Text("Claude 设置")
+            } footer: {
+                Text("在选定编辑器中快捷打开 Claude Code 用户配置文件 ~/.claude/settings.json；点「在…中打开」右侧箭头可切换编辑器（自动探测已安装的 VS Code / Cursor 等，另有「系统默认」与「其他应用…」）。文件不存在时在访达中定位 ~/.claude 目录。")
+            }
+        }
+    }
+
+    /// 可执行路径行：TextField（可键入）+ 非阻塞无效提示 + 浏览按钮 + 复位为系统探测。
+    private var claudeExecutableRow: some View {
+        let trimmed = (draft.agent.claudeExecutablePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let invalid = !trimmed.isEmpty && !FileManager.default.isExecutableFile(atPath: trimmed)
+        return HStack(spacing: 8) {
+            TextField("Claude Code 可执行文件路径", text: Binding(
+                get: { draft.agent.claudeExecutablePath ?? "" },
+                set: { draft.agent.claudeExecutablePath = $0.isEmpty ? nil : $0 }
+            ), prompt: Text(verbatim: "/opt/homebrew/bin/claude"))
+            .labelsHidden()                                  // 隐藏前导标签，占位符落入框内（同 DatePicker 范式）
+            .textFieldStyle(.roundedBorder)
+            .accessibilityLabel("Claude Code 可执行文件路径")
+            if invalid {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help("该路径不存在或不可执行；留空则自动从系统 PATH 探测")
+                    .accessibilityLabel("路径无效：文件不存在或不可执行")
+            }
+            Button { pickClaudeExecutable() } label: {
+                Image(systemName: "folder")
+            }
+            .help("浏览选择 Claude Code 可执行文件")
+            .accessibilityLabel("浏览选择可执行文件")
+            Button("使用系统 Claude Code") { draft.agent.claudeExecutablePath = nil }
+                .disabled(trimmed.isEmpty)
+                .help("清除自定义路径，改为自动从系统 PATH 探测（推荐）")
+                .accessibilityHint("清除自定义 Claude Code 路径，回退系统 PATH 探测")
+        }
+    }
+
+    /// Claude 设置行：显示 ~/.claude/settings.json + split-button「在 X 中打开」（下拉切换编辑器）。
+    private var claudeSettingsRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "doc.text")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("~/.claude/settings.json")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+            Spacer(minLength: 8)
+            openInMenu
+        }
+    }
+
+    /// split-button：主操作用当前所选编辑器打开；下拉切换编辑器（含系统默认 / 其他应用…）。
+    private var openInMenu: some View {
+        Menu {
+            if installedEditors.isEmpty {
+                Text("未探测到已安装编辑器")
+            }
+            ForEach(installedEditors) { ed in
+                Button {
+                    draft.agent.claudeSettingsEditorBundleId = ed.bundleId
+                } label: {
+                    Label {
+                        Text(ed.name)
+                    } icon: {
+                        Image(nsImage: ClaudeSettingsLauncher.icon(for: ed))
+                    }
+                }
+            }
+            Divider()
+            Button("系统默认打开") { draft.agent.claudeSettingsEditorBundleId = nil }
+            Button("其他应用…") { pickEditorApp() }
+        } label: {
+            Label("在 \(currentEditorLabel) 中打开", systemImage: "arrow.up.forward.app")
+        } primaryAction: {
+            ClaudeSettingsLauncher.openClaudeSettings(editorBundleId: draft.agent.claudeSettingsEditorBundleId)
+        }
+        .fixedSize()
+        .help("在「\(currentEditorLabel)」中打开 ~/.claude/settings.json（点右侧箭头切换编辑器）")
+        .accessibilityLabel("打开 Claude 设置，当前编辑器 \(currentEditorLabel)")
+    }
+
+    /// 当前选定编辑器的展示名；未选（nil/空）时为「系统默认」。
+    private var currentEditorLabel: String {
+        if let id = draft.agent.claudeSettingsEditorBundleId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !id.isEmpty {
+            return ClaudeSettingsLauncher.displayName(forBundleId: id)
+        }
+        return "系统默认"
+    }
+
+    /// NSOpenPanel 选 Claude Code 可执行文件（默认定位 Homebrew bin 目录，可见隐藏文件）。
+    private func pickClaudeExecutable() {
+        let panel = NSOpenPanel()
+        panel.title = "选择 Claude Code 可执行文件"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.showsHiddenFiles = true                       // 可执行常在 /usr/local/bin、/opt/homebrew/bin
+        panel.treatsFilePackagesAsDirectories = true
+        panel.directoryURL = URL(fileURLWithPath: "/opt/homebrew/bin")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        draft.agent.claudeExecutablePath = url.path
+    }
+
+    /// NSOpenPanel 选任意编辑器 .app，取其 bundle id 持久化（下拉「其他应用…」入口）。
+    private func pickEditorApp() {
+        let panel = NSOpenPanel()
+        panel.title = "选择编辑器应用"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        guard panel.runModal() == .OK, let url = panel.url,
+              let bundleId = Bundle(url: url)?.bundleIdentifier else { return }
+        draft.agent.claudeSettingsEditorBundleId = bundleId
     }
 
     // MARK: - 底部按钮栏
