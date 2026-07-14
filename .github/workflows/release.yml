@@ -268,7 +268,7 @@ jobs:
           echo "==> RELEASE_NOTES.md 预览（前 30 行）："; sed -n '1,30p' RELEASE_NOTES.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: v${{ env.RELEASE_VERSION }}
           name: Give me a break ${{ env.RELEASE_VERSION }}
