@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 45   # 公证高峰期预留（notarytool --wait 偶达 30+ min）
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup macOS + Swift (cached)
         uses: ./.github/actions/setup-macos-swift
@@ -165,7 +165,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET 8
         # NOTE: 暂用 tag，待人工/Dependabot SHA-pin 对齐仓库其余 action 规范。
@@ -206,7 +206,7 @@ jobs:
     steps:
       # 取仓库（含 CHANGELOG.md）以便把本版本章节注入 Release Note 正文。
       - name: Checkout (for CHANGELOG → Release Note)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download markers
         # NOTE: 暂用 tag，待 SHA-pin。
