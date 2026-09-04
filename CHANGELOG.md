@@ -6,6 +6,7 @@
 
 ### 核心改进
 
+- **新增主动屏幕遮罩（手动「屏幕遮罩」）**。在到点强制休息之外，新增用户随时可触发的全屏遮罩：菜单「屏幕遮罩」或占用系统锁屏快捷键 Control+Command+Q（拦截后不真正锁屏，改为进入本 App 遮罩）触发，电脑后台照常运行，仅阻断新的鼠标/键盘输入；双击 Esc 退出。与既有工作/休息调度引擎（FSM）**零耦合**——不读写引擎状态，仅在计划性休息触发时自动让位（休息优先）。快捷键拦截需「输入监控」权限，未授权时静默降级为仅菜单可用（不阻塞、日志可观测）。
 - **设置窗口新增「Agentic AI」页签（Claude Code 配置 · 功能预留）**。为后续引入 Agentic AI 相关功能预留配置入口，与既有「每功能域一页签」结构一致：
   - **Claude Code 可执行文件路径**：可键入 / 浏览选择自定义路径，非可执行时行内橙色警示（非阻塞）；「使用系统 Claude Code」一键复位为**自动从系统 PATH 探测**（推荐）。
   - **Claude 设置快捷打开**：split-button「在 X 中打开」一键打开 `~/.claude/settings.json`，右侧下拉自动探测已安装编辑器（VS Code / Cursor / Zed / Sublime / Xcode 等，含图标）并**持久化所选编辑器**,另有「系统默认」与「其他应用…」;文件不存在时在访达中定位 `~/.claude`。
@@ -13,6 +14,7 @@
 
 ### 工程
 
+- 新增 `LockShortcutMonitor`（`CGEventTap` 于 HID 层拦截 Control+Command+Q，`.headInsertEventTap` + `.defaultTap`，权限经 `CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 查询/申请）与 `ScreenMaskController`/`ScreenMaskContentView`（复用既有 `OverlayPanel`，独立实现、不修改 `LiveOverlayController`）。二者均为纯新增文件，零改动引擎/既有遮罩代码；`AppRoot`/`StatusItemController` 增量接线。Info.plist 新增 `NSInputMonitoringUsageDescription`。
 - 配置 schema 7→8：`DayPlanConfig` 新增正交子结构 `agent: AgentSettings`（`claudeExecutablePath` / `claudeSettingsEditorBundleId`,默认全 `nil`）,容错解码平滑迁移（旧 v7 缺 `agent` 补默认、子字段缺失补 `nil`、显式值尊重）。子结构仅纯 Foundation 字段落于 Engine 层、引擎携带即忽略;AppKit 编辑器探测/打开逻辑正交隔离于集成层新 `ClaudeSettingsLauncher`。
 - 单元测试 83→87（+4：v7→v8 迁移补默认 / `agent` 往返 / `AgentSettings` 部分字段容错 / 默认全 nil），全绿 < 1s。无新依赖、无回归。
 

@@ -18,6 +18,10 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
+    // 主动屏幕遮罩（与工作/休息 FSM 正交，零引擎耦合）+ 系统锁屏快捷键接管
+    private var screenMaskController: ScreenMaskController?
+    private var lockShortcutMonitor: LockShortcutMonitor?
+
     // 工作日志（休息前记录 + 周期报告 + 补录漏掉的时段）
     private var workLogStore: WorkLogStore?
     private var workLogPromptController: WorkLogPromptWindowController?
@@ -41,6 +45,12 @@ final public class AppRoot {
 
     public func start() {
         AccessibilityChecker.bootstrap()  // 引导 Accessibility 授权（媒体键控制必需）
+
+        screenMaskController = ScreenMaskController()
+        let lockShortcut = LockShortcutMonitor()
+        lockShortcut.onTriggered = { [weak self] in self?.enterScreenMask() }
+        lockShortcut.start()  // 引导「输入监控」授权；未授权时自动降级，仅菜单「屏幕遮罩」可用
+        lockShortcutMonitor = lockShortcut
 
         let dir = ConfigStore.defaultDirectory(bundleId: bundleId)
         let store: ConfigStore?
@@ -135,6 +145,7 @@ final public class AppRoot {
                 self?.engine?.forceRestNow()
                 self?.engine?.tick()  // 立即生效，不等下一秒心跳
             },
+            onEnterScreenMask: { [weak self] in self?.enterScreenMask() },
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
             onOpenSettings: { [weak self] in self?.openSettings() },
@@ -150,6 +161,10 @@ final public class AppRoot {
             self.engine?.tick()
             if let phase = self.engine?.state.phase {
                 self.statusItem?.setStatus(text: self.statusText(for: phase, engine: self.engine))
+                // 计划性休息优先于手动便利遮罩：一旦转入 .resting，立即让位（≤1s 延迟）。
+                if phase == .resting, self.screenMaskController?.isShown == true {
+                    self.screenMaskController?.dismiss()
+                }
             }
         }
         self.heartbeat = heartbeat
@@ -188,6 +203,7 @@ final public class AppRoot {
     public func shutdown() {
         if let state = engine?.state { configStore?.saveState(state) }
         heartbeat?.stop()
+        lockShortcutMonitor?.stop()
         for observer in sleepObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
@@ -199,6 +215,18 @@ final public class AppRoot {
     func openSettings() {
         guard let config = engine?.config else { return }
         settingsController?.show(currentConfig: config, loginEnabled: LoginService.isEnabled)
+    }
+
+    // MARK: - 主动屏幕遮罩（菜单「屏幕遮罩」+ 系统锁屏快捷键接管的共同入口）
+
+    /// 进入手动屏幕遮罩。与引擎 FSM 零耦合——不读写 EngineState，只与既有休息遮罩互斥
+    /// （计划性休息优先，见心跳闭包内的让位判断）。已在强制休息中时忽略，避免叠加两组遮罩面板。
+    func enterScreenMask() {
+        guard engine?.state.phase != .resting else {
+            NSLog("[GiveMeABreak][screenMask] 强制休息进行中，忽略手动遮罩触发")
+            return
+        }
+        screenMaskController?.show()  // show() 自身幂等
     }
 
     // MARK: - 工作日志
@@ -400,6 +428,7 @@ final public class AppRoot {
                 self.heartbeat?.resume()
             }
             self.engine?.handleWake()
+            self.lockShortcutMonitor?.recheckHealth()  // 唤醒时顺带核实锁屏快捷键 tap 是否仍处于启用状态
             NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(self.workLogPromptController?.isPresenting == true ? "（小结窗开启，心跳保持挂起）" : " + 恢复心跳")")
         }
         sleepObservers = [will, did]

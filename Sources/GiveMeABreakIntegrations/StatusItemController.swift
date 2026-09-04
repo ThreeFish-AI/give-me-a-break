@@ -5,6 +5,7 @@ import AppKit
 final class StatusItemController {
     private let statusItem: NSStatusItem
     private let onForceRest: () -> Void
+    private let onEnterScreenMask: () -> Void
     private let onSetLaunchAtLogin: (Bool) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenWorkLog: () -> Void
@@ -13,6 +14,7 @@ final class StatusItemController {
     private let onOpenBackfillExercise: () -> Void
 
     init(onForceRest: @escaping () -> Void,
+         onEnterScreenMask: @escaping () -> Void,
          loginEnabled: Bool,
          onSetLaunchAtLogin: @escaping (Bool) -> Void,
          onOpenSettings: @escaping () -> Void,
@@ -21,6 +23,7 @@ final class StatusItemController {
          onOpenCombinedReport: @escaping () -> Void,
          onOpenBackfillExercise: @escaping () -> Void) {
         self.onForceRest = onForceRest
+        self.onEnterScreenMask = onEnterScreenMask
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
         self.onOpenSettings = onOpenSettings
         self.onOpenWorkLog = onOpenWorkLog
@@ -49,6 +52,11 @@ final class StatusItemController {
         rest.target = self
         rest.image = Self.menuSymbol("moon.zzz", description: "立即休息")
         menu.addItem(rest)
+
+        let screenMask = NSMenuItem(title: "屏幕遮罩", action: #selector(enterScreenMask), keyEquivalent: "k")
+        screenMask.target = self
+        screenMask.image = Self.menuSymbol("lock.fill", description: "屏幕遮罩")
+        menu.addItem(screenMask)
 
         menu.addItem(.separator())
 
@@ -129,6 +137,8 @@ final class StatusItemController {
     }
 
     @objc private func forceRest() { onForceRest() }
+
+    @objc private func enterScreenMask() { onEnterScreenMask() }
 
     @objc private func openSettings() { onOpenSettings() }
 

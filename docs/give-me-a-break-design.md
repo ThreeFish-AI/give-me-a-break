@@ -96,8 +96,8 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 
 ## 6. 已验证 / 待实机核实
 
-✅ 已无头验证：编译链接、87 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）。
-⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点。
+✅ 已无头验证：编译链接、87 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过。
+⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建。
 
 ## 7. 工作日志（休息前记录 + 周期报告）
 
@@ -150,6 +150,35 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 `renderWorkLogReport` 按 `startedAt` 在指定时区分桶，产出今日/本周/月报/全部 Markdown：恰好一个 H1 + blockquote 元数据（周期/时区/条数/总专注时长）+ Top 3（按时长降序）+ 按日或按周拆解 + 待续·下一步（聚合 `nextAction`）。日期格式化全用 `Calendar` 组件手动拼接（零 locale 依赖，**确定性幂等**：同 entries + 同 now/cal/tz → 字节一致，便于 git diff）。v1 不做模糊去重/关键词 tag 推断（避免隐藏用户原始数据 + 误合并）。
 
+## 8. 主动屏幕遮罩（手动遮罩）
+
+### 8.1 设计目标与正交性
+
+在到点强制休息之外，新增一个**用户主动触发**的屏幕遮罩能力（菜单「屏幕遮罩」）：复用休息遮罩完全相同的视觉/输入阻断机制（`CGShieldingWindowLevel` 多屏 borderless `NSPanel`），但与调度引擎（FSM）**正交解耦**——`ScreenMaskController` 不读写 `EngineState`、不触发 `forcedRest`/`onPreBreak`/`onPostBreak` 等任一副作用路径，因此不会复现 [issue #6](../.agents/issue.md) 中「一次性意图标志被下个 tick 拉回」的耦合缺陷。触发方式：
+
+1. 菜单栏「屏幕遮罩」菜单项（`StatusItemController`，始终可用，零权限依赖）；
+2. 占用 macOS 默认锁屏快捷键 Control+Command+Q（`LockShortcutMonitor` 用 `CGEventTap` 在 HID 层拦截并消费，系统不再执行真正锁屏），需用户授权「输入监控」，未授权时静默降级为仅菜单可用（不阻塞、可观测日志，同 [issue #3](../.agents/issue.md) 降级范式）。
+
+退出仅支持双击 Esc（0.4s 内，复用 `LiveOverlayController` 已验证的时间窗/事件消费逻辑），不设二次确认——手动遮罩无「强制时长」需要保护，不同于休息软强制。
+
+`ScreenMaskController` 复用 `LiveOverlayController.swift` 内定义的 `OverlayPanel`（`NSPanel` 子类），但独立实现面板构造/热插拔/淡入淡出——刻意**不**抽取共享基类：`LiveOverlayController.swift` 是 [issue #4](../.agents/issue.md)、[issue #6](../.agents/issue.md) 两次事故现场且零自动化测试覆盖，本项目既有窗口控制器（`SettingsWindowController`/`WorkLogPromptWindowController` 等 7 处）也均独立重复各自的 `NSApp.activate`/`makeKeyAndOrderFront` 样板代码、从未共享基类，本次遵循同一惯例。
+
+### 8.2 与休息遮罩的关系：互斥而非叠加
+
+`ScreenMaskController`（手动）与 `LiveOverlayController`（休息）各自独立持有一组 `OverlayPanel`，均可能置于同一 `CGShieldingWindowLevel`。若二者同时显示，两个独立的本地 Esc 监听器语义会冲突（双击判定不确定指向谁）。故在编排层（`AppRoot`）强制互斥：
+
+- 进入手动遮罩前置 guard（`AppRoot.enterScreenMask()`）：`engine.state.phase == .resting` 时忽略触发（已被强制休息遮罩覆盖，无需叠加）；
+- 心跳每秒 tick 后检查（`AppRoot.swift` 心跳闭包，复用既有读取 `phase` 的代码块）：若手动遮罩仍显示而 `phase` 已转入 `.resting`，立即 `dismiss()` 手动遮罩，让休息遮罩接管（调度休息优先于手动便利遮罩，≤1s 延迟）。执行时序上 `engine.tick()` 内部先同步显示休息遮罩，互斥判断后才隐藏手动遮罩，故不会露出一帧桌面。
+- 手动遮罩罩住已打开的设置窗/工作日志提示窗等窗口（不做特殊处理），与既有「立即休息」菜单项（`forceRestNow()`，同样不做工作日志拦截）行为完全对称。
+
+### 8.3 CGEventTap 快捷键拦截
+
+`LockShortcutMonitor` 在 HID 事件流入 WindowServer 之前插入一个 `.headInsertEventTap`（`tap: .cghidEventTap`）<sup>[[14]](#ref14)</sup>，监听 `keyDown`，比对 `keyCode==12`（Q）且修饰键恰为 Control+Command（`CGEventFlags` 与关心的修饰键位掩码求交集后比较，忽略 `.maskNonCoalesced`/`.maskNumericPad` 等硬件杂位），命中则消费（回调返回 `nil`，系统不再派发）并转投 `onTriggered`；未命中原样放行。`options` 必须为 `.defaultTap`（而非 `.listenOnly`）——后者只能观察无法拦截。回调保持轻量（仅比较 + 主线程异步转发），否则系统会以 `.tapDisabledByTimeout` 强制禁用 tap，需监听该事件类型并调用 `CGEvent.tapEnable(tap:enable:true)` 恢复（应用唤醒时另经 `recheckHealth()` 兜底核实）。权限模型独立于既有 `AXIsProcessTrusted`（后者仅用于*发送*媒体键 CGEvent）——*监听*系统级按键需要「输入监控」(Input Monitoring) 权限，经 `CGPreflightListenEventAccess()` / `CGRequestListenEventAccess()` <sup>[[15]](#ref15)</sup> 查询/申请，未授权时 `CGEvent.tapCreate` 返回 `nil`，按既有降级范式静默回退（仅菜单可用 + NSLog 诊断）。
+
+⚠️ **已知 macOS 行为边界**（非本实现缺陷，均已交叉验证）：(a) **Secure Input Mode 全局单例**——系统上任意 App 持有 Secure Input（密码框、Terminal 安全键盘输入等）时，全机所有 `CGEventTap` 被静默禁用，此时按 Control+Command+Q 会真正锁屏，且本 App 对此不可探测；(b) **输入监控权限变更非热生效**——与 Accessibility 不同，用户在系统设置授权后须重启 App 才生效；(c) 固定拦截 macOS 默认组合 Control+Command+Q，用户自定义过的锁屏快捷键不在拦截范围内。
+
+⚠️ **CLT SDK 注记**：`CGEventFlags` 无 `NSEvent.ModifierFlags.deviceIndependentFlagsMask` 对应物，需显式声明关心的修饰键位掩码后再求交集比较（实现时已验证于本项目 Command Line Tools 工具链下编译通过；`CGEvent.tapCreate`/`CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 均无 [issue #2](../.agents/issue.md) 那类符号缺失问题）。
+
 ## References
 
 <a id="ref1"></a>[1] Apple Inc., "NSWindow.Level.screenSaver — Window Levels," *AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct/screensaver
@@ -165,3 +194,5 @@ tick() 检测 eff.showOverlay（.working → .resting）
 <a id="ref11"></a>[11] B. Fogg, "Fogg Behavior Model — Prompts (Facilitator / Signal / Spark)," *Stanford Behavior Design Lab*. [Online]. Available: https://www.behaviormodel.org/prompts
 <a id="ref12"></a>[12] "Required Fields in Forms: Best Design Practices," *UX Tigers*, 2024. [Online]. Available: https://www.uxtigers.com/post/required-fields
 <a id="ref13"></a>[13] I. Nahum-Shani et al., "Just-in-Time Adaptive Interventions (JITAIs) in Mobile Health: Key Components and Design Principles for Ongoing Health Behavior Support," *Annals of Behavioral Medicine*, 2016. [Online]. Available: https://pmc.ncbi.nlm.nih.gov/articles/PMC5364076/
+<a id="ref14"></a>[14] Apple Inc., "CGEvent.tapCreate(tap:place:options:eventsOfInterest:callback:userInfo:) — Quartz Event Services," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgevent/tapcreate(tap:place:options:eventsofinterest:callback:userinfo:)
+<a id="ref15"></a>[15] Apple Inc., "CGPreflightListenEventAccess() / CGRequestListenEventAccess() — Input Monitoring Privacy Access," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgpreflightlisteneventaccess() ; https://developer.apple.com/documentation/coregraphics/cgrequestlisteneventaccess()
