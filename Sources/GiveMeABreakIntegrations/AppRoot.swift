@@ -19,7 +19,7 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
-    // 主动屏幕遮罩（与工作/休息 FSM 正交，零引擎耦合）+ 系统锁屏快捷键接管 + 全局快捷键
+    // 主动屏幕遮罩（遮罩期间挂起心跳冻结引擎，不触碰调度决策状态）+ 系统锁屏快捷键接管 + 全局快捷键
     private var screenMaskController: ScreenMaskController?
     private var lockShortcutMonitor: LockShortcutMonitor?
     private var globalHotkeyCenter: GlobalHotkeyCenter?
@@ -49,6 +49,7 @@ final public class AppRoot {
         AccessibilityChecker.bootstrap()  // 引导 Accessibility 授权（媒体键控制必需）
 
         screenMaskController = ScreenMaskController()
+        screenMaskController?.onDismiss = { [weak self] in self?.handleScreenMaskDismissed() }
         let lockShortcut = LockShortcutMonitor()
         lockShortcut.onTriggered = { [weak self] in self?.enterScreenMask() }
         lockShortcut.start()  // 引导「输入监控」授权；未授权时自动降级，仅菜单「屏幕遮罩」可用
@@ -172,10 +173,6 @@ final public class AppRoot {
             self.engine?.tick()
             if let phase = self.engine?.state.phase {
                 self.statusItem?.setStatus(text: self.statusText(for: phase, engine: self.engine))
-                // 计划性休息优先于手动便利遮罩：一旦转入 .resting，立即让位（≤1s 延迟）。
-                if phase == .resting, self.screenMaskController?.isShown == true {
-                    self.screenMaskController?.dismiss()
-                }
             }
         }
         self.heartbeat = heartbeat
@@ -230,18 +227,31 @@ final public class AppRoot {
 
     // MARK: - 主动屏幕遮罩（菜单「屏幕遮罩」+ 系统锁屏快捷键接管的共同入口）
 
-    /// 进入手动屏幕遮罩。与引擎 FSM 零耦合——不读写 EngineState，只与既有休息遮罩互斥
-    /// （计划性休息优先，见心跳闭包内的让位判断）。已在强制休息中时忽略，避免叠加两组遮罩面板。
+    /// 进入手动屏幕遮罩。遮罩期间**冻结引擎**（挂起心跳）：工作计时暂停、计划性休息及其小结窗
+    /// 不会在遮罩中触发。已在强制休息中（.resting，含工作日志小结窗延迟期）时忽略，避免叠加两组遮罩面板。
     func enterScreenMask() {
         guard engine?.state.phase != .resting else {
             NSLog("[GiveMeABreak][screenMask] 强制休息进行中，忽略手动遮罩触发")
             return
         }
-        screenMaskController?.show()  // show() 自身幂等
+        guard let mask = screenMaskController, !mask.isShown else { return }  // 已显示：幂等忽略
+        mask.show()
+        heartbeat?.suspend()  // 遮罩 ⇒ 引擎冻结（与 handleWake 的 resume 严格配对，见 didWake 守卫）
+        NSLog("[GiveMeABreak][screenMask] 遮罩期间工作计时已冻结")
+    }
+
+    /// 遮罩结束（双击 Esc / 被「立即休息」让位）：遮罩时长不计入工作累加器（rebase 对账基点，
+    /// 语义同 handleWake）+ 恢复心跳。与 enterScreenMask 的 suspend 严格配对。
+    private func handleScreenMaskDismissed() {
+        engine?.handleScreenMaskEnded()
+        heartbeat?.resume()
+        NSLog("[GiveMeABreak][screenMask] 遮罩结束：恢复工作计时")
     }
 
     /// 立即休息（菜单「立即休息」/ 全局快捷键 ⌃⌥⌘R 共用入口）：立即生效，不等下一秒心跳。
+    /// 显式用户动作优先于遮罩：先撤遮罩（onDismiss 回调 rebase + 恢复心跳），再进入强制休息。
     func forceRestNow() {
+        screenMaskController?.dismiss()
         engine?.forceRestNow()
         engine?.tick()
     }
@@ -439,14 +449,17 @@ final public class AppRoot {
         let did = nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             self.sensors?.isAsleep = false
-            // 小结窗仍开启（含永久等待）时不抢恢复心跳：否则唤醒后引擎抢先 tick 会把这次延迟休息
-            // 静默判定为「已结束」。心跳由提示窗收尾的 afterPrompt 负责恢复，suspend/resume 严格配对。
-            if self.workLogPromptController?.isPresenting != true {
+            // 小结窗仍开启（含永久等待）→ 由提示窗收尾的 afterPrompt 负责恢复；屏幕遮罩仍显示
+            // → 由遮罩收尾的 handleScreenMaskDismissed 负责恢复。二者之外才在此恢复心跳，
+            // suspend/resume 严格配对，避免唤醒后引擎抢先 tick 把延迟休息/遮罩冻结静默打破。
+            let promptPresenting = self.workLogPromptController?.isPresenting == true
+            let maskShown = self.screenMaskController?.isShown == true
+            if !promptPresenting, !maskShown {
                 self.heartbeat?.resume()
             }
             self.engine?.handleWake()
             self.lockShortcutMonitor?.recheckHealth()  // 唤醒时顺带核实锁屏快捷键 tap 是否仍处于启用状态
-            NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(self.workLogPromptController?.isPresenting == true ? "（小结窗开启，心跳保持挂起）" : " + 恢复心跳")")
+            NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(promptPresenting ? "（小结窗开启，心跳保持挂起）" : maskShown ? "（屏幕遮罩中，心跳保持挂起）" : " + 恢复心跳")")
         }
         sleepObservers = [will, did]
     }

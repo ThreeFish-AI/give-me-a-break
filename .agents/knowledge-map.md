@@ -27,7 +27,7 @@
 | 调度核心（FSM + evaluate 纯函数） | `Sources/GiveMeABreakEngine/Engine.swift` |
 | 引擎接线 + sleep/wake + fast-forward | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift` |
 | 多屏遮罩 + 软强制 Esc | `Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift` |
-| 主动屏幕遮罩（手动，与 FSM 正交）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
+| 主动屏幕遮罩（手动，遮罩期间心跳冻结计时）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
 | 全局快捷键（⌃⌥⌘K/R，RegisterEventHotKey，零权限） | `Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift` |
 | 休息音效（粉噪音 + QQ 音乐联动） | `Sources/GiveMeABreakIntegrations/LiveMusicController.swift` + `AmbientSoundPlayer.swift` |
 | 内置粉噪音合成（AVAudioEngine） | `Sources/GiveMeABreakIntegrations/AmbientSoundPlayer.swift` |
