@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <!-- 版本（SSOT 次要锚点；CI 用 -p:Version 覆盖 assembly metadata，本声明需手填与 Resources/Info.plist 同步）。主锚点：Resources/Info.plist CFBundleShortVersionString。Win32 manifest 版本为 4 段纯数字，无法承载 prerelease 后缀（如 -rc.1），故预发布阶段仅在此填数值主干，rc 标记以 Info.plist / -p:Version 为准。 -->
-  <assemblyIdentity version="0.1.4.0" name="GiveMeABreakShell.app" />
+  <assemblyIdentity version="0.1.5.0" name="GiveMeABreakShell.app" />
   <!-- 作为用户进程运行（asInvoker），无管理员提权；开机自启走 HKCU 非提权注册表项 -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
