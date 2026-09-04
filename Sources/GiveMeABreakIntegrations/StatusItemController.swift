@@ -50,11 +50,15 @@ final class StatusItemController {
         // 即时动作
         let rest = NSMenuItem(title: "立即休息", action: #selector(forceRest), keyEquivalent: "r")
         rest.target = self
+        // 全局快捷键（GlobalHotkeyCenter 经 RegisterEventHotKey 注册）真实生效于任意应用前台，
+        // 菜单如实展示 ⌃⌥⌘R；裸字母 keyEquivalent 仅在菜单展开时生效，易被误读为全局。
+        rest.keyEquivalentModifierMask = [.control, .option, .command]
         rest.image = Self.menuSymbol("moon.zzz", description: "立即休息")
         menu.addItem(rest)
 
         let screenMask = NSMenuItem(title: "屏幕遮罩", action: #selector(enterScreenMask), keyEquivalent: "k")
         screenMask.target = self
+        screenMask.keyEquivalentModifierMask = [.control, .option, .command]
         screenMask.image = Self.menuSymbol("lock.fill", description: "屏幕遮罩")
         menu.addItem(screenMask)
 

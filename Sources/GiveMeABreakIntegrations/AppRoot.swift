@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import GiveMeABreakEngine
 
 private let bundleId = "com.aurelius.givemeabreak"
@@ -18,9 +19,10 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
-    // 主动屏幕遮罩（与工作/休息 FSM 正交，零引擎耦合）+ 系统锁屏快捷键接管
+    // 主动屏幕遮罩（与工作/休息 FSM 正交，零引擎耦合）+ 系统锁屏快捷键接管 + 全局快捷键
     private var screenMaskController: ScreenMaskController?
     private var lockShortcutMonitor: LockShortcutMonitor?
+    private var globalHotkeyCenter: GlobalHotkeyCenter?
 
     // 工作日志（休息前记录 + 周期报告 + 补录漏掉的时段）
     private var workLogStore: WorkLogStore?
@@ -51,6 +53,18 @@ final public class AppRoot {
         lockShortcut.onTriggered = { [weak self] in self?.enterScreenMask() }
         lockShortcut.start()  // 引导「输入监控」授权；未授权时自动降级，仅菜单「屏幕遮罩」可用
         lockShortcutMonitor = lockShortcut
+
+        // 全局快捷键（零权限，任意应用前台生效）：⌃⌥⌘R 立即休息 / ⌃⌥⌘K 屏幕遮罩。
+        // 菜单项裸字母快捷键仅在菜单展开时生效（AppKit 原生行为），全局诉求由本层承载。
+        let hotkeys = GlobalHotkeyCenter()
+        let hyperModifiers = UInt32(controlKey | optionKey | cmdKey)
+        hotkeys.register(keyCode: UInt32(kVK_ANSI_R), modifiers: hyperModifiers) { [weak self] in
+            self?.forceRestNow()
+        }
+        hotkeys.register(keyCode: UInt32(kVK_ANSI_K), modifiers: hyperModifiers) { [weak self] in
+            self?.enterScreenMask()
+        }
+        globalHotkeyCenter = hotkeys
 
         let dir = ConfigStore.defaultDirectory(bundleId: bundleId)
         let store: ConfigStore?
@@ -141,10 +155,7 @@ final public class AppRoot {
         lastSavedPhase = engine.state.phase
 
         statusItem = StatusItemController(
-            onForceRest: { [weak self] in
-                self?.engine?.forceRestNow()
-                self?.engine?.tick()  // 立即生效，不等下一秒心跳
-            },
+            onForceRest: { [weak self] in self?.forceRestNow() },
             onEnterScreenMask: { [weak self] in self?.enterScreenMask() },
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
@@ -227,6 +238,12 @@ final public class AppRoot {
             return
         }
         screenMaskController?.show()  // show() 自身幂等
+    }
+
+    /// 立即休息（菜单「立即休息」/ 全局快捷键 ⌃⌥⌘R 共用入口）：立即生效，不等下一秒心跳。
+    func forceRestNow() {
+        engine?.forceRestNow()
+        engine?.tick()
     }
 
     // MARK: - 工作日志

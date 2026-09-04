@@ -26,9 +26,6 @@ struct ScreenMaskContentView: View {
                         Text("键盘说它有点烫，我去给它买个冰棍，两分钟后见~")
                             .font(.system(size: 30, weight: .light, design: .rounded))
                             .foregroundStyle(.white.opacity(0.85))
-                        Text("双击 Esc 退出")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.45))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
