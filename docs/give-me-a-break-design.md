@@ -163,13 +163,15 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 `ScreenMaskController` 复用 `LiveOverlayController.swift` 内定义的 `OverlayPanel`（`NSPanel` 子类），但独立实现面板构造/热插拔/淡入淡出——刻意**不**抽取共享基类：`LiveOverlayController.swift` 是 [issue #4](../.agents/issue.md)、[issue #6](../.agents/issue.md) 两次事故现场且零自动化测试覆盖，本项目既有窗口控制器（`SettingsWindowController`/`WorkLogPromptWindowController` 等 7 处）也均独立重复各自的 `NSApp.activate`/`makeKeyAndOrderFront` 样板代码、从未共享基类，本次遵循同一惯例。
 
-### 8.2 与休息遮罩的关系：互斥而非叠加
+### 8.2 与调度引擎的关系：遮罩冻结计时，强制休息优先
 
-`ScreenMaskController`（手动）与 `LiveOverlayController`（休息）各自独立持有一组 `OverlayPanel`，均可能置于同一 `CGShieldingWindowLevel`。若二者同时显示，两个独立的本地 Esc 监听器语义会冲突（双击判定不确定指向谁）。故在编排层（`AppRoot`）强制互斥：
+`ScreenMaskController`（手动）与 `LiveOverlayController`（休息）各自独立持有一组 `OverlayPanel`，均置于同一 `CGShieldingWindowLevel`，二者不得同时显示。编排层（`AppRoot`）的协调语义（v0.1.5 起）：
 
-- 进入手动遮罩前置 guard（`AppRoot.enterScreenMask()`）：`engine.state.phase == .resting` 时忽略触发（已被强制休息遮罩覆盖，无需叠加）；
-- 心跳每秒 tick 后检查（`AppRoot.swift` 心跳闭包，复用既有读取 `phase` 的代码块）：若手动遮罩仍显示而 `phase` 已转入 `.resting`，立即 `dismiss()` 手动遮罩，让休息遮罩接管（调度休息优先于手动便利遮罩，≤1s 延迟）。执行时序上 `engine.tick()` 内部先同步显示休息遮罩，互斥判断后才隐藏手动遮罩，故不会露出一帧桌面。
-- 手动遮罩罩住已打开的设置窗/工作日志提示窗等窗口（不做特殊处理），与既有「立即休息」菜单项（`forceRestNow()`，同样不做工作日志拦截）行为完全对称。
+- **遮罩冻结引擎**：进入遮罩即挂起心跳（复用工作日志小结窗的既有「心跳冻结」机制）——工作累加器停止推进，计划性休息及其小结窗**不可能在遮罩中触发**（用户诉求：遮罩是「请勿打扰」，不被到点休息的表单打断）。遮罩结束（双击 Esc）先经 `LiveGiveMeABreakEngine.handleScreenMaskEnded()` rebase 对账基点（语义同 `handleWake`，遮罩时长不回灌工作累加器），再恢复心跳。
+- **不变量**：`遮罩显示 ⇒ 心跳挂起`。全部 resume 路径（小结窗收尾 `afterPrompt` / 唤醒 `didWake` / 遮罩收尾）均带守卫：小结窗展示中、遮罩显示中分别不在此恢复，由各自的收尾方恢复，`suspend`/`resume` 严格配对（`HeartbeatTimer` 二者幂等，双挂起安全）。
+- **强制休息优先于遮罩**：「立即休息」（菜单/⌃⌥⌘R）为显式用户动作，`forceRestNow()` 先撤遮罩（触发上述收尾链路）再强制休息——不会叠加两组遮罩面板。
+- 进入手动遮罩前置 guard：`engine.state.phase == .resting`（含小结窗延迟期，该阶段 phase 已是 .resting）时忽略触发，已被休息遮罩覆盖或小结窗流程进行中时不叠加。
+- 手动遮罩罩住已打开的设置窗等窗口（不做特殊处理），与既有「立即休息」菜单项行为对称。
 
 ### 8.3 CGEventTap 快捷键拦截
 

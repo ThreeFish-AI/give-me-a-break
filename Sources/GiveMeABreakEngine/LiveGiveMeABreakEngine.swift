@@ -143,6 +143,12 @@ public final class LiveGiveMeABreakEngine {
         state.lastTickAt = clock.now()
     }
 
+    /// 手动屏幕遮罩结束：语义同 `handleWake`（重置对账基点），使遮罩期间的时长不回灌工作累加器
+    /// ——遮罩期间心跳由 AppRoot 挂起（引擎冻结），恢复前先 rebase，首个恢复 tick 的 delta≈0。
+    public func handleScreenMaskEnded() {
+        state.lastTickAt = clock.now()
+    }
+
     /// 启动崩溃恢复：依据持久化的 lastTickAt 与当前 now 的间隔决策。
     /// 短中断（≤ sanity）→ 按工作态推进（计入累加）；长中断 → 仅对账基点，不回灌。
     public func fastForward(sanityLimit: TimeInterval = 300) {

@@ -6,6 +6,9 @@ import SwiftUI
 /// 故退出逻辑无需像 LiveOverlayController 那样经回调桥接到引擎，dismiss() 由本类直接调用。
 /// 复用 LiveOverlayController.swift 内定义的 OverlayPanel（NSPanel 子类，internal 可跨文件访问）。
 final class ScreenMaskController {
+    /// 遮罩真正收起的回调（仅状态切换时触发一次；幂等 no-op 不触发）。AppRoot 据此恢复心跳计时。
+    var onDismiss: (() -> Void)?
+
     private var panels: [OverlayPanel] = []
     private var escMonitor: Any?
     private var screenObserver: NSObjectProtocol?
@@ -38,6 +41,7 @@ final class ScreenMaskController {
         }
         panels.removeAll()
         lastEscAt = nil  // 干净初始态，防下次 show 残留双击计时
+        onDismiss?()
         NSLog("[GiveMeABreak][screenMask] dismiss")
     }
 
