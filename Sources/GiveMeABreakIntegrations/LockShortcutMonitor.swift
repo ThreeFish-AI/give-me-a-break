@@ -35,7 +35,9 @@ final class LockShortcutMonitor {
             NSLog("[GiveMeABreak][lockShortcut] 已由环境变量禁用（开发期/应急短路）")
             return
         }
-        if !CGPreflightListenEventAccess() {
+        let preflightGranted = CGPreflightListenEventAccess()
+        NSLog("[GiveMeABreak][lockShortcut] 输入监控权限 preflight=\(preflightGranted)（Ad-hoc 应用每次升级替换二进制后授权会失效，需在系统设置重新添加）")
+        if !preflightGranted {
             _ = CGRequestListenEventAccess()  // 触发系统一次性「输入监控」授权弹窗
         }
 

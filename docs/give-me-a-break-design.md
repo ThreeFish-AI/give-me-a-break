@@ -179,6 +179,18 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ⚠️ **CLT SDK 注记**：`CGEventFlags` 无 `NSEvent.ModifierFlags.deviceIndependentFlagsMask` 对应物，需显式声明关心的修饰键位掩码后再求交集比较（实现时已验证于本项目 Command Line Tools 工具链下编译通过；`CGEvent.tapCreate`/`CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 均无 [issue #2](../.agents/issue.md) 那类符号缺失问题）。
 
+### 8.4 快捷键体系（三层，各司其职）
+
+| 层 | 组合键 | 机制 | 权限 | 生效范围 |
+|---|---|---|---|---|
+| 全局即时动作 | ⌃⌥⌘K 屏幕遮罩 / ⌃⌥⌘R 立即休息 | `RegisterEventHotKey`（Carbon HIToolbox，`GlobalHotkeyCenter`） | 无 | 全局，事件被系统消费、不透传前台应用 |
+| 系统锁屏劫持 | ⌃⌘Q | `CGEventTap`（§8.3） | 输入监控 | 全局，权限门控 |
+| 菜单快捷键 | 裸字母（R/K/L/,/Q） | `NSMenuItem.keyEquivalent` | 无 | 仅菜单展开时（AppKit 原生行为） |
+
+选择 ⌃⌥⌘ 修饰组合的原因：与常见应用内快捷键（⌘R/⌘K/⌘L 等）冲突面最小。v0.1.4 曾把裸字母展示为组合键、被用户按全局快捷键预期使用而无任何反应（「所有快捷键未生效」缺陷根因之一）——修复为即时动作挂真实全局热键 + 菜单如实展示 ⌃⌥⌘R/⌃⌥⌘K；窗口类菜单项保留菜单展开时快捷键（其原生生效域），不做全局注册（全局化窗口弹出/退出属于越权抢键，退出热键化更是灾难性脚枪）。
+
+⚠️ **CLT SDK 注记（[issue #2](../.agents/issue.md) 同类）**：本 SDK 的 HIToolbox 头文件已不含 `RegisterEventHotKey` 声明，仅 `HIToolbox.tbd` 导出符号；Swift `import Carbon.HIToolbox` 仍可编译链接。已在独立无授权进程中探针验证 `InstallEventHandler`/`RegisterEventHotKey` 返回 `noErr`（零权限可用）。Carbon 文档已被 Apple 归档：[Documentation Archive](https://developer.apple.com/library/archive/navigation/index.html?filter=carbon)。
+
 ## References
 
 <a id="ref1"></a>[1] Apple Inc., "NSWindow.Level.screenSaver — Window Levels," *AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct/screensaver
