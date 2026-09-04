@@ -25,18 +25,18 @@ final class WorkLogBackfillWindowController {
             onCancel: { [weak self] in self?.window?.close() }
         )
 
+        // 每次重建 NSHostingController：强制 SwiftUI 新视图树，`@State`（时段/summary/nextAction）
+        // 干净初始化——规避 root 身份不变导致 @State 残留（同 WorkLogPromptWindowController 已知行为）。
         if window == nil {
-            let hosting = NSHostingController(rootView: view)
-            let w = NSWindow(contentViewController: hosting)
+            let w = NSWindow()
             w.title = "补录工作日志"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.level = .floating
             w.setContentSize(NSSize(width: 440, height: 470))
             window = w
-        } else {
-            (window?.contentViewController as? NSHostingController<WorkLogEntryFormView>)?.rootView = view
         }
+        window?.contentViewController = NSHostingController(rootView: view)
 
         centerOnMainScreen()
         NSApp.activate(ignoringOtherApps: true)

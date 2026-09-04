@@ -18,6 +18,10 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
+    // 主动屏幕遮罩（与工作/休息 FSM 正交，零引擎耦合）+ 系统锁屏快捷键接管
+    private var screenMaskController: ScreenMaskController?
+    private var lockShortcutMonitor: LockShortcutMonitor?
+
     // 工作日志（休息前记录 + 周期报告 + 补录漏掉的时段）
     private var workLogStore: WorkLogStore?
     private var workLogPromptController: WorkLogPromptWindowController?
@@ -41,6 +45,12 @@ final public class AppRoot {
 
     public func start() {
         AccessibilityChecker.bootstrap()  // 引导 Accessibility 授权（媒体键控制必需）
+
+        screenMaskController = ScreenMaskController()
+        let lockShortcut = LockShortcutMonitor()
+        lockShortcut.onTriggered = { [weak self] in self?.enterScreenMask() }
+        lockShortcut.start()  // 引导「输入监控」授权；未授权时自动降级，仅菜单「屏幕遮罩」可用
+        lockShortcutMonitor = lockShortcut
 
         let dir = ConfigStore.defaultDirectory(bundleId: bundleId)
         let store: ConfigStore?
@@ -78,10 +88,28 @@ final public class AppRoot {
         exerciseStore = exercise
         exercisePromptController = ExercisePromptWindowController()
         exerciseBackfillController = ExerciseBackfillWindowController(onSave: { [weak self] entry in
-            self?.exerciseStore?.append(entry)
+            guard let self else { return }
+            self.exerciseStore?.append(entry)              // 落库 exercise-log.json
+            self.learnCustomExerciseTypes(from: entry.sets) // 自定义类型自动记住 → config.exerciseTypes
         })
         if let exercise, let workLog {
-            combinedReportController = CombinedReportWindowController(workStore: workLog, exerciseStore: exercise)
+            combinedReportController = CombinedReportWindowController(
+                workStore: workLog,
+                exerciseStore: exercise,
+                exerciseTypesProvider: { [weak self] in
+                    self?.engine?.config.exerciseTypes ?? defaultExerciseTypes
+                },
+                onSaveExercise: { [weak self] entry in
+                    guard let self else { return }
+                    self.exerciseStore?.append(entry)
+                    self.learnCustomExerciseTypes(from: entry.sets)
+                },
+                onUpdateExercise: { [weak self] entry in
+                    guard let self else { return }
+                    self.exerciseStore?.update(entry)
+                    self.learnCustomExerciseTypes(from: entry.sets)
+                }
+            )
         }
 
         let config = debugConfigOrLoaded(store: store)
@@ -117,6 +145,7 @@ final public class AppRoot {
                 self?.engine?.forceRestNow()
                 self?.engine?.tick()  // 立即生效，不等下一秒心跳
             },
+            onEnterScreenMask: { [weak self] in self?.enterScreenMask() },
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
             onOpenSettings: { [weak self] in self?.openSettings() },
@@ -132,6 +161,10 @@ final public class AppRoot {
             self.engine?.tick()
             if let phase = self.engine?.state.phase {
                 self.statusItem?.setStatus(text: self.statusText(for: phase, engine: self.engine))
+                // 计划性休息优先于手动便利遮罩：一旦转入 .resting，立即让位（≤1s 延迟）。
+                if phase == .resting, self.screenMaskController?.isShown == true {
+                    self.screenMaskController?.dismiss()
+                }
             }
         }
         self.heartbeat = heartbeat
@@ -170,6 +203,7 @@ final public class AppRoot {
     public func shutdown() {
         if let state = engine?.state { configStore?.saveState(state) }
         heartbeat?.stop()
+        lockShortcutMonitor?.stop()
         for observer in sleepObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
@@ -181,6 +215,18 @@ final public class AppRoot {
     func openSettings() {
         guard let config = engine?.config else { return }
         settingsController?.show(currentConfig: config, loginEnabled: LoginService.isEnabled)
+    }
+
+    // MARK: - 主动屏幕遮罩（菜单「屏幕遮罩」+ 系统锁屏快捷键接管的共同入口）
+
+    /// 进入手动屏幕遮罩。与引擎 FSM 零耦合——不读写 EngineState，只与既有休息遮罩互斥
+    /// （计划性休息优先，见心跳闭包内的让位判断）。已在强制休息中时忽略，避免叠加两组遮罩面板。
+    func enterScreenMask() {
+        guard engine?.state.phase != .resting else {
+            NSLog("[GiveMeABreak][screenMask] 强制休息进行中，忽略手动遮罩触发")
+            return
+        }
+        screenMaskController?.show()  // show() 自身幂等
     }
 
     // MARK: - 工作日志
@@ -204,11 +250,14 @@ final public class AppRoot {
         combinedReportController?.show()
     }
 
-    /// 打开「补录运动记录」窗口（菜单入口）：默认起始取上一条记录的 endedAt，无则回退 10 分钟前。
+    /// 打开「补录运动记录」窗口（菜单入口）：默认时段为 `[now − restDuration, now]`（「补刚才那段休息做的运动」），
+    /// 而非沿用上一条记录的 endedAt（那是「紧接续写」语义，属报告内「加一条」按钮）。
     func openBackfillExercise() {
-        let lastEnd = exerciseStore?.loadEntries().last?.endedAt
-        let defaultStart = lastEnd ?? Date().addingTimeInterval(-10 * 60)
-        exerciseBackfillController?.show(defaultStart: defaultStart)
+        let rest = engine?.config.restDurationSeconds ?? 600
+        let range = exerciseBackfillDefaultRange(now: Date(), restDurationSeconds: rest)
+        exerciseBackfillController?.show(defaultStart: range.start,
+                                         defaultEnd: range.end,
+                                         exerciseTypes: exerciseTypes)
     }
 
     /// 引擎在休息自然结束、回到工作时回调。决定弹运动录入窗还是静默放行——不阻塞、不冻结心跳。
@@ -227,12 +276,15 @@ final public class AppRoot {
         prompt.present(
             restStartedAt: ctx.restStartedAt,
             restEndedAt: ctx.restEndedAt,
+            exerciseTypes: exerciseTypes,
+            timeoutSeconds: engine?.config.exercisePromptTimeoutSeconds ?? 180,
             onSubmit: { [weak self] sets, note in
                 store.append(ExerciseEntry(
                     startedAt: ctx.restStartedAt,
                     endedAt: ctx.restEndedAt,
                     sets: sets,
                     note: note))
+                self?.learnCustomExerciseTypes(from: sets)   // 自定义类型自动记住
                 self?.consecutiveExerciseSkips = 0
             },
             onSkip: { [weak self] in
@@ -287,6 +339,28 @@ final public class AppRoot {
         if submitted { consecutiveSkips = 0 } else { consecutiveSkips += 1 }
         engine?.completeDeferredRest(now: Date())
         heartbeat?.resume()
+    }
+
+    // MARK: - 运动类型注册表（config.exerciseTypes 的运行期读取 + 自定义项自动记住）
+
+    /// 当前生效的运动类型注册表（Picker 数据源）；引擎无配置时回退出厂默认。
+    private var exerciseTypes: [String] { engine?.config.exerciseTypes ?? defaultExerciseTypes }
+
+    /// 保存一条运动记录后，把其中的自定义类型（不在注册表内的）追加进 `config.exerciseTypes` 并持久化。
+    /// 纯计算交由 `appendedExerciseTypes`（可单测）；此处只负责「写 config + 热更新引擎」副作用。
+    /// 无新增类型时该纯函数返回 nil，本方法即跳过写盘（避免无谓 I/O）。
+    private func learnCustomExerciseTypes(from sets: [ExerciseSet]) {
+        guard let engine = engine, let store = configStore else { return }
+        var config = engine.config
+        guard let updated = appendedExerciseTypes(current: config.exerciseTypes, sets: sets) else { return }
+        config.exerciseTypes = updated
+        do {
+            try store.saveConfig(config)
+        } catch {
+            NSLog("[GiveMeABreak] 运动类型注册表持久化失败：\(error.localizedDescription)")
+        }
+        engine.updateConfig(config)
+        NSLog("[GiveMeABreak] 运动类型注册表已更新：\(updated.count) 项")
     }
 
     // MARK: - 调试配置
@@ -354,6 +428,7 @@ final public class AppRoot {
                 self.heartbeat?.resume()
             }
             self.engine?.handleWake()
+            self.lockShortcutMonitor?.recheckHealth()  // 唤醒时顺带核实锁屏快捷键 tap 是否仍处于启用状态
             NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(self.workLogPromptController?.isPresenting == true ? "（小结窗开启，心跳保持挂起）" : " + 恢复心跳")")
         }
         sleepObservers = [will, did]

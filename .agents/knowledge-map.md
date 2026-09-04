@@ -27,9 +27,11 @@
 | 调度核心（FSM + evaluate 纯函数） | `Sources/GiveMeABreakEngine/Engine.swift` |
 | 引擎接线 + sleep/wake + fast-forward | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift` |
 | 多屏遮罩 + 软强制 Esc | `Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift` |
+| 主动屏幕遮罩（手动，与 FSM 正交）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
 | 休息音效（粉噪音 + QQ 音乐联动） | `Sources/GiveMeABreakIntegrations/LiveMusicController.swift` + `AmbientSoundPlayer.swift` |
 | 内置粉噪音合成（AVAudioEngine） | `Sources/GiveMeABreakIntegrations/AmbientSoundPlayer.swift` |
-| 设置界面（一般/工作时段/节律/休息音效/工作日志/运动记录） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |
+| 设置界面（一般/工作时段/节律/休息音效/工作日志/运动记录/Agentic AI） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |
+| Claude 设置编辑器探测与打开（Agentic AI 页 groundwork） | `Sources/GiveMeABreakIntegrations/Settings/ClaudeSettingsLauncher.swift` |
 | 应用图标生成脚本（leaf.fill + squircle） | `scripts/generate_icon.swift` |
 | 配置 schema 迁移（容错解码） | `Sources/GiveMeABreakEngine/Models.swift` + `ConfigStore.swift` |
 | 工作日志（休息前记录 + 周期报告） | `Sources/GiveMeABreakEngine/WorkLogStore.swift` + `WorkLogReport.swift` + `Sources/GiveMeABreakIntegrations/WorkLog/` |

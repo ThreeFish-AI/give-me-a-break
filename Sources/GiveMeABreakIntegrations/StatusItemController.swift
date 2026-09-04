@@ -5,6 +5,7 @@ import AppKit
 final class StatusItemController {
     private let statusItem: NSStatusItem
     private let onForceRest: () -> Void
+    private let onEnterScreenMask: () -> Void
     private let onSetLaunchAtLogin: (Bool) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenWorkLog: () -> Void
@@ -13,6 +14,7 @@ final class StatusItemController {
     private let onOpenBackfillExercise: () -> Void
 
     init(onForceRest: @escaping () -> Void,
+         onEnterScreenMask: @escaping () -> Void,
          loginEnabled: Bool,
          onSetLaunchAtLogin: @escaping (Bool) -> Void,
          onOpenSettings: @escaping () -> Void,
@@ -21,6 +23,7 @@ final class StatusItemController {
          onOpenCombinedReport: @escaping () -> Void,
          onOpenBackfillExercise: @escaping () -> Void) {
         self.onForceRest = onForceRest
+        self.onEnterScreenMask = onEnterScreenMask
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
         self.onOpenSettings = onOpenSettings
         self.onOpenWorkLog = onOpenWorkLog
@@ -40,37 +43,54 @@ final class StatusItemController {
         header.isEnabled = false
         menu.addItem(header)
 
+        // 分组（文案统一 2~4 字；「…」尾缀遵循 macOS「打开窗口」约定，不计入字数）：
+        //  即时动作 ┃ 查看（报告）┃ 录入（补录）┃ 偏好 ┃ 退出
+        menu.addItem(.separator())
+
+        // 即时动作
         let rest = NSMenuItem(title: "立即休息", action: #selector(forceRest), keyEquivalent: "r")
         rest.target = self
         rest.image = Self.menuSymbol("moon.zzz", description: "立即休息")
         menu.addItem(rest)
 
-        let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
-        settings.target = self
-        settings.image = Self.menuSymbol("gearshape", description: "设置")
-        menu.addItem(settings)
+        let screenMask = NSMenuItem(title: "屏幕遮罩", action: #selector(enterScreenMask), keyEquivalent: "k")
+        screenMask.target = self
+        screenMask.image = Self.menuSymbol("lock.fill", description: "屏幕遮罩")
+        menu.addItem(screenMask)
 
+        menu.addItem(.separator())
+
+        // 查看
         let workLog = NSMenuItem(title: "工作日志…", action: #selector(openWorkLog), keyEquivalent: "l")
         workLog.target = self
         workLog.image = Self.menuSymbol("list.bullet.rectangle", description: "工作日志")
         menu.addItem(workLog)
-
-        let backfill = NSMenuItem(title: "补录工作日志…", action: #selector(openBackfillWorkLog), keyEquivalent: "")
-        backfill.target = self
-        backfill.image = Self.menuSymbol("square.and.pencil", description: "补录工作日志")
-        menu.addItem(backfill)
 
         let combined = NSMenuItem(title: "综合报告…", action: #selector(openCombinedReport), keyEquivalent: "")
         combined.target = self
         combined.image = Self.menuSymbol("chart.bar.doc.horizontal", description: "综合报告")
         menu.addItem(combined)
 
-        let backfillExercise = NSMenuItem(title: "补录运动记录…", action: #selector(openBackfillExercise), keyEquivalent: "")
+        menu.addItem(.separator())
+
+        // 录入（补录）
+        let backfill = NSMenuItem(title: "补录工作…", action: #selector(openBackfillWorkLog), keyEquivalent: "")
+        backfill.target = self
+        backfill.image = Self.menuSymbol("square.and.pencil", description: "补录工作")
+        menu.addItem(backfill)
+
+        let backfillExercise = NSMenuItem(title: "补录运动…", action: #selector(openBackfillExercise), keyEquivalent: "")
         backfillExercise.target = self
-        backfillExercise.image = Self.menuSymbol("figure.run", description: "补录运动记录")
+        backfillExercise.image = Self.menuSymbol("figure.run", description: "补录运动")
         menu.addItem(backfillExercise)
 
         menu.addItem(.separator())
+
+        // 偏好
+        let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        settings.image = Self.menuSymbol("gearshape", description: "设置")
+        menu.addItem(settings)
 
         let login = NSMenuItem(title: "开机自启", action: #selector(toggleLogin(_:)), keyEquivalent: "")
         login.target = self
@@ -80,6 +100,7 @@ final class StatusItemController {
 
         menu.addItem(.separator())
 
+        // 退出
         let quit = NSMenuItem(title: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         quit.image = Self.menuSymbol("xmark.circle", description: "退出")
@@ -116,6 +137,8 @@ final class StatusItemController {
     }
 
     @objc private func forceRest() { onForceRest() }
+
+    @objc private func enterScreenMask() { onEnterScreenMask() }
 
     @objc private func openSettings() { onOpenSettings() }
 

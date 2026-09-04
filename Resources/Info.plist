@@ -11,9 +11,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.aurelius.givemeabreak</string>
     <key>CFBundleVersion</key>
-    <string>10</string>
+    <string>13</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.1</string>
+    <string>0.1.4</string>
     <key>CFBundleExecutable</key>
     <string>GiveMeABreak</string>
     <key>CFBundleIconFile</key>
@@ -36,5 +36,7 @@
     <string>Give me a break 读取您的日历以在会议期间推迟休息。</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Give me a break 在播放器不支持媒体键时用于暂停音乐（可选回退）。</string>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Give me a break 拦截系统锁屏快捷键（Control+Command+Q）以触发「屏幕遮罩」而非真正锁屏。</string>
 </dict>
 </plist>

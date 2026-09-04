@@ -200,11 +200,28 @@ func runConfigStoreCases() {
         expectEqual(store.loadConfig().exerciseLogEnabled, false, "原 exerciseLogEnabled=false 应保留")
     }
 
-    test("schema 迁移：旧 v5 config 缺 exerciseLogEnabled → 升 v6 补默认 true，旧字段保留") {
+    test("exerciseTypes round-trip：自定义列表原样读回（保序）") {
+        let store = try! ConfigStore(directory: makeTempDir())
+        var config = DayPlanConfig.defaultConfig
+        config.exerciseTypes = ["深蹲", "俯卧撑", "平板支撑", "开合跳"]
+        try! store.saveConfig(config)
+        let loaded = store.loadConfig()
+        expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑", "平板支撑", "开合跳"], "自定义运动类型列表应原样保序读回")
+    }
+
+    test("exercisePromptTimeoutSeconds 哨兵 0（永久等待）显式存在时不被误补默认") {
+        let store = try! ConfigStore(directory: makeTempDir())
+        var config = DayPlanConfig.defaultConfig
+        config.exercisePromptTimeoutSeconds = 0  // 永久等待
+        try! store.saveConfig(config)
+        expectEqual(store.loadConfig().exercisePromptTimeoutSeconds, 0, "显式 0（永久等待）必须严格保留，不被默认 180 覆盖")
+    }
+
+    test("schema 迁移：旧 v6 config 缺 exerciseTypes / exercisePromptTimeoutSeconds → 升 v7 补默认，旧字段保留") {
         let dir = makeTempDir()
         let store = try! ConfigStore(directory: dir)
         let seed = DayPlanConfig(
-            schemaVersion: 5,
+            schemaVersion: 6,
             workWindows: [WorkWindow(start: TimeOfDay(hours: 9), end: TimeOfDay(hours: 12))],
             workIntervalSeconds: 3000,
             restDurationSeconds: 600,
@@ -214,21 +231,112 @@ func runConfigStoreCases() {
             workLogEnabled: false,
             workLogPromptTimeoutSeconds: 240,
             restMusicPath: "/tmp/a.mp3"
-            // exerciseLogEnabled 不传（v6 新增，模拟旧 v5 配置）
+            // exerciseLogEnabled 用默认；exerciseTypes / exercisePromptTimeoutSeconds 模拟 v6 缺失
         )
         try! store.saveConfig(seed)
         let cfgURL = dir.appendingPathComponent("config.json")
         var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
-        json.removeValue(forKey: "exerciseLogEnabled")  // 确保 v5 旧配置无此字段
-        json["schemaVersion"] = 5
+        // 模拟真实 v6 配置：移除 v7 新增字段
+        json.removeValue(forKey: "exerciseTypes")
+        json.removeValue(forKey: "exercisePromptTimeoutSeconds")
+        json["schemaVersion"] = 6
         let rewritten = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
         try! rewritten.write(to: cfgURL)
 
         let loaded = store.loadConfig()
-        expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "v5→v6 版本号应规范化")
-        expectEqual(loaded.exerciseLogEnabled, true, "缺失的 exerciseLogEnabled 应补默认 true")
-        expectEqual(loaded.workLogEnabled, false, "原 workLogEnabled=false 应保留")
+        expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "v6→v7 版本号应规范化")
+        expectEqual(loaded.exerciseTypes, defaultExerciseTypes, "缺失的 exerciseTypes 应补出厂默认 4 项")
+        expectEqual(loaded.exercisePromptTimeoutSeconds, 180, "缺失的 exercisePromptTimeoutSeconds 应补默认 180")
         expectEqual(loaded.controlQQMusic, false, "原 controlQQMusic=false 应保留")
         expectEqual(loaded.restMusicPath, "/tmp/a.mp3", "原 restMusicPath 应保留")
+    }
+
+    test("exerciseTypes 显式空数组被尊重（不回退默认）") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        let seed = DayPlanConfig.defaultConfig
+        try! store.saveConfig(seed)
+        let cfgURL = dir.appendingPathComponent("config.json")
+        var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        json["exerciseTypes"] = []  // 用户主动清空
+        let rewritten = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+        try! rewritten.write(to: cfgURL)
+
+        let loaded = store.loadConfig()
+        expect(loaded.exerciseTypes.isEmpty, "显式空数组应被尊重，不回退默认（用户主动清空也保留）")
+    }
+
+    // MARK: - v8：Agentic AI 设置（AgentSettings）
+
+    test("agent 默认：无文件 / 未设时为全 nil AgentSettings") {
+        let store = try! ConfigStore(directory: makeTempDir())
+        let loaded = store.loadConfig()  // 无文件 → 默认
+        expectEqual(loaded.agent, AgentSettings(), "默认 agent 应为全 nil（未覆盖路径、未指定编辑器）")
+        expect(loaded.agent.claudeExecutablePath == nil, "默认 claudeExecutablePath 应为 nil（回退系统 PATH 探测）")
+        expect(loaded.agent.claudeSettingsEditorBundleId == nil, "默认 claudeSettingsEditorBundleId 应为 nil（系统默认编辑器）")
+    }
+
+    test("agent round-trip：自定义可执行路径 + 编辑器 bundle id 原样读回") {
+        let store = try! ConfigStore(directory: makeTempDir())
+        var config = DayPlanConfig.defaultConfig
+        config.agent = AgentSettings(claudeExecutablePath: "/opt/homebrew/bin/claude",
+                                     claudeSettingsEditorBundleId: "com.microsoft.VSCode")
+        try! store.saveConfig(config)
+        let loaded = store.loadConfig()
+        expectEqual(loaded.agent.claudeExecutablePath, "/opt/homebrew/bin/claude", "自定义可执行路径应原样读回")
+        expectEqual(loaded.agent.claudeSettingsEditorBundleId, "com.microsoft.VSCode", "所选编辑器 bundle id 应原样读回")
+    }
+
+    test("AgentSettings 部分字段容错：仅 claudeExecutablePath 存在时另一字段补 nil") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        let seed = DayPlanConfig.defaultConfig
+        try! store.saveConfig(seed)
+        let cfgURL = dir.appendingPathComponent("config.json")
+        var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        // 模拟仅含部分字段的 agent 对象（缺 claudeSettingsEditorBundleId）
+        json["agent"] = ["claudeExecutablePath": "/usr/local/bin/claude"]
+        let rewritten = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+        try! rewritten.write(to: cfgURL)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.agent.claudeExecutablePath, "/usr/local/bin/claude", "存在的子字段应保留")
+        expect(loaded.agent.claudeSettingsEditorBundleId == nil, "缺失的子字段应容错补 nil")
+    }
+
+    test("schema 迁移：旧 v7 config 缺 agent → 升 v8 补默认（全 nil），旧字段保留") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        let seed = DayPlanConfig(
+            schemaVersion: 7,
+            workWindows: [WorkWindow(start: TimeOfDay(hours: 9), end: TimeOfDay(hours: 12))],
+            workIntervalSeconds: 3000,
+            restDurationSeconds: 600,
+            afkThresholdSeconds: 180,
+            ambientSoundEnabled: true,
+            controlQQMusic: false,
+            workLogEnabled: true,
+            workLogPromptTimeoutSeconds: 240,
+            exerciseLogEnabled: true,
+            exercisePromptTimeoutSeconds: 120,
+            exerciseTypes: ["深蹲", "俯卧撑"],
+            restMusicPath: "/tmp/a.mp3"
+            // agent 不传（v8 新增，模拟旧 v7 配置）
+        )
+        try! store.saveConfig(seed)
+        let cfgURL = dir.appendingPathComponent("config.json")
+        var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        json.removeValue(forKey: "agent")   // 确保 v7 旧配置无此字段
+        json["schemaVersion"] = 7
+        let rewritten = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+        try! rewritten.write(to: cfgURL)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "v7→v8 版本号应规范化为当前版本")
+        expectEqual(loaded.agent, AgentSettings(), "缺失的 agent 应补默认（全 nil）")
+        expectEqual(loaded.controlQQMusic, false, "原 controlQQMusic=false 应保留")
+        expectEqual(loaded.restMusicPath, "/tmp/a.mp3", "原 restMusicPath 应保留")
+        expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑"], "原 exerciseTypes 应保留")
+        expectEqual(loaded.exercisePromptTimeoutSeconds, 120, "原 exercisePromptTimeoutSeconds 应保留")
     }
 }
