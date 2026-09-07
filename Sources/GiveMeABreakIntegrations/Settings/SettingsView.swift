@@ -20,6 +20,51 @@ private extension TimeOfDay {
     }
 }
 
+// MARK: - 页签规格与尺寸契约（SSOT：渲染与宽度测算同源）
+
+/// 设置页签（七页签分类：通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI）。
+private enum SettingsTab: Hashable { case general, power, schedule, sound, workLog, exercise, agenticAI }
+
+/// 页签规格：TabView 渲染与宽度测算共用同一份 (页签, 标题, 图标)，防「文案改了、测算没跟上」漂移。
+private struct SettingsTabSpec {
+    let tab: SettingsTab
+    let title: String
+    let icon: String
+}
+
+/// 页签条平铺最小宽度模型（常量经 macOS 26 实机校准，依据见各注释；Apple 不公布页签条度量）。
+/// 本 bug 根因即第 7 页签「Agentic AI」超出硬编码 560pt 宽度后，宽度不足的页签被折叠进 >> 溢出菜单。
+private enum SettingsTabMetrics {
+    static let tabs: [SettingsTabSpec] = [
+        .init(tab: .general,   title: "通用",       icon: "gearshape"),
+        .init(tab: .power,     title: "电源",       icon: "bolt"),
+        .init(tab: .schedule,  title: "作息",       icon: "clock"),
+        .init(tab: .sound,     title: "休息音效",   icon: "music.note"),
+        .init(tab: .workLog,   title: "工作日志",   icon: "note.text"),
+        .init(tab: .exercise,  title: "运动记录",   icon: "figure.run"),
+        .init(tab: .agenticAI, title: "Agentic AI", icon: "sparkles"),
+    ]
+
+    static let labelFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)  // 13pt，与页签标签同族
+    static let iconWidth: CGFloat = 16              // SF Symbol @ body ≈ 11~19pt，按槽位计宽
+    static let iconTextSpacing: CGFloat = 5         // 图标-文案间距
+    static let itemHorizontalPadding: CGFloat = 24  // 单页签左右内边距合计（胶囊风格上界）
+    static let interItemSpacing: CGFloat = 5        // 相邻页签间隙
+    static let stripInsets: CGFloat = 112           // 交通灯簇(~70)+页签行两侧留白(~42)；首要校准项
+    static let slack: CGFloat = 32                  // 字体/密度渲染差异 + 取整余量
+
+    /// 全部页签平铺（不折叠进 >>）所需的最小内容宽度；文案运行期实测，增删/改名页签自动重算。
+    static var minimumContentWidth: CGFloat {
+        let text = tabs.reduce(CGFloat(0)) {
+            $0 + ceil(($1.title as NSString).size(withAttributes: [.font: labelFont]).width)
+        }
+        let items = text
+            + CGFloat(tabs.count) * (iconWidth + iconTextSpacing + itemHorizontalPadding)
+            + CGFloat(tabs.count - 1) * interItemSpacing
+        return ceil(items + stripInsets + slack)
+    }
+}
+
 /// 设置视图：七页签分类（通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI），draft-apply 模式。
 /// 「开机自启」与「防止睡眠」总开关即时生效（非 draft）——二者同为菜单栏快捷开关，走 draft 会让
 /// 设置窗开启期间菜单侧的改动被旧草稿静默回滚；其余随底部「应用」一次性提交所有页签的草稿。
@@ -37,7 +82,16 @@ struct SettingsView: View {
     private let onToggleLogin: (Bool) -> Void
     private let onTogglePreventIdleSleep: (Bool) -> Void
 
-    private enum SettingsTab: Hashable { case general, power, schedule, sound, workLog, exercise, agenticAI }
+    // MARK: - 窗口尺寸契约（供 SettingsWindowController：contentMinSize 锁底 + 首开默认值）
+
+    /// 页签条平铺的最小内容宽度（运行期按页签文案测算，见 SettingsTabMetrics）。
+    static var minimumContentWidth: CGFloat { SettingsTabMetrics.minimumContentWidth }
+    static let minimumContentHeight: CGFloat = 440   // 页签条(~40)+footer(~56)+至少两组 Section
+    /// 首次打开默认尺寸：宽度 = 平铺下限 + 呼吸余量；高度盖住最高常用页签（作息）。
+    /// 不按首签内容适配——「通用」页很矮，按它开窗过小、切页签即滚动。
+    static var defaultContentSize: NSSize {
+        NSSize(width: minimumContentWidth + 40, height: 640)
+    }
 
     init(initial: DayPlanConfig,
          loginEnabled: Bool,
@@ -62,72 +116,20 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $selectedTab) {
-                // 通用：开机自启 + 关于
-                Form {
-                    generalSection
-                    aboutSection
+                ForEach(SettingsTabMetrics.tabs, id: \.tab) { spec in
+                    content(for: spec.tab)
+                        .formStyle(.grouped)
+                        .tabItem { Label(spec.title, systemImage: spec.icon) }
+                        .tag(spec.tab)
                 }
-                .formStyle(.grouped)
-                .tabItem { Label("通用", systemImage: "gearshape") }
-                .tag(SettingsTab.general)
-
-                // 电源：防止空闲睡眠/熄屏（IOKit 断言，与休息/工作/遮罩引擎零耦合）
-                Form {
-                    powerSection
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("电源", systemImage: "bolt") }
-                .tag(SettingsTab.power)
-
-                // 作息：工作时段 + 节律（何时工作、工作多久休息一次）
-                Form {
-                    workWindowsSection
-                    rhythmSection
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("作息", systemImage: "clock") }
-                .tag(SettingsTab.schedule)
-
-                // 休息音效：休息时听什么（自定义音频 / 白噪音 / QQ 音乐）
-                Form {
-                    soundSection
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("休息音效", systemImage: "music.note") }
-                .tag(SettingsTab.sound)
-
-                // 工作日志：休息前的小结书写（开关 / 永久等待 / 等待时长）
-                Form {
-                    workLogSection
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("工作日志", systemImage: "note.text") }
-                .tag(SettingsTab.workLog)
-
-                // 运动记录：休息结束后的微运动录入（开关）
-                Form {
-                    exerciseSection
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("运动记录", systemImage: "figure.run") }
-                .tag(SettingsTab.exercise)
-
-                // Agentic AI：Claude Code 相关配置（为后续 Agentic AI 功能预留的 groundwork）
-                Form {
-                    agenticAISection
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("Agentic AI", systemImage: "sparkles") }
-                .tag(SettingsTab.agenticAI)
             }
 
             Divider()
             footerButtons
         }
         .onAppear { installedEditors = ClaudeSettingsLauncher.availableEditors() }
-        // 宽度固定、高度随当前页签内容自适应（窗口侧以 preferredContentSize 跟随，免滚动条/多余留白）。
-        .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
+        // 尺寸契约：不加任何 frame 修饰符——窗口尺寸归用户（控制器经 contentMinSize 锁「页签
+        // 平铺」最小宽度）；窗口偏小时由 Form（grouped 即 ScrollView）内部滚动，不压坏布局。
         .confirmationDialog("确定恢复全部设置为默认值？",
                             isPresented: $showingResetConfirm,
                             titleVisibility: .visible) {
@@ -135,6 +137,22 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("将重置工作时段、节律、休息音效、工作日志、运动记录、电源防护范围与 Agentic AI 设置为初始值（不影响开机自启与「防止睡眠」总开关，二者即时生效）。")
+        }
+    }
+
+    // MARK: - 页签内容（规格与宽度测算同源于 SettingsTabMetrics.tabs）
+
+    /// 各页签内容：Form 与 Section 原样承载，页签条渲染交给 TabView。
+    @ViewBuilder
+    private func content(for tab: SettingsTab) -> some View {
+        switch tab {
+        case .general:   Form { generalSection; aboutSection }       // 通用：开机自启 + 关于
+        case .power:     Form { powerSection }                       // 电源：防止空闲睡眠/熄屏（IOKit 断言，与休息/工作/遮罩引擎零耦合）
+        case .schedule:  Form { workWindowsSection; rhythmSection }  // 作息：工作时段 + 节律（何时工作、工作多久休息一次）
+        case .sound:     Form { soundSection }                       // 休息音效：休息时听什么（自定义音频 / 白噪音 / QQ 音乐）
+        case .workLog:   Form { workLogSection }                     // 工作日志：休息前的小结书写（开关 / 永久等待 / 等待时长）
+        case .exercise:  Form { exerciseSection }                    // 运动记录：休息结束后的微运动录入（开关）
+        case .agenticAI: Form { agenticAISection }                   // Agentic AI：Claude Code 相关配置（为后续功能预留的 groundwork）
         }
     }
 
