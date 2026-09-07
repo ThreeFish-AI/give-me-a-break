@@ -24,14 +24,14 @@ final class IdleSleepGuard {
         let wantSystem = power.preventIdleSleepEnabled && power.mode == .displayAndSystem
         if wantDisplay, displayAssertion == nil {
             displayAssertion = createAssertion(type: kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
-                                               reason: "Give me a break 防止空闲熄屏")
+                                               reason: "GiveMeABreak prevent display idle sleep")
         } else if !wantDisplay, let id = displayAssertion {
             displayAssertion = nil
             releaseAssertion(id, kind: "显示器")
         }
         if wantSystem, systemAssertion == nil {
             systemAssertion = createAssertion(type: kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
-                                              reason: "Give me a break 防止空闲睡眠")
+                                              reason: "GiveMeABreak prevent system idle sleep")
         } else if !wantSystem, let id = systemAssertion {
             systemAssertion = nil
             releaseAssertion(id, kind: "系统")
