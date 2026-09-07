@@ -120,6 +120,7 @@
 - **处理方式**：
   - 页签规格（页签/标题/图标）收敛为唯一事实源 `SettingsTabMetrics`（文件级），`TabView` 的 `ForEach` 渲染与宽度测算同源；运行期以 `NSFont.systemFont(ofSize: 13)` 实测各页签文案宽度，加图标/间距/内边距/页签条内衬校准常量（`stripInsets` 112 为首要校准项，macOS 26.6 实测无需再调）推算最小内容宽度，经窗口 `contentMinSize` 硬性锁底。实测最小宽度 785pt 下 7 页签平铺无截断（后续页签文案缩短为双字「音效/日志/运动」，最小宽度经同源测算自动重算为 707pt、默认尺寸 825→747——机制自证的防复发收益，无需改任何测算代码）。
   - 尺寸归用户：`.resizable` + 删除全部内容驱动机制（`preferredContentSize` KVO / `didMove` 锚点 / `layoutWindowToContent`，净删约 60 行）；承载层 `NSHostingController` → `NSHostingView`（contentView 赋值语义为「视图适配窗口」，而 contentViewController 会使窗口跟随内容 resize——Apple 文档明示 `NSWindow.contentViewController` 的窗口跟随行为，与用户持有尺寸冲突）。issue #9 的「每次 show 重建 hosting」语义经新建 `NSHostingView` 延续。
+  - （后续演进）页签条改**自绘**：`.resizable` 后发现原生 TabView 在 macOS 26 会把页签均匀铺满工具栏、间隙随窗口拉伸且无样式 API 可控（第二轮用户反馈「间距过大」）。自绘（左对齐、相邻标题净间隙 1.5 字宽、胶囊选中态、VoiceOver isSelected）使测量字体=渲染字体、自然宽度闭式确定；`contentMinSize` 改为 max(页签条自然宽度, 表单可读性 560)；`SettingsTabSpec` 随之移除 icon 字段（原生 26 本就不渲染）。
   - 持久化：`setFrameAutosaveName` 原生落盘（键 `NSWindow Frame GiveMeABreakSettingsWindow`）；首开「默认尺寸 + 显式居中」（沿用 #7 协议），其后 `setFrameUsingName` 恢复 + 屏内收口（`constrainFrameRect` 不修水平位置，拔屏后须我方钳制）。
 - **验证**（沿用 #7 方法论：`CGWindowListCopyWindowInfo` + `screencapture -l`）：默认宽/最小宽（注入超小 frame 被 contentMinSize 收口）下均平铺无 `>>`；注入 900×650 精确还原；真实 .app bundle 跨启动位置精确还原、页签平铺；91 单测全绿。
 - **后续防范**：**页签/导航项文案与承载窗口宽度必须同源测算**（经 `SettingsTabMetrics` 类 SSOT），禁止硬编码窗口宽度；给 `NSHostingView` 显式设 `sizingOptions = []` 以切断 SwiftUI 内容尺寸对窗口的隐式反压。注意 macOS 26 工具栏式页签条仅显示文字不显示 SF 图标（系统样式行为，非缺陷）。
