@@ -1,5 +1,6 @@
 # Give me a break — 构建与分发（无需 Xcode，仅 Command Line Tools）
-# 个人用途：ad-hoc 签名 + Hardened Runtime；公开分发见下方 notarize 注释。
+# 签名：默认 ad-hoc；本机经 scripts/create-signing-cert.sh 启用稳定自签名（TCC 授权跨版本持久）；
+# Developer ID + 公证链路见 release.yml 与底部注释。
 
 BUNDLE_ID   := com.aurelius.givemeabreak
 APP_NAME    := GiveMeABreak
@@ -12,6 +13,11 @@ INFO_PLIST  := Resources/Info.plist
 ICON_SCRIPT := scripts/generate_icon.swift
 ICONSET     := Resources/AppIcon.iconset
 ICON_ICNS   := Resources/AppIcon.icns
+# 签名身份：`-` = ad-hoc（TCC 授权不跨构建持久）；稳定自签名见 scripts/create-signing-cert.sh
+SIGNING_IDENTITY ?= -
+
+# 本机私有覆写（gitignored）：SIGNING_IDENTITY := GiveMeABreak Release
+sinclude Makefile.local
 
 .PHONY: all build app icon run test test-integration clean sign run-debug
 
@@ -27,7 +33,7 @@ icon:
 	@swift $(ICON_SCRIPT) A
 	@iconutil -c icns $(ICONSET) -o $(ICON_ICNS)
 
-## 装配 GiveMeABreak.app 并 ad-hoc 签名（Hardened Runtime + entitlements）
+## 装配 GiveMeABreak.app 并签名（默认 ad-hoc；Makefile.local 可切稳定自签名）
 app: build icon
 	@echo "==> 装配 $(APP_BUNDLE)"
 	@rm -rf $(APP_BUNDLE)
@@ -37,8 +43,8 @@ app: build icon
 	@cp $(INFO_PLIST) $(APP_BUNDLE)/Contents/Info.plist
 	@cp $(ICON_ICNS) $(APP_BUNDLE)/Contents/Resources/AppIcon.icns
 	@printf 'APPL????' > $(APP_BUNDLE)/Contents/PkgInfo
-	@echo "==> ad-hoc 签名（Hardened Runtime + entitlements）"
-	@codesign --force --deep --options runtime --timestamp --entitlements $(ENTITLEMENTS) -s - $(APP_BUNDLE)
+	@echo "==> 签名（身份：$(SIGNING_IDENTITY)，值为 - 时为 ad-hoc）"
+	@codesign --force --deep --options runtime --timestamp --entitlements $(ENTITLEMENTS) -s "$(SIGNING_IDENTITY)" $(APP_BUNDLE)
 	@xattr -dr com.apple.quarantine $(APP_BUNDLE) 2>/dev/null || true
 	@echo "==> 完成：./$(APP_BUNDLE)"
 

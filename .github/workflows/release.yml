@@ -1,9 +1,11 @@
 # Give me a break — 发布 CD（持续交付）· 多平台（macOS + Windows）。
 # 触发：git tag v*（版本即 tag，不可变锚点）+ workflow_dispatch（手动补刀 / prerelease）。
 # 架构（docs/windows-port-design.md §7）：单 workflow + 3 job 规避多 workflow 同 tag 竞态——
-#   macos job（①-⑥ 现有链路逐字保留，演进式签名）+ windows job（dotnet publish self-contained，无签名）
+#   macos job（①-⑥ 现有链路逐字保留，演进式签名；③b 新增自签名稳定证书重签——TCC 授权跨版本持久）
+#   + windows job（dotnet publish self-contained，无签名）
 #   → release job（needs [macos, windows] 收敛）一次性 softprops/action-gh-release 挂双 asset。
-# macOS 演进式签名不变（ENABLE_DEVELOPER_ID_SIGNING + secrets）；Windows 暂不签名（SmartScreen 告知，签名留后续）。
+# macOS 签名三态（signing marker 供 Release Note 分支）：devid（公证）> selfsign（稳定自签名）> adhoc；
+# Windows 暂不签名（SmartScreen 告知，签名留后续）。
 name: Release
 
 on:
@@ -63,9 +65,11 @@ jobs:
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
+          MACOS_SELFSIGN_P12: ${{ secrets.MACOS_SELFSIGN_P12 }}
         run: |
           if [ -n "$MACOS_CERTIFICATE" ]; then echo "has_cert=true" >> "$GITHUB_OUTPUT"; else echo "has_cert=false" >> "$GITHUB_OUTPUT"; fi
           if [ -n "$APPLE_ID" ]; then echo "has_notarize=true" >> "$GITHUB_OUTPUT"; else echo "has_notarize=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$MACOS_SELFSIGN_P12" ]; then echo "has_selfsign=true" >> "$GITHUB_OUTPUT"; else echo "has_selfsign=false" >> "$GITHUB_OUTPUT"; fi
 
       # ③ 条件 Developer ID 重签（演进升级；--force 覆盖 make app 的 ad-hoc 签名）。
       - name: Import cert & re-sign with Developer ID
@@ -91,6 +95,38 @@ jobs:
             --entitlements Resources/GiveMeABreakRelease.entitlements \
             --keychain "$KC" -s "$SIGNING_IDENTITY" GiveMeABreak.app
           rm -f "$CERT_FILE"
+          security delete-keychain "$KC"
+
+      # ③b 条件自签名稳定证书重签（TCC 授权跨版本持久；与 ③ 互斥防双签）。
+      # 所有 Release 共用同一张证书 → DR 稳定 → 下载用户升级后不再重复 TCC 授权（见 scripts/create-signing-cert.sh）。
+      - name: Import self-signed cert & re-sign (stable TCC identity)
+        if: ${{ steps.signing.outputs.has_selfsign == 'true' && !(vars.ENABLE_DEVELOPER_ID_SIGNING == 'true' && steps.signing.outputs.has_cert == 'true') }}
+        env:
+          MACOS_SELFSIGN_P12: ${{ secrets.MACOS_SELFSIGN_P12 }}
+          MACOS_SELFSIGN_P12_PWD: ${{ secrets.MACOS_SELFSIGN_P12_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          SELFSIGN_IDENTITY: ${{ vars.SELFSIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          [ -n "$SELFSIGN_IDENTITY" ] || { echo "::error::已配置 MACOS_SELFSIGN_P12 但缺少 repo variable SELFSIGN_IDENTITY（证书 CN，如 GiveMeABreak Release）"; exit 1; }
+          CERT_FILE=$(mktemp /tmp/selfsign.p12.XXXX)
+          CERT_PEM=$(mktemp /tmp/selfsign.cer.XXXX)
+          echo "$MACOS_SELFSIGN_P12" | base64 --decode > "$CERT_FILE"
+          KC="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KC"
+          security import "$CERT_FILE" -P "$MACOS_SELFSIGN_P12_PWD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KC"
+          # 自签名证书必须显式信任为 code signing 根，否则 find-identity 视为 invalid
+          openssl pkcs12 -in "$CERT_FILE" -passin "pass:$MACOS_SELFSIGN_P12_PWD" -nokeys -clcerts -out "$CERT_PEM"
+          security add-trusted-cert -r trustRoot -p codeSign -k "$KC" "$CERT_PEM"
+          echo "==> 可用签名 identity（排障）："
+          security find-identity -v -p codesigning "$KC"
+          codesign --force --deep --options runtime --timestamp \
+            --entitlements Resources/GiveMeABreakRelease.entitlements \
+            --keychain "$KC" -s "$SELFSIGN_IDENTITY" GiveMeABreak.app
+          rm -f "$CERT_FILE" "$CERT_PEM"
           security delete-keychain "$KC"
 
       # ④ 条件公证（notarytool submit --wait + stapler staple）。
@@ -135,11 +171,21 @@ jobs:
           spctl -a -vvvv -t install GiveMeABreak.app
           xcrun stapler validate GiveMeABreak.app
 
-      # ⑦ 上传 artifact（Release 创建上移到 release 收敛 job）+ 版本/公证 markers（供 release job 跨 job 读取）。
-      - name: Write version & notarized markers
+      # ⑦ 上传 artifact（Release 创建上移到 release 收敛 job）+ 版本/公证/签名 markers（供 release job 跨 job 读取）。
+      # 签名状态以产物实签为准（codesign Authority），不依赖步骤执行标志——冻结链路零改动。
+      - name: Write version & notarized & signing markers
         run: |
+          set -euo pipefail
           echo "${RELEASE_VERSION}" > version.txt
           echo "${NOTARIZED:-false}" > notarized.txt
+          if codesign -dvvv GiveMeABreak.app 2>&1 | grep -q 'Authority=Developer ID'; then
+            echo "devid" > signing.txt
+          elif codesign -dvvv GiveMeABreak.app 2>&1 | grep -q '^Authority='; then
+            echo "selfsign" > signing.txt
+          else
+            echo "adhoc" > signing.txt
+          fi
+          echo "==> 签名状态：$(cat signing.txt)"
 
       - name: Upload macOS zip artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -155,6 +201,7 @@ jobs:
           path: |
             version.txt
             notarized.txt
+            signing.txt
           if-no-files-found: error
 
   # ────────────────────────────────────────────────────────────────────────
@@ -224,11 +271,14 @@ jobs:
         with:
           name: windows-zip
 
-      - name: Resolve version & notarized state
+      - name: Resolve version & notarized & signing state
         run: |
           set -euo pipefail
           echo "RELEASE_VERSION=$(cat version.txt)" >> "$GITHUB_ENV"
           echo "NOTARIZED=$(cat notarized.txt)" >> "$GITHUB_ENV"
+          SIGNING="$(cat signing.txt)"
+          case "$SIGNING" in devid|selfsign|adhoc) ;; *) echo "::error::非法签名状态 marker：$SIGNING"; exit 1 ;; esac
+          echo "SIGNING=$SIGNING" >> "$GITHUB_ENV"
 
       # download-artifact v4 解压到 <name>/ 子目录，归拢到当前目录供 softprops files: 引用。
       - name: Flatten asset layout & verify
@@ -258,7 +308,9 @@ jobs:
             printf -- '---\n\n'
             printf '### macOS\n\n下载 `give-me-a-break-%s-macos.zip`。解压后将 `GiveMeABreak.app` 拖入 `/Applications`；首次启动需在「系统设置 → 隐私与安全性」授权辅助功能与媒体控制权限。\n\n' "$RELEASE_VERSION"
             if [ "${NOTARIZED}" = "true" ]; then
-              printf '> ✅ 已通过 Apple 公证（Notarized）+ Developer ID 签名，Gatekeeper 可直接放行。\n\n'
+              printf '> ✅ 已通过 Apple 公证（Notarized）+ Developer ID 签名，Gatekeeper 可直接放行，双击即开。\n\n'
+            elif [ "${SIGNING}" = "selfsign" ]; then
+              printf '> 🔏 稳定自签名（未公证）。**TCC 权限（辅助功能/输入监控/日历）授权一次、升级后不再重复**。推荐一键安装（自动去隔离 + 装入 /Applications）：\n>\n> ```bash\n> curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/master/install.sh -o install.sh && bash install.sh v%s\n> ```\n>\n> 手动安装则解压拖入 `/Applications` 后执行 `xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app`（macOS 15.1 Sequoia 起「右键→打开」已失效）。\n\n' "$RELEASE_VERSION"
             else
               printf '> ⚠️ 此版本为 ad-hoc 签名（未签名/未公证）。首次打开会被 Gatekeeper 拦截，请执行 `xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app` 放行（macOS 15.1 Sequoia 起「右键→打开」已失效），仅供内测。\n\n'
             fi
