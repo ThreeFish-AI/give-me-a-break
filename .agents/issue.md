@@ -49,7 +49,7 @@
 - **表因**：本机未装 Xcode，无法 `xcodebuild` 生成 `.xcodeproj`。
 - **根因**：方案原定 `.xcodeproj`，但环境约束不允许。
 - **处理方式**：改用 Swift Package Manager（`Package.swift` 三目标）+ `Makefile` 手工装配 `.app`（`Contents/MacOS` + `Info.plist` + `PkgInfo` + `codesign` ad-hoc + Hardened Runtime + entitlements + `xattr` 清 quarantine）。比 `.xcodeproj` 更简约，且 `codesign`/`notarytool` 随 CLT 可用。
-- **后续防范**：公开分发时用 Developer ID + `notarytool` + `stapler`（Makefile 已预留注释）；个人用 ad-hoc 即可。
+- **后续防范**（2026-09 更新）：稳定签名已落地——`scripts/create-signing-cert.sh` 一次性创建自签名 codeSigning 证书 + `Makefile` `SIGNING_IDENTITY`/`Makefile.local` + `release.yml` 自签名重签步，所有构建共享同一签名身份（DR 绑定证书 CN 而非 cdhash），TCC 授权跨版本持久（v0.1.5 曾因 ad-hoc 身份漂移复发，见 #3/#7 关联记录）；从 ad-hoc 迁移需最后一次重新授权。Gatekeeper 对下载产物的**首次**拦截仍需 Developer ID + `notarytool` + `stapler` 公证（release.yml 已预留，购证后仅配置即启用），现阶段以根目录 `install.sh`（下载 + 去隔离 + 装配 + 启动一条命令）压低摩擦。
 - **同类影响**：任何无 Xcode 的 macOS 应用构建。
 
 ## #6 休息模式 Esc 退出失效（对话框被遮罩遮挡 + forcedRest 残留死循环）

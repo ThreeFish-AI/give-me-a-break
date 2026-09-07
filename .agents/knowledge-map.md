@@ -44,5 +44,7 @@
 | pre-break 拦截 + completeDeferredRest 不变量 | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift`（见 issue #6） |
 | post-break 回调（仅休息自然结束触发运动录入） | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift`（onPostBreak） |
 | Google 日历 EventKit 门控 | `Sources/GiveMeABreakIntegrations/LiveCalendarProvider.swift` |
-| .app 装配 + 图标生成 + 签名 | `Makefile` |
+| 稳定自签名证书创建（一次性；TCC 授权跨版本持久） | `scripts/create-signing-cert.sh` |
+| 一键安装/升级（下载 + 去隔离 + 装配 + 启动） | `install.sh` |
+| .app 装配 + 图标生成 + 签名（身份可插拔，`Makefile.local` 本机覆写） | `Makefile` |
 | CI/CD 工作流（测试 / 文档门禁 / 发布） | `.github/workflows/` |

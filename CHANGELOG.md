@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+### 核心改进
+
+- **稳定自签名：TCC 权限授权一次、跨版本持久**。根因修复「升级替换二进制后辅助功能 / 输入监控 / 日历反复要求重新授权」——ad-hoc 签名（`codesign -s -`）的 Designated Requirement 绑定 cdhash，每次构建都变，TCC 视为不同应用；改用稳定自签名代码签名证书（10 年期、codeSigning EKU）后 DR 跨构建稳定，TCC 授权持久。**从 ad-hoc 版本升级需最后一次重新授权**。配套：`scripts/create-signing-cert.sh`（一次性证书创建，OpenSSL/LibreSSL 双兼容 + sudo 信任 + 自动写入 `Makefile.local`）；`Makefile` 签名身份可插拔（`SIGNING_IDENTITY ?= -` + `sinclude Makefile.local`，默认行为不变）；`release.yml` 新增自签名重签步（`MACOS_SELFSIGN_P12` 等 secrets 门控、与 Developer ID 步互斥防双签，公证链路逐字保留）+ `signing.txt` 状态 marker（按产物实签判定）+ Release Note 三分支文案。
+- **新增 `install.sh` 一键安装/升级**：下载 Release zip → 防御性去隔离 → 替换 `/Applications/GiveMeABreak.app` → 启动，一条命令完成；版本参数严格校验，`/Applications` 不可写时自动降级 sudo / `~/Applications`。
+
 ## v0.1.7 — 2026-09-07（GA · 防止空闲睡眠）
 
 继 v0.1.6 后的功能版本：新增「防止空闲睡眠」——经 IOKit 原生电源断言（与 `caffeinate` 同机制，非子进程）阻止电脑因空闲而熄屏/睡眠，菜单栏勾选项与设置「电源」页双入口、总开关即时生效、状态持久化，**无需任何权限**。配置 schema 升至 v9（容错迁移，旧配置无感），91 单测全绿，引擎 FSM 零改动。
