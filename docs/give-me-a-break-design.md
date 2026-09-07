@@ -83,7 +83,7 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 ```
 
 > **Agentic AI 配置（v8，groundwork）**：`AgentSettings` 为「Agentic AI」功能域预留的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移。仅承载纯 Foundation 的 `String?` 字段——引擎不消费（携带即忽略，同 `restMusicPath`）；编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`，与本模型正交解耦。当前仅持久化 + 设置 UI，未接入实际 Claude Code 调用。
-
+>
 > **电源配置（v9）**：`PowerSettings` 为「防止空闲睡眠/熄屏」功能域的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移（旧 v8 缺 `power` 补默认；`mode` 先解 `String` 再按 rawValue 回退——未知枚举值只回退该字段，不会令整份配置回退默认）。引擎不消费（携带即忽略，同 `agent`）；IOKit 断言的持有/释放位于集成层 `IdleSleepGuard`（§3），与休息 / 工作 / 遮罩调度完全正交。**UI 双入口的通道划分**：总开关 `preventIdleSleepEnabled` 由菜单栏「防止睡眠」勾选项与设置「电源」页共用同一即时通道（`AppRoot.setPreventIdleSleep`，`engine.config` 为权威值，设置窗「应用」时以 live 值覆盖草稿快照，避免旧草稿回滚菜单侧改动——同「开机自启」的非 draft 语义）；防护范围 `mode` 仍走 draft，随「应用」提交。
 
 崩溃恢复：启动加载持久化 `EngineState`，`fastForward(sanityLimit:)` 依间隔决策——短中断（≤300s）按工作态推进计入累加；长中断仅对账基点不回灌（`U11` 断言）。
