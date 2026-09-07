@@ -49,7 +49,7 @@
 - **表因**：本机未装 Xcode，无法 `xcodebuild` 生成 `.xcodeproj`。
 - **根因**：方案原定 `.xcodeproj`，但环境约束不允许。
 - **处理方式**：改用 Swift Package Manager（`Package.swift` 三目标）+ `Makefile` 手工装配 `.app`（`Contents/MacOS` + `Info.plist` + `PkgInfo` + `codesign` ad-hoc + Hardened Runtime + entitlements + `xattr` 清 quarantine）。比 `.xcodeproj` 更简约，且 `codesign`/`notarytool` 随 CLT 可用。
-- **后续防范**：公开分发时用 Developer ID + `notarytool` + `stapler`（Makefile 已预留注释）；个人用 ad-hoc 即可。
+- **后续防范**（2026-09 更新）：稳定签名已落地——`scripts/create-signing-cert.sh` 一次性创建自签名 codeSigning 证书 + `Makefile` `SIGNING_IDENTITY`/`Makefile.local` + `release.yml` 自签名重签步，所有构建共享同一签名身份（DR 绑定证书 CN 而非 cdhash），TCC 授权跨版本持久（v0.1.5 曾因 ad-hoc 身份漂移复发，见 #3/#7 关联记录）；从 ad-hoc 迁移需最后一次重新授权。Gatekeeper 对下载产物的**首次**拦截仍需 Developer ID + `notarytool` + `stapler` 公证（release.yml 已预留，购证后仅配置即启用），现阶段以根目录 `install.sh`（下载 + 去隔离 + 装配 + 启动一条命令）压低摩擦。
 - **同类影响**：任何无 Xcode 的 macOS 应用构建。
 
 ## #6 休息模式 Esc 退出失效（对话框被遮罩遮挡 + forcedRest 残留死循环）
@@ -102,6 +102,14 @@
 - **处理方式**：每次 `present`/`show` **重建 `NSHostingController`**（窗口复用、控制器替换：`window?.contentViewController = NSHostingController(rootView: view)`），强制 SwiftUI 视为新视图树、`@State` 归零。Settings 控制器额外重建 KVO（`preferredContentSize` 观测绑到新 hosting）；report 控制器同步处理。
 - **后续防范**：**任何 `NSHostingController`/`UIHostingController` 反复替换 rootView 的场景，必须重建 hosting 控制器或用 `.id(token)` 强制身份变更**，否则 `@State`/`@FocusState` 残留。复用窗口可以，但「视图身份」不可隐式复用。
 - **同类影响**：所有 AppKit+SwiftUI 混合的复用窗口（菜单栏 accessory app 尤甚）；任何「重开窗口显示旧草稿/旧输入」的疑似 bug 先查此根因，而非查持久化层。
+
+## #10 macOS 自带 bash 3.2 多字节解析：`$VAR` 后紧跟中文标点 → unbound variable
+
+- **表因**：`install.sh` 传非法版本时本应输出「版本号格式非法：vabc（应为 vX.Y.Z）」，实际报 `VER?: unbound variable` 直接退出（`set -u`），错误文案完全丢失。
+- **根因**：macOS `/usr/bin/bash` 为 3.2（非多字节感知）。双引号内 `$VER（` 的全角括号首字节被并入变量名解析，变量名变「脏」→ `set -u` 判为未绑定变量。shellcheck 按现代 bash 方言检查，对此**不报警**。
+- **处理方式**：变量一律花括号包裹（`${VER}（`）；并按模式 `\$[A-Za-z_][A-Za-z0-9_]*[^ -~"]` 全仓扫描两个脚本排查同类隐患。
+- **后续防范**：macOS 原生 bash 3.2 运行的脚本中，变量后紧邻非 ASCII 字符时必须写 `${VAR}`；脚本**错误路径必须实跑验证**（本次静态检查全绿，`bash install.sh vabc` 一跑即暴露）。
+- **同类影响**：所有在 macOS 自带 bash 下运行、提示文案含中文的 shell 脚本（CI 的 bash 5.x 无此问题，勿因 CI 通过而误判安全）。
 
 ## #10 设置窗页签折叠进 `>>` 溢出菜单 + 窗口不可调节（硬编码宽度 × 内容驱动尺寸）
 

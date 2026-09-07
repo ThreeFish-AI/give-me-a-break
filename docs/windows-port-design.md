@@ -200,7 +200,7 @@ flowchart LR
 
 | 平台 | 机制 | 成本 | 现状 |
 |---|---|---|---|
-| macOS | Developer ID 签名 + Apple 公证（`notarytool`） | Apple Developer Program **$99/年**；签名/公证含在内 | `release.yml` 已预留演进开关（`ENABLE_DEVELOPER_ID_SIGNING`），补 `--timestamp` 后即可激活<sup>[[10]](#ref10)</sup> |
+| macOS | Developer ID 签名 + Apple 公证（`notarytool`） | Apple Developer Program **$99/年**；签名/公证含在内 | 已落地**稳定自签名**过渡方案（TCC 授权跨版本持久 + `install.sh` 去隔离一键安装）；`release.yml` 预留公证开关（`ENABLE_DEVELOPER_ID_SIGNING`）与自签名重签步，购证后仅配置即启用<sup>[[10]](#ref10)</sup> |
 | Windows | Authenticode 代码签名（`signtool`） | OV 证书约 $200–400/年；EV 更贵 | 需新增 `WINDOWS_CERT_PFX` 等 secrets |
 
 > **Windows 签名注意（已验证的误区）**：自 **2023-06** 起 Microsoft 强制所有代码签名证书（含 OV）使用硬件安全模块（HSM/Token），CI 中需经 USB token 转发或云签名服务（如 Azure Trusted Signing）；且 **2024 起 EV 证书不再保证立即通过 SmartScreen**，新应用仍需逐步累积信誉<sup>[[13]](#ref13)</sup>。未签名或低信誉应用会触发 SmartScreen 警告，用户体验等同于 macOS ad-hoc 的 Gatekeeper 拦截。
