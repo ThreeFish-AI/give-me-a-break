@@ -192,15 +192,22 @@ final public class AppRoot {
         settingsController = SettingsWindowController(
             onApply: { [weak self] newConfig in
                 guard let self else { return }
+                // 「防止睡眠」总开关走即时通道（菜单栏与设置窗共用，engine.config 为单一事实源），
+                // 故以 live 值覆盖草稿快照——否则设置窗开启期间菜单侧的改动会被旧草稿静默回滚。
+                var applied = newConfig
+                if let live = self.engine?.config.power.preventIdleSleepEnabled {
+                    applied.power.preventIdleSleepEnabled = live
+                }
                 if let store = self.configStore {
-                    do { try store.saveConfig(newConfig) }
+                    do { try store.saveConfig(applied) }
                     catch { NSLog("[GiveMeABreak] 配置保存失败：\(error.localizedDescription)") }
                 }
-                self.engine?.updateConfig(newConfig)
-                self.idleSleepGuard?.apply(newConfig.power)
-                NSLog("[GiveMeABreak] 配置已应用：\(newConfig.workWindows.count) 个工作窗口 / 工作 \(Int(newConfig.workIntervalSeconds/60))min / 休息 \(Int(newConfig.restDurationSeconds/60))min / 白噪音\(newConfig.ambientSoundEnabled ? "开" : "关") / QQ音乐\(newConfig.controlQQMusic ? "开" : "关") / 防止睡眠\(newConfig.power.preventIdleSleepEnabled ? "开" : "关")")
+                self.engine?.updateConfig(applied)
+                self.idleSleepGuard?.apply(applied.power)   // 防护范围（mode）随「应用」生效
+                NSLog("[GiveMeABreak] 配置已应用：\(applied.workWindows.count) 个工作窗口 / 工作 \(Int(applied.workIntervalSeconds/60))min / 休息 \(Int(applied.restDurationSeconds/60))min / 白噪音\(applied.ambientSoundEnabled ? "开" : "关") / QQ音乐\(applied.controlQQMusic ? "开" : "关") / 防止睡眠\(applied.power.preventIdleSleepEnabled ? "开" : "关")")
             },
-            onToggleLogin: { LoginService.setEnabled($0) }
+            onToggleLogin: { LoginService.setEnabled($0) },
+            onTogglePreventIdleSleep: { [weak self] in self?.setPreventIdleSleep($0) }
         )
 
         registerSleepObservers()
@@ -406,7 +413,8 @@ final public class AppRoot {
 
     // MARK: - 防止空闲睡眠（菜单快捷开关）
 
-    /// 菜单「防止睡眠」勾选项：toggle 总开关并持久化（防护模式仍在设置「电源」页配置）。
+    /// 「防止睡眠」总开关的唯一即时通道（菜单栏勾选项 + 设置「电源」页开关共用）：写 config 并持久化
+    /// （防护范围 mode 仍随设置窗「应用」提交）。
     /// 镜像 `learnCustomExerciseTypes` 的「copy config → mutate → save → updateConfig」路径；
     /// store 不可用时降级为仅本会话生效（配置本就无处落盘），仍即时应用电源断言。
     private func setPreventIdleSleep(_ enabled: Bool) {

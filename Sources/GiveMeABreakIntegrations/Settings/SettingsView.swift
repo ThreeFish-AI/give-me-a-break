@@ -21,10 +21,13 @@ private extension TimeOfDay {
 }
 
 /// 设置视图：七页签分类（通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI），draft-apply 模式。
-/// 「开机自启」即时生效（非 draft）；其余随底部「应用」一次性提交所有页签的草稿。
+/// 「开机自启」与「防止睡眠」总开关即时生效（非 draft）——二者同为菜单栏快捷开关，走 draft 会让
+/// 设置窗开启期间菜单侧的改动被旧草稿静默回滚；其余随底部「应用」一次性提交所有页签的草稿。
 struct SettingsView: View {
     @State private var draft: DayPlanConfig
     @State private var loginEnabled: Bool
+    /// 「防止睡眠」总开关（即时通道的本地镜像，非 draft 字段；权威值在 `engine.config`）。
+    @State private var preventIdleSleepEnabled: Bool
     @State private var selectedTab: SettingsTab = .general
     @State private var showingResetConfirm: Bool = false
     /// 已安装的候选编辑器（Agentic AI 页「在…中打开」下拉数据源）；视图出现时探测一次。
@@ -32,6 +35,7 @@ struct SettingsView: View {
     private let onApply: (DayPlanConfig) -> Void
     private let onCancel: () -> Void
     private let onToggleLogin: (Bool) -> Void
+    private let onTogglePreventIdleSleep: (Bool) -> Void
 
     private enum SettingsTab: Hashable { case general, power, schedule, sound, workLog, exercise, agenticAI }
 
@@ -39,12 +43,15 @@ struct SettingsView: View {
          loginEnabled: Bool,
          onApply: @escaping (DayPlanConfig) -> Void,
          onCancel: @escaping () -> Void,
-         onToggleLogin: @escaping (Bool) -> Void) {
+         onToggleLogin: @escaping (Bool) -> Void,
+         onTogglePreventIdleSleep: @escaping (Bool) -> Void) {
         _draft = State(initialValue: initial)
         _loginEnabled = State(initialValue: loginEnabled)
+        _preventIdleSleepEnabled = State(initialValue: initial.power.preventIdleSleepEnabled)
         self.onApply = onApply
         self.onCancel = onCancel
         self.onToggleLogin = onToggleLogin
+        self.onTogglePreventIdleSleep = onTogglePreventIdleSleep
     }
 
     /// 工作时段校验：非跨午夜且 end ≤ start 视为非法（禁用「应用」+ 行内警示）。
@@ -127,7 +134,7 @@ struct SettingsView: View {
             Button("恢复默认", role: .destructive) { draft = .defaultConfig }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("将重置工作时段、节律、休息音效、工作日志、运动记录、电源与 Agentic AI 设置为初始值（不影响开机自启）。")
+            Text("将重置工作时段、节律、休息音效、工作日志、运动记录、电源防护范围与 Agentic AI 设置为初始值（不影响开机自启与「防止睡眠」总开关，二者即时生效）。")
         }
     }
 
@@ -181,9 +188,15 @@ struct SettingsView: View {
 
     private var powerSection: some View {
         Section {
-            Toggle("防止空闲睡眠熄屏", isOn: $draft.power.preventIdleSleepEnabled)
-                .accessibilityHint("开启后阻止显示器与系统因空闲而熄屏/睡眠；可在菜单栏「防止睡眠」快速开关")
-            if draft.power.preventIdleSleepEnabled {
+            Toggle("防止空闲睡眠熄屏", isOn: Binding(
+                get: { preventIdleSleepEnabled },
+                set: { newValue in
+                    preventIdleSleepEnabled = newValue
+                    onTogglePreventIdleSleep(newValue)   // 即时生效，与菜单栏勾选项同一通道（不走 draft）
+                }
+            ))
+            .accessibilityHint("开启后阻止显示器与系统因空闲而熄屏/睡眠；可在菜单栏「防止睡眠」快速开关")
+            if preventIdleSleepEnabled {
                 Picker("防护范围", selection: $draft.power.mode) {
                     Text("仅显示器").tag(IdleSleepGuardMode.displayOnly)
                     Text("显示器 + 系统").tag(IdleSleepGuardMode.displayAndSystem)
@@ -194,7 +207,7 @@ struct SettingsView: View {
         } header: {
             Text("防止空闲睡眠")
         } footer: {
-            Text("开启后本应用持有系统电源断言（与 caffeinate 同机制）。「仅显示器」等同 caffeinate -d：显示器保持常亮，系统亦不会因空闲而睡眠；「显示器 + 系统」等同 caffeinate -d -i：在此之上显式阻止系统空闲睡眠。均不影响主动睡眠（合盖、Apple 菜单睡眠、低电量）。开关状态持久化，重启后自动恢复；也可在菜单栏「防止睡眠」快速开关。本功能与休息 / 工作 / 遮罩模式完全独立。")
+            Text("开启后本应用持有系统电源断言（与 caffeinate 同机制）。「仅显示器」等同 caffeinate -d：显示器保持常亮，系统亦不会因空闲而睡眠；「显示器 + 系统」等同 caffeinate -d -i：在此之上显式阻止系统空闲睡眠。均不影响主动睡眠（合盖、Apple 菜单睡眠、低电量）。总开关即时生效（同菜单栏「防止睡眠」），防护范围随「应用」提交；状态持久化，重启后自动恢复。本功能与休息 / 工作 / 遮罩模式完全独立。")
         }
     }
 
@@ -564,7 +577,7 @@ struct SettingsView: View {
     private var footerButtons: some View {
         HStack {
             Button("恢复默认") { showingResetConfirm = true }
-                .help("将工作时段、节律、休息音效、工作日志、运动记录、电源与 Agentic AI 恢复为初始值（不影响开机自启）")
+                .help("将工作时段、节律、休息音效、工作日志、运动记录、电源防护范围与 Agentic AI 恢复为初始值（不影响开机自启与「防止睡眠」总开关）")
             Spacer()
             Button("取消") { onCancel() }
                 .keyboardShortcut(.cancelAction)
