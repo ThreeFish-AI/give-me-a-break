@@ -5,8 +5,8 @@ import GiveMeABreakEngine
 /// 设置窗口控制器：NSWindow + NSHostingView 承载 SwiftUI SettingsView。
 /// 每次 show 以当前引擎配置作为初始草稿；应用 → 持久化 + 热更新引擎。
 ///
-/// 尺寸策略：窗口尺寸归用户所有（.resizable + contentMinSize 锁「页签平铺」最小宽度，该宽度
-/// 运行期按页签文案测算，见 SettingsView 的 SettingsTabMetrics）；位置/尺寸经 setFrameAutosaveName
+/// 尺寸策略：窗口尺寸归用户所有（.resizable + contentMinSize 锁「页签条自然宽度 ∨ 表单可读性」
+/// 下限，该下限运行期按页签文案测算，见 SettingsView 的 SettingsTabMetrics）；位置/尺寸经 setFrameAutosaveName
 /// 原生持久化，首次显示走默认尺寸 + 显式居中主屏可见区（issue #7：弃 center()）。内容不再反向
 /// 驱动窗口——页签内容高于窗口时由 Form（grouped 即 ScrollView）内部滚动，与系统设置窗行为一致。
 /// 故用 NSHostingView（contentView，视图适配窗口）而非 NSHostingController（contentViewController，

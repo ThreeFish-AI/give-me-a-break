@@ -25,47 +25,44 @@ private extension TimeOfDay {
 /// 设置页签（七页签分类：通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI）。
 private enum SettingsTab: Hashable { case general, power, schedule, sound, workLog, exercise, agenticAI }
 
-/// 页签规格：TabView 渲染与宽度测算共用同一份 (页签, 标题, 图标)，防「文案改了、测算没跟上」漂移。
+/// 页签规格：页签条渲染与宽度测算共用同一份标题，防「文案改了、测算没跟上」漂移。
 private struct SettingsTabSpec {
     let tab: SettingsTab
     let title: String
-    let icon: String
 }
 
-/// 页签条平铺最小宽度模型（常量经 macOS 26 实机校准，依据见各注释；Apple 不公布页签条度量）。
-/// 本 bug 根因即第 7 页签「Agentic AI」超出硬编码 560pt 宽度后，宽度不足的页签被折叠进 >> 溢出菜单。
+/// 自绘页签条的宽度模型（自绘后测量字体=渲染字体，宽度闭式确定；Apple 不公布原生页签条度量，
+/// 且原生样式在 macOS 26 会把页签均匀铺满工具栏、间隙不可控）。
 private enum SettingsTabMetrics {
     static let tabs: [SettingsTabSpec] = [
-        .init(tab: .general,   title: "通用",       icon: "gearshape"),
-        .init(tab: .power,     title: "电源",       icon: "bolt"),
-        .init(tab: .schedule,  title: "作息",       icon: "clock"),
-        .init(tab: .sound,     title: "音效",       icon: "music.note"),
-        .init(tab: .workLog,   title: "日志",       icon: "note.text"),
-        .init(tab: .exercise,  title: "运动",       icon: "figure.run"),
-        .init(tab: .agenticAI, title: "Agentic AI", icon: "sparkles"),
+        .init(tab: .general,   title: "通用"),
+        .init(tab: .power,     title: "电源"),
+        .init(tab: .schedule,  title: "作息"),
+        .init(tab: .sound,     title: "音效"),
+        .init(tab: .workLog,   title: "日志"),
+        .init(tab: .exercise,  title: "运动"),
+        .init(tab: .agenticAI, title: "Agentic AI"),
     ]
 
-    static let labelFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)  // 13pt，与页签标签同族
-    static let iconWidth: CGFloat = 16              // SF Symbol @ body ≈ 11~19pt，按槽位计宽
-    static let iconTextSpacing: CGFloat = 5         // 图标-文案间距
-    static let itemHorizontalPadding: CGFloat = 24  // 单页签左右内边距合计（胶囊风格上界）
-    static let interItemSpacing: CGFloat = 5        // 相邻页签间隙
-    static let stripInsets: CGFloat = 112           // 交通灯簇(~70)+页签行两侧留白(~42)；首要校准项
-    static let slack: CGFloat = 32                  // 字体/密度渲染差异 + 取整余量
+    static let labelFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)  // 13pt，页签标题字体
+    /// 相邻页签标题文字的净间隙：1.5 个字宽（13pt 下 ≈ 19.5pt），恒定不随窗口宽度拉伸。
+    /// 以「标题两侧各留一半内边距」实现（条内零间距），文字间隙恰为 1.5 字宽。
+    static let interTitleGap: CGFloat = NSFont.systemFontSize * 1.5
+    /// 页签条与窗口左右边缘的留白（与 Form(.grouped) 内容边距对齐）。
+    static let stripHorizontalPadding: CGFloat = 16
+    /// 表单可读性下限（历史验证值 560：两组 Section 首屏可见，长期使用的固定宽度）。
+    static let formMinWidth: CGFloat = 560
 
-    /// 全部页签平铺（不折叠进 >>）所需的最小内容宽度；文案运行期实测，增删/改名页签自动重算。
-    static var minimumContentWidth: CGFloat {
+    /// 页签条自然宽度（含左右留白）；窗口最小宽度须容纳它，杜绝标题截断。
+    static var stripNaturalWidth: CGFloat {
         let text = tabs.reduce(CGFloat(0)) {
             $0 + ceil(($1.title as NSString).size(withAttributes: [.font: labelFont]).width)
         }
-        let items = text
-            + CGFloat(tabs.count) * (iconWidth + iconTextSpacing + itemHorizontalPadding)
-            + CGFloat(tabs.count - 1) * interItemSpacing
-        return ceil(items + stripInsets + slack)
+        return text + CGFloat(tabs.count) * interTitleGap + 2 * stripHorizontalPadding
     }
 }
 
-/// 设置视图：七页签分类（通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI），draft-apply 模式。
+/// 设置视图：七页签分类（通用 / 电源 / 作息 / 音效 / 日志 / 运动 / Agentic AI），draft-apply 模式。
 /// 「开机自启」与「防止睡眠」总开关即时生效（非 draft）——二者同为菜单栏快捷开关，走 draft 会让
 /// 设置窗开启期间菜单侧的改动被旧草稿静默回滚；其余随底部「应用」一次性提交所有页签的草稿。
 struct SettingsView: View {
@@ -84,8 +81,10 @@ struct SettingsView: View {
 
     // MARK: - 窗口尺寸契约（供 SettingsWindowController：contentMinSize 锁底 + 首开默认值）
 
-    /// 页签条平铺的最小内容宽度（运行期按页签文案测算，见 SettingsTabMetrics）。
-    static var minimumContentWidth: CGFloat { SettingsTabMetrics.minimumContentWidth }
+    /// 窗口最小内容宽度：页签条自然宽度与表单可读性下限取大（运行期按页签文案测算）。
+    static var minimumContentWidth: CGFloat {
+        max(SettingsTabMetrics.formMinWidth, SettingsTabMetrics.stripNaturalWidth).rounded(.up)
+    }
     static let minimumContentHeight: CGFloat = 440   // 页签条(~40)+footer(~56)+至少两组 Section
     /// 首次打开默认尺寸：宽度 = 平铺下限 + 呼吸余量；高度盖住最高常用页签（作息）。
     /// 不按首签内容适配——「通用」页很矮，按它开窗过小、切页签即滚动。
@@ -115,21 +114,19 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TabView(selection: $selectedTab) {
-                ForEach(SettingsTabMetrics.tabs, id: \.tab) { spec in
-                    content(for: spec.tab)
-                        .formStyle(.grouped)
-                        .tabItem { Label(spec.title, systemImage: spec.icon) }
-                        .tag(spec.tab)
-                }
-            }
+            tabBar
+
+            Divider()
+            content(for: selectedTab)
+                .formStyle(.grouped)
 
             Divider()
             footerButtons
         }
         .onAppear { installedEditors = ClaudeSettingsLauncher.availableEditors() }
-        // 尺寸契约：不加任何 frame 修饰符——窗口尺寸归用户（控制器经 contentMinSize 锁「页签
-        // 平铺」最小宽度）；窗口偏小时由 Form（grouped 即 ScrollView）内部滚动，不压坏布局。
+        // 尺寸契约：不加任何 frame 修饰符——窗口尺寸归用户（控制器经 contentMinSize 锁
+        // 「页签条自然宽度 ∨ 表单可读性」下限）；窗口偏小时由 Form（grouped 即 ScrollView）
+        // 内部滚动，不压坏布局。
         .confirmationDialog("确定恢复全部设置为默认值？",
                             isPresented: $showingResetConfirm,
                             titleVisibility: .visible) {
@@ -140,9 +137,42 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - 页签内容（规格与宽度测算同源于 SettingsTabMetrics.tabs）
+    // MARK: - 页签条与页签内容（规格与宽度测算同源于 SettingsTabMetrics.tabs）
 
-    /// 各页签内容：Form 与 Section 原样承载，页签条渲染交给 TabView。
+    /// 自绘页签条：左对齐、相邻标题净间隙恒为 1.5 字宽，不随窗口宽度拉伸——原生 TabView 在
+    /// macOS 26 将页签均匀铺满工具栏、间隙不可控，故弃用改自绘；窗口 contentMinSize ≥
+    /// 页签条自然宽度，任何宽度下都不会截断或折叠。
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(SettingsTabMetrics.tabs, id: \.tab) { spec in
+                tabButton(for: spec)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, SettingsTabMetrics.stripHorizontalPadding)
+        .padding(.vertical, 8)
+    }
+
+    /// 单个页签：标题两侧各留 1.5 字宽的一半（间隙由 item 内边距构成，条内零间距）；
+    /// 选中态胶囊底色（对齐系统分段控件观感），VoiceOver isSelected 标记选中页签。
+    private func tabButton(for spec: SettingsTabSpec) -> some View {
+        let isSelected = selectedTab == spec.tab
+        return Button {
+            selectedTab = spec.tab
+        } label: {
+            Text(spec.title)
+                .font(.system(size: NSFont.systemFontSize))
+                .padding(.horizontal, SettingsTabMetrics.interTitleGap / 2)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(isSelected ? 0.08 : 0), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+        .accessibilityLabel(spec.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// 各页签内容：Form 与 Section 原样承载。
     @ViewBuilder
     private func content(for tab: SettingsTab) -> some View {
         switch tab {
