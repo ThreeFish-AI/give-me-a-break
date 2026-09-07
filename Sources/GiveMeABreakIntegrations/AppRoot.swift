@@ -19,6 +19,9 @@ final public class AppRoot {
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
 
+    // 防止空闲睡眠/熄屏（IOKit 电源断言，与引擎 FSM 完全正交）
+    private var idleSleepGuard: IdleSleepGuard?
+
     // 主动屏幕遮罩（遮罩期间挂起心跳冻结引擎，不触碰调度决策状态）+ 系统锁屏快捷键接管 + 全局快捷键
     private var screenMaskController: ScreenMaskController?
     private var lockShortcutMonitor: LockShortcutMonitor?
@@ -155,11 +158,20 @@ final public class AppRoot {
         self.engine = engine
         lastSavedPhase = engine.state.phase
 
+        // 防止空闲睡眠：启动即恢复持久化状态（默认关则零行为；与引擎 FSM 完全正交）
+        let powerGuard = IdleSleepGuard()
+        powerGuard.apply(config.power)
+        idleSleepGuard = powerGuard
+
         statusItem = StatusItemController(
             onForceRest: { [weak self] in self?.forceRestNow() },
             onEnterScreenMask: { [weak self] in self?.enterScreenMask() },
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
+            preventIdleSleepEnabled: { [weak self] in
+                self?.engine?.config.power.preventIdleSleepEnabled ?? false
+            },
+            onSetPreventIdleSleep: { [weak self] enabled in self?.setPreventIdleSleep(enabled) },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenWorkLog: { [weak self] in self?.openWorkLog() },
             onOpenBackfillWorkLog: { [weak self] in self?.openBackfillWorkLog() },
@@ -185,7 +197,8 @@ final public class AppRoot {
                     catch { NSLog("[GiveMeABreak] 配置保存失败：\(error.localizedDescription)") }
                 }
                 self.engine?.updateConfig(newConfig)
-                NSLog("[GiveMeABreak] 配置已应用：\(newConfig.workWindows.count) 个工作窗口 / 工作 \(Int(newConfig.workIntervalSeconds/60))min / 休息 \(Int(newConfig.restDurationSeconds/60))min / 白噪音\(newConfig.ambientSoundEnabled ? "开" : "关") / QQ音乐\(newConfig.controlQQMusic ? "开" : "关")")
+                self.idleSleepGuard?.apply(newConfig.power)
+                NSLog("[GiveMeABreak] 配置已应用：\(newConfig.workWindows.count) 个工作窗口 / 工作 \(Int(newConfig.workIntervalSeconds/60))min / 休息 \(Int(newConfig.restDurationSeconds/60))min / 白噪音\(newConfig.ambientSoundEnabled ? "开" : "关") / QQ音乐\(newConfig.controlQQMusic ? "开" : "关") / 防止睡眠\(newConfig.power.preventIdleSleepEnabled ? "开" : "关")")
             },
             onToggleLogin: { LoginService.setEnabled($0) }
         )
@@ -212,6 +225,7 @@ final public class AppRoot {
         if let state = engine?.state { configStore?.saveState(state) }
         heartbeat?.stop()
         lockShortcutMonitor?.stop()
+        idleSleepGuard?.release()
         for observer in sleepObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
@@ -388,6 +402,28 @@ final public class AppRoot {
         }
         engine.updateConfig(config)
         NSLog("[GiveMeABreak] 运动类型注册表已更新：\(updated.count) 项")
+    }
+
+    // MARK: - 防止空闲睡眠（菜单快捷开关）
+
+    /// 菜单「防止睡眠」勾选项：toggle 总开关并持久化（防护模式仍在设置「电源」页配置）。
+    /// 镜像 `learnCustomExerciseTypes` 的「copy config → mutate → save → updateConfig」路径；
+    /// store 不可用时降级为仅本会话生效（配置本就无处落盘），仍即时应用电源断言。
+    private func setPreventIdleSleep(_ enabled: Bool) {
+        guard let engine else { return }
+        guard enabled != engine.config.power.preventIdleSleepEnabled else { return }  // 幂等
+        var config = engine.config
+        config.power.preventIdleSleepEnabled = enabled
+        if let store = configStore {
+            do {
+                try store.saveConfig(config)
+            } catch {
+                NSLog("[GiveMeABreak][power] 配置持久化失败：\(error.localizedDescription)")
+            }
+        }
+        engine.updateConfig(config)
+        idleSleepGuard?.apply(config.power)
+        NSLog("[GiveMeABreak][power] 防止空闲睡眠：\(enabled ? "开" : "关")")
     }
 
     // MARK: - 调试配置

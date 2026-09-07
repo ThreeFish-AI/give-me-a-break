@@ -20,7 +20,7 @@ private extension TimeOfDay {
     }
 }
 
-/// 设置视图：五页签分类（通用 / 作息 / 休息音效 / 工作日志 / 运动记录），draft-apply 模式。
+/// 设置视图：七页签分类（通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI），draft-apply 模式。
 /// 「开机自启」即时生效（非 draft）；其余随底部「应用」一次性提交所有页签的草稿。
 struct SettingsView: View {
     @State private var draft: DayPlanConfig
@@ -33,7 +33,7 @@ struct SettingsView: View {
     private let onCancel: () -> Void
     private let onToggleLogin: (Bool) -> Void
 
-    private enum SettingsTab: Hashable { case general, schedule, sound, workLog, exercise, agenticAI }
+    private enum SettingsTab: Hashable { case general, power, schedule, sound, workLog, exercise, agenticAI }
 
     init(initial: DayPlanConfig,
          loginEnabled: Bool,
@@ -63,6 +63,14 @@ struct SettingsView: View {
                 .formStyle(.grouped)
                 .tabItem { Label("通用", systemImage: "gearshape") }
                 .tag(SettingsTab.general)
+
+                // 电源：防止空闲睡眠/熄屏（IOKit 断言，与休息/工作/遮罩引擎零耦合）
+                Form {
+                    powerSection
+                }
+                .formStyle(.grouped)
+                .tabItem { Label("电源", systemImage: "bolt") }
+                .tag(SettingsTab.power)
 
                 // 作息：工作时段 + 节律（何时工作、工作多久休息一次）
                 Form {
@@ -119,7 +127,7 @@ struct SettingsView: View {
             Button("恢复默认", role: .destructive) { draft = .defaultConfig }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("将重置工作时段、节律、休息音效、工作日志、运动记录与 Agentic AI 设置为初始值（不影响开机自启）。")
+            Text("将重置工作时段、节律、休息音效、工作日志、运动记录、电源与 Agentic AI 设置为初始值（不影响开机自启）。")
         }
     }
 
@@ -167,6 +175,27 @@ struct SettingsView: View {
 
     private var appVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
+    }
+
+    // MARK: - 电源（防止空闲睡眠/熄屏）
+
+    private var powerSection: some View {
+        Section {
+            Toggle("防止空闲睡眠熄屏", isOn: $draft.power.preventIdleSleepEnabled)
+                .accessibilityHint("开启后阻止显示器与系统因空闲而熄屏/睡眠；可在菜单栏「防止睡眠」快速开关")
+            if draft.power.preventIdleSleepEnabled {
+                Picker("防护范围", selection: $draft.power.mode) {
+                    Text("仅显示器").tag(IdleSleepGuardMode.displayOnly)
+                    Text("显示器 + 系统").tag(IdleSleepGuardMode.displayAndSystem)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("防护范围")
+            }
+        } header: {
+            Text("防止空闲睡眠")
+        } footer: {
+            Text("开启后本应用持有系统电源断言（与 caffeinate 同机制）。「仅显示器」等同 caffeinate -d：显示器保持常亮，系统亦不会因空闲而睡眠；「显示器 + 系统」等同 caffeinate -d -i：在此之上显式阻止系统空闲睡眠。均不影响主动睡眠（合盖、Apple 菜单睡眠、低电量）。开关状态持久化，重启后自动恢复；也可在菜单栏「防止睡眠」快速开关。本功能与休息 / 工作 / 遮罩模式完全独立。")
+        }
     }
 
     // MARK: - 工作时段
@@ -535,7 +564,7 @@ struct SettingsView: View {
     private var footerButtons: some View {
         HStack {
             Button("恢复默认") { showingResetConfirm = true }
-                .help("将工作时段、节律、休息音效、工作日志与运动记录恢复为初始值（不影响开机自启）")
+                .help("将工作时段、节律、休息音效、工作日志、运动记录、电源与 Agentic AI 恢复为初始值（不影响开机自启）")
             Spacer()
             Button("取消") { onCancel() }
                 .keyboardShortcut(.cancelAction)
