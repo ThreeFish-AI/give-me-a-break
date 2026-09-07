@@ -39,9 +39,9 @@ private enum SettingsTabMetrics {
         .init(tab: .general,   title: "通用",       icon: "gearshape"),
         .init(tab: .power,     title: "电源",       icon: "bolt"),
         .init(tab: .schedule,  title: "作息",       icon: "clock"),
-        .init(tab: .sound,     title: "休息音效",   icon: "music.note"),
-        .init(tab: .workLog,   title: "工作日志",   icon: "note.text"),
-        .init(tab: .exercise,  title: "运动记录",   icon: "figure.run"),
+        .init(tab: .sound,     title: "音效",       icon: "music.note"),
+        .init(tab: .workLog,   title: "日志",       icon: "note.text"),
+        .init(tab: .exercise,  title: "运动",       icon: "figure.run"),
         .init(tab: .agenticAI, title: "Agentic AI", icon: "sparkles"),
     ]
 

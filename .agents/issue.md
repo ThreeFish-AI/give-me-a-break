@@ -110,7 +110,7 @@
   - (a) `SettingsView` 根视图硬编码 `.frame(width: 560)` 钉死内容宽度。第 7 个页签「Agentic AI」加入后，7 个图文页签固有宽度超出 560pt 可用宽度——macOS 26（Tahoe，页签条并入工具栏）将放不下的页签折叠为 `>>` 溢出菜单（该折叠行为无官方文档，仅社区实测定性；macOS 14 的 `NSTabView` 背板则是压缩截断文案，同为宽度不足的退化形态）。宽度与页签文案**解耦**是结构性根因。
   - (b) 窗口 `styleMask` 无 `.resizable`；且 `sizingOptions = [.preferredContentSize]` + KVO 强制 `setFrame` 的「内容驱动尺寸」机制使任何内容变化都覆写窗口尺寸——与「用户自由调节」语义互斥。
 - **处理方式**：
-  - 页签规格（页签/标题/图标）收敛为唯一事实源 `SettingsTabMetrics`（文件级），`TabView` 的 `ForEach` 渲染与宽度测算同源；运行期以 `NSFont.systemFont(ofSize: 13)` 实测各页签文案宽度，加图标/间距/内边距/页签条内衬校准常量（`stripInsets` 112 为首要校准项，macOS 26.6 实测无需再调）推算最小内容宽度，经窗口 `contentMinSize` 硬性锁底。实测最小宽度 785pt 下 7 页签平铺无截断。
+  - 页签规格（页签/标题/图标）收敛为唯一事实源 `SettingsTabMetrics`（文件级），`TabView` 的 `ForEach` 渲染与宽度测算同源；运行期以 `NSFont.systemFont(ofSize: 13)` 实测各页签文案宽度，加图标/间距/内边距/页签条内衬校准常量（`stripInsets` 112 为首要校准项，macOS 26.6 实测无需再调）推算最小内容宽度，经窗口 `contentMinSize` 硬性锁底。实测最小宽度 785pt 下 7 页签平铺无截断（后续页签文案缩短为双字「音效/日志/运动」，最小宽度经同源测算自动重算为 707pt、默认尺寸 825→747——机制自证的防复发收益，无需改任何测算代码）。
   - 尺寸归用户：`.resizable` + 删除全部内容驱动机制（`preferredContentSize` KVO / `didMove` 锚点 / `layoutWindowToContent`，净删约 60 行）；承载层 `NSHostingController` → `NSHostingView`（contentView 赋值语义为「视图适配窗口」，而 contentViewController 会使窗口跟随内容 resize——Apple 文档明示 `NSWindow.contentViewController` 的窗口跟随行为，与用户持有尺寸冲突）。issue #9 的「每次 show 重建 hosting」语义经新建 `NSHostingView` 延续。
   - 持久化：`setFrameAutosaveName` 原生落盘（键 `NSWindow Frame GiveMeABreakSettingsWindow`）；首开「默认尺寸 + 显式居中」（沿用 #7 协议），其后 `setFrameUsingName` 恢复 + 屏内收口（`constrainFrameRect` 不修水平位置，拔屏后须我方钳制）。
 - **验证**（沿用 #7 方法论：`CGWindowListCopyWindowInfo` + `screencapture -l`）：默认宽/最小宽（注入超小 frame 被 contentMinSize 收口）下均平铺无 `>>`；注入 900×650 精确还原；真实 .app bundle 跨启动位置精确还原、页签平铺；91 单测全绿。
