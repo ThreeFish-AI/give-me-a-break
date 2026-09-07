@@ -62,25 +62,29 @@ evaluate(now) 按顺序短路求值，首个匹配决定目标态：
 
 `workInterval=3000s`（50min）。t=0 WORKING 累加至 30min → t=30 会议开始 IN_MEETING，累加器续推 → t=50 穿越阈值但谓词 3 压过谓词 4，**不触发休息** → t=60 会议结束，`workAccum=3600≥3000` 且 meeting=nil → **RESTING**，reset，休息 60→70 → t=70 WORKING。✓ 已由单元测试 `U1` 断言。
 
-## 3. 三大集成契约
+## 3. 集成契约
 
 | 契约 | 实现 | 关键 API | 权限 |
 |---|---|---|---|
 | **遮罩** | `LiveOverlayController` | 每 `NSScreen` 一个 borderless `NSPanel`，`level=CGShieldingWindowLevel()`<sup>[[3]](#ref3)</sup>（⚠️ 该 C 函数 Apple 已弃用，现代等价 `.screenSaver` / `CGWindowLevelForKey(.shieldingWindowLevelKey)`，同屏蔽层级；`LiveOverlayController.swift:73` 待平滑替换为 `.screenSaver`），`collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications]`；Esc 经本地事件监听→`NSAlert` 二次确认 | 无（遮罩本身不需 TCC） |
 | **音乐** | `LiveMusicController` | `NSWorkspace` 拉起 QQ 音乐 + CGEvent 合成 `NX_KEYTYPE_PLAY`(=16) 媒体键（`subtype=8` NX_SUBTYPE_AUX_CONTROL_BUTTONS）<sup>[[4]](#ref4)</sup>，OS 路由到 Now Playing 应用 | **Accessibility（必需）** |
 | **日历** | `LiveCalendarProvider` | 单一 `EKEventStore`<sup>[[5]](#ref5)</sup>，`requestFullAccessToEvents()`，过滤 `sourceType==.calDAV`<sup>[[6]](#ref6)</sup> + busy，`EKEventStoreChanged` 推送 + 限流回退 | **完全日历访问** |
+| **防止空闲睡眠**（v9） | `IdleSleepGuard` | `IOPMAssertionCreateWithName`<sup>[[16]](#ref16)</sup> 持有 `kIOPMAssertionTypePreventUserIdleDisplaySleep`（`.displayAndSystem` 再叠加 `…PreventUserIdleSystemSleep`），按断言维度 diff 增删（模式切换时 display 断言全程不落）；进程退出由内核回收，无 caffeinate 子进程的孤儿风险 | 无（非沙盒 + Hardened Runtime 下无需 entitlement / TCC） |
 
 ## 4. 数据模型
 
 ```swift
 struct EngineState { phase; workAccumulatedSeconds; lastTickAt; restStartedAt; modelVersion }  // 单一事实源，Codable 持久化
-struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; …; agent: AgentSettings; schemaVersion }
+struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; …; agent: AgentSettings; power: PowerSettings; schemaVersion }
 struct AgentSettings { claudeExecutablePath: String?; claudeSettingsEditorBundleId: String? }  // v8 · Agentic AI 正交子结构
+struct PowerSettings { preventIdleSleepEnabled: Bool; mode: IdleSleepGuardMode }  // v9 · 电源正交子结构（displayOnly | displayAndSystem）
 struct MeetingTimeline { busyIntervals: [DateRange]; generatedAt }  // 合并后的不相交忙碌区间
 func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（背靠背会议视为连续）
 ```
 
 > **Agentic AI 配置（v8，groundwork）**：`AgentSettings` 为「Agentic AI」功能域预留的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移。仅承载纯 Foundation 的 `String?` 字段——引擎不消费（携带即忽略，同 `restMusicPath`）；编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`，与本模型正交解耦。当前仅持久化 + 设置 UI，未接入实际 Claude Code 调用。
+>
+> **电源配置（v9）**：`PowerSettings` 为「防止空闲睡眠/熄屏」功能域的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移（旧 v8 缺 `power` 补默认；`mode` 先解 `String` 再按 rawValue 回退——未知枚举值只回退该字段，不会令整份配置回退默认）。引擎不消费（携带即忽略，同 `agent`）；IOKit 断言的持有/释放位于集成层 `IdleSleepGuard`（§3），与休息 / 工作 / 遮罩调度完全正交。**UI 双入口的通道划分**：总开关 `preventIdleSleepEnabled` 由菜单栏「防止睡眠」勾选项与设置「电源」页共用同一即时通道（`AppRoot.setPreventIdleSleep`，`engine.config` 为权威值，设置窗「应用」时以 live 值覆盖草稿快照，避免旧草稿回滚菜单侧改动——同「开机自启」的非 draft 语义）；防护范围 `mode` 仍走 draft，随「应用」提交。
 
 崩溃恢复：启动加载持久化 `EngineState`，`fastForward(sanityLimit:)` 依间隔决策——短中断（≤300s）按工作态推进计入累加；长中断仅对账基点不回灌（`U11` 断言）。
 
@@ -92,12 +96,12 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 - **工作示例** U1：30+30 会议→60 工作→10 休息（纯函数 + 引擎接线双重断言）。
 - **边缘 case**：U2 会议恰在阈值点不触发瞬间休息；U3 背靠背会议跨接缝；U4 会议跨窗口边界→offDuty 优先；U7 休息被会议打断→abort-and-reset；U9 同态幂等（showOverlay 仅一次）。
 - **健壮性**：U10 advance 限幅；U5 AFK 冻结累加器；U6 睡眠不回灌；U11 fast-forward 短推进/长冻结。
-- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移（含 v7→v8 `agent`/AgentSettings 缺字段补默认、子字段容错、往返一致）。
+- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移（含 v7→v8 `agent`/AgentSettings 与 v8→v9 `power`/PowerSettings 缺字段补默认、子字段容错、未知 `mode` rawValue 回退不拖垮整份配置、往返一致）。
 
 ## 6. 已验证 / 待实机核实
 
-✅ 已无头验证：编译链接、87 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过。
-⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建。
+✅ 已无头验证：编译链接、91 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过。
+⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建；**「防止睡眠」两种防护范围下 `pmset -g assertions` 是否分别可见 1 条 / 2 条对应断言，关闭与退出应用后断言是否消失**。
 
 ## 7. 工作日志（休息前记录 + 周期报告）
 
@@ -210,3 +214,4 @@ tick() 检测 eff.showOverlay（.working → .resting）
 <a id="ref13"></a>[13] I. Nahum-Shani et al., "Just-in-Time Adaptive Interventions (JITAIs) in Mobile Health: Key Components and Design Principles for Ongoing Health Behavior Support," *Annals of Behavioral Medicine*, 2016. [Online]. Available: https://pmc.ncbi.nlm.nih.gov/articles/PMC5364076/
 <a id="ref14"></a>[14] Apple Inc., "CGEvent.tapCreate(tap:place:options:eventsOfInterest:callback:userInfo:) — Quartz Event Services," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgevent/tapcreate(tap:place:options:eventsofinterest:callback:userinfo:)
 <a id="ref15"></a>[15] Apple Inc., "CGPreflightListenEventAccess() / CGRequestListenEventAccess() — Input Monitoring Privacy Access," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgpreflightlisteneventaccess() ; https://developer.apple.com/documentation/coregraphics/cgrequestlisteneventaccess()
+<a id="ref16"></a>[16] Apple Inc., "IOPMAssertionCreateWithName — Power Management Assertions," *IOKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/iokit/1557134-iopmassertioncreatewithname

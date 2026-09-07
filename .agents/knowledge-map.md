@@ -29,9 +29,10 @@
 | 多屏遮罩 + 软强制 Esc | `Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift` |
 | 主动屏幕遮罩（手动，遮罩期间心跳冻结计时）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
 | 全局快捷键（⌃⌥⌘K/R，RegisterEventHotKey，零权限） | `Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift` |
+| 防止空闲睡眠/熄屏（IOKit 电源断言，等同 caffeinate -d/-i） | `Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift` |
 | 休息音效（粉噪音 + QQ 音乐联动） | `Sources/GiveMeABreakIntegrations/LiveMusicController.swift` + `AmbientSoundPlayer.swift` |
 | 内置粉噪音合成（AVAudioEngine） | `Sources/GiveMeABreakIntegrations/AmbientSoundPlayer.swift` |
-| 设置界面（一般/工作时段/节律/休息音效/工作日志/运动记录/Agentic AI） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |
+| 设置界面（一般/电源/工作时段/节律/休息音效/工作日志/运动记录/Agentic AI） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |
 | Claude 设置编辑器探测与打开（Agentic AI 页 groundwork） | `Sources/GiveMeABreakIntegrations/Settings/ClaudeSettingsLauncher.swift` |
 | 应用图标生成脚本（leaf.fill + squircle） | `scripts/generate_icon.swift` |
 | 配置 schema 迁移（容错解码） | `Sources/GiveMeABreakEngine/Models.swift` + `ConfigStore.swift` |

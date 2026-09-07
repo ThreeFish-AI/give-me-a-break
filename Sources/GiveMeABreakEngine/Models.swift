@@ -81,10 +81,55 @@ public struct AgentSettings: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - 电源设置（防止空闲睡眠/熄屏）
+
+/// 防止空闲睡眠的防护模式。
+/// - `.displayOnly`: 仅持有显示器断言（等同 `caffeinate -d`）。显示器保持常亮，
+///   期间系统亦不会因空闲而睡眠（display 断言隐含阻止系统空闲睡眠）。
+/// - `.displayAndSystem`: 在显示器断言之上**显式**再持有系统断言（等同 `caffeinate -d -i`，
+///   `pmset -g assertions` 可见两条断言）。
+/// 序列化为 camelCase 字符串（对齐 `EnginePhase` 先例）。
+public enum IdleSleepGuardMode: String, Codable, Equatable, Hashable, Sendable {
+    case displayOnly
+    case displayAndSystem
+}
+
+/// 「电源」功能域的正交配置子结构（防止空闲睡眠/熄屏）。
+/// 引擎不消费本结构（同 `agent` 现状，携带即忽略）；IOKit 电源断言调用位于集成层 `IdleSleepGuard`。
+/// 仅阻止「空闲」睡眠/熄屏；不阻止合盖、Apple 菜单主动睡眠、低电量等主动睡眠。
+public struct PowerSettings: Codable, Equatable, Sendable {
+    /// 总开关，默认关（升级用户零行为变化）。开启后 App 持有 IOKit 电源断言。
+    public var preventIdleSleepEnabled: Bool
+    /// 防护模式，默认仅显示器。
+    public var mode: IdleSleepGuardMode
+
+    public init(preventIdleSleepEnabled: Bool = false,
+                mode: IdleSleepGuardMode = .displayOnly) {
+        self.preventIdleSleepEnabled = preventIdleSleepEnabled
+        self.mode = mode
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case preventIdleSleepEnabled, mode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = PowerSettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        preventIdleSleepEnabled = try c.decodeIfPresent(Bool.self, forKey: .preventIdleSleepEnabled) ?? d.preventIdleSleepEnabled
+        // 须先解 String 再回退 rawValue：直接解枚举遇未知字符串会 throw，
+        // 进而导致整份 DayPlanConfig 解码失败回退全默认（用户配置全丢）。
+        let rawMode = try c.decodeIfPresent(String.self, forKey: .mode)
+        mode = rawMode.flatMap(IdleSleepGuardMode.init(rawValue:)) ?? d.mode
+    }
+}
+
 // MARK: - 一日计划配置
 
 public struct DayPlanConfig: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 8
+    public static let currentSchemaVersion = 9
 
     public var schemaVersion: Int
     public var workWindows: [WorkWindow]
@@ -123,6 +168,9 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     /// Agentic AI 功能域配置（Claude Code 可执行路径覆盖 / `~/.claude/settings.json` 打开编辑器）。
     /// v8 新增；正交子结构，引擎忽略，仅供集成层消费。详见 `AgentSettings`。
     public var agent: AgentSettings
+    /// 电源功能域配置（防止空闲睡眠/熄屏）。
+    /// v9 新增；正交子结构，引擎忽略，仅供集成层消费（`IdleSleepGuard`）。详见 `PowerSettings`。
+    public var power: PowerSettings
 
     public init(
         schemaVersion: Int = DayPlanConfig.currentSchemaVersion,
@@ -141,7 +189,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         exercisePromptTimeoutSeconds: TimeInterval = 180,
         exerciseTypes: [String] = defaultExerciseTypes,
         restMusicPath: String? = nil,
-        agent: AgentSettings = AgentSettings()
+        agent: AgentSettings = AgentSettings(),
+        power: PowerSettings = PowerSettings()
     ) {
         self.schemaVersion = schemaVersion
         self.workWindows = workWindows
@@ -157,6 +206,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         self.exerciseTypes = exerciseTypes
         self.restMusicPath = restMusicPath
         self.agent = agent
+        self.power = power
     }
 
     public static var defaultConfig: DayPlanConfig { DayPlanConfig() }
@@ -167,7 +217,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         case schemaVersion, workWindows, workIntervalSeconds, restDurationSeconds
         case afkThresholdSeconds, ambientSoundEnabled, controlQQMusic, workLogEnabled
         case workLogPromptTimeoutSeconds, exerciseLogEnabled, exercisePromptTimeoutSeconds
-        case exerciseTypes, restMusicPath, agent
+        case exerciseTypes, restMusicPath, agent, power
     }
 
     public init(from decoder: Decoder) throws {
@@ -191,6 +241,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         restMusicPath = try c.decodeIfPresent(String.self, forKey: .restMusicPath)
         // 旧配置（v7 及以前）无此字段 → 补默认（全 nil）；AgentSettings 自身亦容错解码。v8 新增。
         agent = try c.decodeIfPresent(AgentSettings.self, forKey: .agent) ?? d.agent
+        // 旧配置（v8 及以前）无此字段 → 补默认（关 + 仅显示器）；PowerSettings 自身亦容错解码。v9 新增。
+        power = try c.decodeIfPresent(PowerSettings.self, forKey: .power) ?? d.power
     }
 }
 

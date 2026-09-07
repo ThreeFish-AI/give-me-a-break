@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+### 核心改进
+
+- **新增「防止空闲睡眠」（等同 `caffeinate -d` / `-d -i`）**。经 IOKit 原生电源断言（`IOPMAssertionCreateWithName`，即 caffeinate / Amphetamine / KeepingYouAwake 的同一机制，**非 spawn 子进程**——App 崩溃时内核自动回收断言，无孤儿进程风险）阻止电脑因空闲而熄屏/睡眠，无需任何权限。两种防护模式：**仅显示器**（= `-d`，display 断言亦隐含阻止系统空闲睡眠）与**显示器 + 系统**（= `-d -i`，显式再叠加系统断言，`pmset -g assertions` 可观测两条）。入口双轨：菜单栏新增勾选项「防止睡眠」（咖啡杯图标，勾选态经 `menuWillOpen` 自愈同步）+ 设置窗口新增独立「电源」页签。**总开关两处均即时生效**（与「开机自启」同语义，共用一条即时通道），防护范围 segmented Picker 随「应用」提交。开关状态持久化（重启后自动恢复），默认关。**与休息 / 工作 / 遮罩模式完全正交**：引擎 FSM 零改动，不影响主动睡眠（合盖、Apple 菜单睡眠、低电量）。
+
+### 工程
+
+- 新增 `IdleSleepGuard`（集成层，按断言维度 diff 增删：模式切换时 display 断言全程不落，零空窗；创建失败记日志、下次 apply 自愈重试；仅主线程调用）。配置 schema 8→9：`DayPlanConfig` 新增正交子结构 `power: PowerSettings`（`preventIdleSleepEnabled: Bool` 默认 false / `mode: IdleSleepGuardMode` 默认 displayOnly），容错解码平滑迁移（旧 v8 缺 `power` 补默认；`mode` 经 String→rawValue 回退，**未知枚举值不炸整份配置**）。`StatusItemController` 继承 NSObject 以承载 `NSMenuDelegate`。总开关采用**单一即时通道**（`AppRoot.setPreventIdleSleep`，`engine.config` 为权威值）：设置窗「应用」时以 live 值覆盖草稿快照——否则设置窗开启期间从菜单栏所做的改动，会被 `show()` 时的旧草稿静默回滚（「开机自启」正是以同样的非 draft 语义规避此类冲突）。单元测试 87→91（+4：默认值 / round-trip / 部分字段与未知 mode 容错 / v8→v9 迁移），全绿。
+- 已知后续项：「开机自启」菜单勾选态未纳入同款 `menuWillOpen` 自愈（`SMAppService.status` 为系统调用，超出本次边界）。
+
 ## v0.1.6 — 2026-09-04（GA · 遮罩冻结计时）
 
 继 v0.1.5 后的行为语义版本：屏幕遮罩期间工作计时冻结——计划性休息及其小结窗不再打断遮罩，遮罩成为真正的「请勿打扰」。87 单测全绿，纯引擎 FSM 零改动。

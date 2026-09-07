@@ -1,22 +1,29 @@
 import AppKit
 
 /// 菜单栏状态项控制器（AppKit：NSStatusItem 无 SwiftUI 对等物）。
-/// 状态文案 + 倒计时 + 下拉菜单（立即休息 / 开机自启 / 退出）。
-final class StatusItemController {
+/// 状态文案 + 倒计时 + 下拉菜单（立即休息 / 屏幕遮罩 / 防止睡眠 / 开机自启 / 退出）。
+/// 继承 NSObject 以承载 NSMenuDelegate（menuWillOpen 自愈刷新勾选态）。
+final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
     private let onForceRest: () -> Void
     private let onEnterScreenMask: () -> Void
     private let onSetLaunchAtLogin: (Bool) -> Void
+    private let preventIdleSleepEnabled: () -> Bool
+    private let onSetPreventIdleSleep: (Bool) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenWorkLog: () -> Void
     private let onOpenBackfillWorkLog: () -> Void
     private let onOpenCombinedReport: () -> Void
     private let onOpenBackfillExercise: () -> Void
+    /// 「防止睡眠」勾选项（menuWillOpen 时刷新勾选态，须持有引用）。
+    private var preventSleepItem: NSMenuItem?
 
     init(onForceRest: @escaping () -> Void,
          onEnterScreenMask: @escaping () -> Void,
          loginEnabled: Bool,
          onSetLaunchAtLogin: @escaping (Bool) -> Void,
+         preventIdleSleepEnabled: @escaping () -> Bool,
+         onSetPreventIdleSleep: @escaping (Bool) -> Void,
          onOpenSettings: @escaping () -> Void,
          onOpenWorkLog: @escaping () -> Void,
          onOpenBackfillWorkLog: @escaping () -> Void,
@@ -25,12 +32,15 @@ final class StatusItemController {
         self.onForceRest = onForceRest
         self.onEnterScreenMask = onEnterScreenMask
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
+        self.preventIdleSleepEnabled = preventIdleSleepEnabled
+        self.onSetPreventIdleSleep = onSetPreventIdleSleep
         self.onOpenSettings = onOpenSettings
         self.onOpenWorkLog = onOpenWorkLog
         self.onOpenBackfillWorkLog = onOpenBackfillWorkLog
         self.onOpenCombinedReport = onOpenCombinedReport
         self.onOpenBackfillExercise = onOpenBackfillExercise
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
         configureMenu(loginEnabled: loginEnabled)
     }
 
@@ -96,6 +106,16 @@ final class StatusItemController {
         settings.image = Self.menuSymbol("gearshape", description: "设置")
         menu.addItem(settings)
 
+        // 防止空闲睡眠（IOKit 电源断言，等同 caffeinate -d/-i）：勾选型快捷开关，
+        // 防护模式在设置「电源」页配置。cup.and.saucer：caffeinate 的咖啡隐喻，
+        // macOS 生态对该功能的惯用符号（且与 App「关于」页品牌角标同源）。
+        let preventSleep = NSMenuItem(title: "防止睡眠", action: #selector(togglePreventIdleSleep(_:)), keyEquivalent: "")
+        preventSleep.target = self
+        preventSleep.image = Self.menuSymbol("cup.and.saucer", description: "防止睡眠")
+        preventSleep.state = preventIdleSleepEnabled() ? .on : .off
+        preventSleepItem = preventSleep
+        menu.addItem(preventSleep)
+
         let login = NSMenuItem(title: "开机自启", action: #selector(toggleLogin(_:)), keyEquivalent: "")
         login.target = self
         login.image = Self.menuSymbol("power", description: "开机自启")
@@ -110,6 +130,7 @@ final class StatusItemController {
         quit.image = Self.menuSymbol("xmark.circle", description: "退出")
         menu.addItem(quit)
 
+        menu.delegate = self   // menuWillOpen 自愈刷新「防止睡眠」勾选态
         statusItem.menu = menu
     }
 
@@ -158,5 +179,22 @@ final class StatusItemController {
         let newState = sender.state != .on
         onSetLaunchAtLogin(newState)
         sender.state = newState ? .on : .off
+    }
+
+    @objc private func togglePreventIdleSleep(_ sender: NSMenuItem) {
+        let newState = sender.state != .on
+        onSetPreventIdleSleep(newState)
+        sender.state = newState ? .on : .off
+    }
+}
+
+// MARK: - NSMenuDelegate（勾选态自愈）
+
+extension StatusItemController: NSMenuDelegate {
+    /// 每次菜单展开前按 provider 闭包刷新勾选态——自愈式：菜单自身 toggle / 设置窗「应用」/
+    /// 未来任意 config 变更路径均自动一致，无需逐一通知。
+    /// （「开机自启」未纳入同款刷新：SMAppService.status 是系统调用，留作后续独立优化。）
+    func menuWillOpen(_ menu: NSMenu) {
+        preventSleepItem?.state = preventIdleSleepEnabled() ? .on : .off
     }
 }

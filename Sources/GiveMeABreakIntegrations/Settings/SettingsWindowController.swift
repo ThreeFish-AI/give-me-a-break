@@ -19,11 +19,14 @@ final class SettingsWindowController {
     private var isAdjustingFrame = false
     private let onApply: (DayPlanConfig) -> Void
     private let onToggleLogin: (Bool) -> Void
+    private let onTogglePreventIdleSleep: (Bool) -> Void
 
     init(onApply: @escaping (DayPlanConfig) -> Void,
-         onToggleLogin: @escaping (Bool) -> Void) {
+         onToggleLogin: @escaping (Bool) -> Void,
+         onTogglePreventIdleSleep: @escaping (Bool) -> Void) {
         self.onApply = onApply
         self.onToggleLogin = onToggleLogin
+        self.onTogglePreventIdleSleep = onTogglePreventIdleSleep
     }
 
     func show(currentConfig: DayPlanConfig, loginEnabled: Bool) {
@@ -35,7 +38,8 @@ final class SettingsWindowController {
                 self?.window?.close()
             },
             onCancel: { [weak self] in self?.window?.close() },
-            onToggleLogin: { [weak self] v in self?.onToggleLogin(v) }
+            onToggleLogin: { [weak self] v in self?.onToggleLogin(v) },
+            onTogglePreventIdleSleep: { [weak self] v in self?.onTogglePreventIdleSleep(v) }
         )
 
         // 每次重建 NSHostingController（非复用 rootView）：强制 SwiftUI 视为新视图树，`@State`（draft）
