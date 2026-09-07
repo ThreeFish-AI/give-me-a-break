@@ -2,13 +2,17 @@
 
 本文件记录 Give me a break 的版本变更事件。
 
-## Unreleased
+## v0.1.9 — 2026-09-07（patch · 页签条自绘等间距 + 签名脚本兼容修复）
 
-设置窗页签条自绘重构：等间距紧凑排布。91 单测全绿，仅涉及 `Settings/` 两文件。
+继 v0.1.8 后的补丁版本：设置窗页签条自绘重构（等间距紧凑排布、不再随窗口拉伸）；`scripts/create-signing-cert.sh` p12 算法兼容修复（macOS `security import` 必现失败）。91 单测全绿，引擎 FSM 零改动。
 
 ### 核心改进
 
 - **页签标题等间距排布（净间隙恒为 1.5 字宽），不再随窗口宽度拉伸铺满**。原生 `TabView` 在 macOS 26 会把页签均匀铺满整个工具栏、间隙随窗口变宽而拉大，且无任何样式 API 可控。改为**自绘页签条**（左对齐 `HStack` + 胶囊选中态 + VoiceOver `isSelected`）：相邻标题文字净间隙恒为 1.5 字宽（13pt 系统字体下 ≈ 19.5pt，以「标题两侧各留一半内边距」实现、条内零间距）；测量字体=渲染字体，页签条自然宽度闭式确定。窗口最小宽度相应改为「页签条自然宽度 ∨ 表单可读性下限 560」取大（运行期按页签文案测算，改名/增删页签自动重算）；`SettingsTabSpec` 移除 `icon` 字段（原生 26 样式本就不渲染图标，自绘后各 macOS 版本观感一致）。
+
+### Bug 修复
+
+- **`scripts/create-signing-cert.sh`：p12 打包改用 legacy 算法（3DES + SHA1 MAC）**。macOS `security import`（含 CI runner）不认新版默认 PBES2/SHA-256 MAC 的 p12，报「MAC verification failed during PKCS12 import (wrong password?)」——误导性文案，实为算法不支持；显式指定后导入成功。（v0.1.8 tag 切于该修复合入之前，故随本版本发布）
 
 ## v0.1.8 — 2026-09-07（GA · 稳定签名与一键安装）
 
@@ -21,10 +25,6 @@
 - **设置窗 7 页签恢复默认平铺（不再折叠进 `>>` 溢出菜单）**。根因：根视图硬编码 `.frame(width: 560)` 钉死内容宽度，第 7 个页签「Agentic AI」加入后图文页签固有宽度超出可用宽度，macOS 26（工具栏式页签条）将放不下的页签折叠为 `>>` 呼出按钮。修复：页签规格（页签 / 标题 / 图标）收敛为唯一事实源 `SettingsTabMetrics`，渲染与宽度测算同源——运行期以系统字体实测文案宽度推算「平铺所需最小内容宽度」，经窗口 `contentMinSize` 硬性锁底；新增 / 改名页签自动重算，同类问题不再复发。页签文案同步精简为双字（通用 / 电源 / 作息 / 音效 / 日志 / 运动 / Agentic AI），窗口更紧凑。
 - **设置窗支持自由调节宽高（尺寸归用户所有）**。`styleMask` 增 `.resizable`；整体移除原「内容驱动尺寸」机制（`preferredContentSize` KVO、`didMove` 锚点、顶边锚定重排，净删约 60 行）——内容不再反向改写窗口尺寸，页签内容高于窗口时由 `Form`（grouped 即 ScrollView）内部滚动，与 macOS 系统设置行为一致。承载层由 `NSHostingController` 改为 `NSHostingView`（contentView 语义：视图适配窗口，而非窗口跟随内容 resize）。
 - **设置窗尺寸 / 位置跨启动记忆**。经 `setFrameAutosaveName` 原生持久化（随移动 / 缩放自动落盘）；首次打开走「默认尺寸 + 显式居中主屏可见区」（沿用 issue #7 协议），其后恢复上次位置尺寸并做离屏收口（多屏 / 拔屏兜底）。
-
-### Bug 修复
-
-- **`scripts/create-signing-cert.sh`：p12 打包改用 legacy 算法（3DES + SHA1 MAC）**。macOS `security import`（含 CI runner）不认新版默认 PBES2/SHA-256 MAC 的 p12，报「MAC verification failed during PKCS12 import (wrong password?)」——误导性文案，实为算法不支持；显式指定后导入成功。（#57 合并时遗漏的尾提交，本 PR 补入）
 
 ## v0.1.7 — 2026-09-07（GA · 防止空闲睡眠）
 
