@@ -102,3 +102,17 @@
 - **处理方式**：每次 `present`/`show` **重建 `NSHostingController`**（窗口复用、控制器替换：`window?.contentViewController = NSHostingController(rootView: view)`），强制 SwiftUI 视为新视图树、`@State` 归零。Settings 控制器额外重建 KVO（`preferredContentSize` 观测绑到新 hosting）；report 控制器同步处理。
 - **后续防范**：**任何 `NSHostingController`/`UIHostingController` 反复替换 rootView 的场景，必须重建 hosting 控制器或用 `.id(token)` 强制身份变更**，否则 `@State`/`@FocusState` 残留。复用窗口可以，但「视图身份」不可隐式复用。
 - **同类影响**：所有 AppKit+SwiftUI 混合的复用窗口（菜单栏 accessory app 尤甚）；任何「重开窗口显示旧草稿/旧输入」的疑似 bug 先查此根因，而非查持久化层。
+
+## #10 设置窗页签折叠进 `>>` 溢出菜单 + 窗口不可调节（硬编码宽度 × 内容驱动尺寸）
+
+- **表因**：设置窗顶部 7 页签未平铺，多出的页签被折叠进 `>>` 呼出按钮；且窗口宽高完全不可调节。
+- **根因**：
+  - (a) `SettingsView` 根视图硬编码 `.frame(width: 560)` 钉死内容宽度。第 7 个页签「Agentic AI」加入后，7 个图文页签固有宽度超出 560pt 可用宽度——macOS 26（Tahoe，页签条并入工具栏）将放不下的页签折叠为 `>>` 溢出菜单（该折叠行为无官方文档，仅社区实测定性；macOS 14 的 `NSTabView` 背板则是压缩截断文案，同为宽度不足的退化形态）。宽度与页签文案**解耦**是结构性根因。
+  - (b) 窗口 `styleMask` 无 `.resizable`；且 `sizingOptions = [.preferredContentSize]` + KVO 强制 `setFrame` 的「内容驱动尺寸」机制使任何内容变化都覆写窗口尺寸——与「用户自由调节」语义互斥。
+- **处理方式**：
+  - 页签规格（页签/标题/图标）收敛为唯一事实源 `SettingsTabMetrics`（文件级），`TabView` 的 `ForEach` 渲染与宽度测算同源；运行期以 `NSFont.systemFont(ofSize: 13)` 实测各页签文案宽度，加图标/间距/内边距/页签条内衬校准常量（`stripInsets` 112 为首要校准项，macOS 26.6 实测无需再调）推算最小内容宽度，经窗口 `contentMinSize` 硬性锁底。实测最小宽度 785pt 下 7 页签平铺无截断。
+  - 尺寸归用户：`.resizable` + 删除全部内容驱动机制（`preferredContentSize` KVO / `didMove` 锚点 / `layoutWindowToContent`，净删约 60 行）；承载层 `NSHostingController` → `NSHostingView`（contentView 赋值语义为「视图适配窗口」，而 contentViewController 会使窗口跟随内容 resize——Apple 文档明示 `NSWindow.contentViewController` 的窗口跟随行为，与用户持有尺寸冲突）。issue #9 的「每次 show 重建 hosting」语义经新建 `NSHostingView` 延续。
+  - 持久化：`setFrameAutosaveName` 原生落盘（键 `NSWindow Frame GiveMeABreakSettingsWindow`）；首开「默认尺寸 + 显式居中」（沿用 #7 协议），其后 `setFrameUsingName` 恢复 + 屏内收口（`constrainFrameRect` 不修水平位置，拔屏后须我方钳制）。
+- **验证**（沿用 #7 方法论：`CGWindowListCopyWindowInfo` + `screencapture -l`）：默认宽/最小宽（注入超小 frame 被 contentMinSize 收口）下均平铺无 `>>`；注入 900×650 精确还原；真实 .app bundle 跨启动位置精确还原、页签平铺；91 单测全绿。
+- **后续防范**：**页签/导航项文案与承载窗口宽度必须同源测算**（经 `SettingsTabMetrics` 类 SSOT），禁止硬编码窗口宽度；给 `NSHostingView` 显式设 `sizingOptions = []` 以切断 SwiftUI 内容尺寸对窗口的隐式反压。注意 macOS 26 工具栏式页签条仅显示文字不显示 SF 图标（系统样式行为，非缺陷）。
+- **同类影响**：所有「顶部 TabView 页签数量会增长」的 macOS 设置窗；`NSHostingController` 作为 contentViewController 且用户可缩放窗口的组合（内容理想尺寸变化会弹回用户手动调节）。
