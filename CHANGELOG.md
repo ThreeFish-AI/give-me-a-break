@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+## v0.1.8 — 2026-09-07（GA · 稳定签名与一键安装）
+
+继 v0.1.7 后的工程基建与体验版本：签名链路升级为稳定自签名证书（TCC 授权一次、跨版本持久，从 ad-hoc 版本升级需最后一次重新授权）并新增 `install.sh` 一键安装/升级；设置窗 7 页签恢复默认平铺、支持自由调节宽高与尺寸/位置跨启动记忆。91 单测全绿，引擎 FSM 零改动。
+
 ### 核心改进
 
 - **稳定自签名：TCC 权限授权一次、跨版本持久**。根因修复「升级替换二进制后辅助功能 / 输入监控 / 日历反复要求重新授权」——ad-hoc 签名（`codesign -s -`）的 Designated Requirement 绑定 cdhash，每次构建都变，TCC 视为不同应用；改用稳定自签名代码签名证书（10 年期、codeSigning EKU）后 DR 跨构建稳定，TCC 授权持久。**从 ad-hoc 版本升级需最后一次重新授权**。配套：`scripts/create-signing-cert.sh`（一次性证书创建，OpenSSL/LibreSSL 双兼容 + sudo 信任 + 自动写入 `Makefile.local`）；`Makefile` 签名身份可插拔（`SIGNING_IDENTITY ?= -` + `sinclude Makefile.local`，默认行为不变）；`release.yml` 新增自签名重签步（`MACOS_SELFSIGN_P12` 等 secrets 门控、与 Developer ID 步互斥防双签，公证链路逐字保留）+ `signing.txt` 状态 marker（按产物实签判定）+ Release Note 三分支文案。
