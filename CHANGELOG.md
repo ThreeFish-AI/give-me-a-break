@@ -16,6 +16,10 @@
 - **设置窗支持自由调节宽高（尺寸归用户所有）**。`styleMask` 增 `.resizable`；整体移除原「内容驱动尺寸」机制（`preferredContentSize` KVO、`didMove` 锚点、顶边锚定重排，净删约 60 行）——内容不再反向改写窗口尺寸，页签内容高于窗口时由 `Form`（grouped 即 ScrollView）内部滚动，与 macOS 系统设置行为一致。承载层由 `NSHostingController` 改为 `NSHostingView`（contentView 语义：视图适配窗口，而非窗口跟随内容 resize）。
 - **设置窗尺寸 / 位置跨启动记忆**。经 `setFrameAutosaveName` 原生持久化（随移动 / 缩放自动落盘）；首次打开走「默认尺寸 + 显式居中主屏可见区」（沿用 issue #7 协议），其后恢复上次位置尺寸并做离屏收口（多屏 / 拔屏兜底）。
 
+### Bug 修复
+
+- **`scripts/create-signing-cert.sh`：p12 打包改用 legacy 算法（3DES + SHA1 MAC）**。macOS `security import`（含 CI runner）不认新版默认 PBES2/SHA-256 MAC 的 p12，报「MAC verification failed during PKCS12 import (wrong password?)」——误导性文案，实为算法不支持；显式指定后导入成功。（#57 合并时遗漏的尾提交，本 PR 补入）
+
 ## v0.1.7 — 2026-09-07（GA · 防止空闲睡眠）
 
 继 v0.1.6 后的功能版本：新增「防止空闲睡眠」——经 IOKit 原生电源断言（与 `caffeinate` 同机制，非子进程）阻止电脑因空闲而熄屏/睡眠，菜单栏勾选项与设置「电源」页双入口、总开关即时生效、状态持久化，**无需任何权限**。配置 schema 升至 v9（容错迁移，旧配置无感），91 单测全绿，引擎 FSM 零改动。

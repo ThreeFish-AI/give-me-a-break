@@ -46,8 +46,11 @@ read -rsp "p12 密码: " P12_PASS; echo
 [ -n "$P12_PASS" ] || die "密码不能为空（p12 内含私钥，必须密码保护）"
 
 log "打包 p12…"
+# 显式 legacy 算法（3DES + SHA1 MAC）：macOS `security import`（含 CI runner）不认
+# 新版默认的 PBES2/SHA-256 MAC p12，会误报 "MAC verification failed (wrong password?)"
 openssl pkcs12 -export -inkey "$OUT_DIR/key.pem" -in "$OUT_DIR/cert.pem" \
-  -name "$CN" -passout "pass:$P12_PASS" -out "$OUT_DIR/selfsign.p12"
+  -name "$CN" -passout "pass:$P12_PASS" \
+  -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 -out "$OUT_DIR/selfsign.p12"
 
 log "导入 login keychain（并授权 /usr/bin/codesign 访问私钥）…"
 security import "$OUT_DIR/selfsign.p12" -k "$HOME/Library/Keychains/login.keychain-db" \
