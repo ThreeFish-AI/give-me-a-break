@@ -61,9 +61,18 @@ flowchart LR
 
 ## 下载与安装（Release 资产）
 
-本版本为 **MVP 正式发布（GA）**：功能完备，但 macOS / Windows 双端产物**均未做代码签名 / 公证**（代码签名公证与 Windows 真机验收将在后续版本补齐），首次启动需按下方说明手动放行。从 [Releases](https://github.com/ThreeFish-AI/give-me-a-break/releases) 下载对应平台 zip。
+从 [Releases](https://github.com/ThreeFish-AI/give-me-a-break/releases) 下载对应平台 zip。macOS 产物为**稳定自签名**（10 年期 codeSigning 证书，未公证）：**TCC 权限（辅助功能 / 输入监控 / 日历）授权一次、跨版本升级持久**；Gatekeeper 对「未知开发者」应用仍会拦截**首次**打开（彻底消除需 Apple 公证，$99/年，演进链路已预留，见[签名与 TCC 授权](#签名与-tcc-授权一次授权跨版本持久)）。
 
-**macOS**（`give-me-a-break-*-macos.zip`）：ad-hoc 签名、未公证，首次打开会被 Gatekeeper 拦截。解压后将 `GiveMeABreak.app` 拖入 `/Applications`，在终端执行一次去隔离即可正常启动（macOS 15 起已无右键「打开」旁路）：
+**macOS 一键安装（推荐，安装/升级通用）**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/master/install.sh -o install.sh
+bash install.sh              # 最新正式版；指定版本：bash install.sh v0.1.8
+```
+
+脚本自动完成：下载 Release zip → 去隔离 → 替换 `/Applications/GiveMeABreak.app` → 启动。
+
+**macOS 手动安装**：解压后将 `GiveMeABreak.app` 拖入 `/Applications`，执行一次去隔离再启动（macOS 15 起已无右键「打开」旁路）：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app
@@ -80,12 +89,12 @@ xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app
 ## 构建与运行
 
 ```bash
-# 装配 GiveMeABreak.app（ad-hoc 签名 + Hardened Runtime）并运行
+# 装配 GiveMeABreak.app（默认 ad-hoc 签名；配置 Makefile.local 后为稳定自签名）并运行
 make run
 
 # 或分步
 make build      # swift build -c release
-make app        # 装配 .app + codesign + 清 quarantine
+make app        # 装配 .app + codesign + 清 quarantine（签名身份见「签名与 TCC 授权」）
 open GiveMeABreak.app
 
 # 单元测试（自建运行器，CLT 无 XCTest）
@@ -112,6 +121,30 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
 
 > Agent 不得绕过任何权限授予——均由用户在系统设置完成（同构于 [浏览器验证协议](./.agents/browser-validation.md) 的登录态红线）。
 
+## 签名与 TCC 授权（一次授权，跨版本持久）
+
+TCC 权限是否在升级后保留，取决于**代码签名身份是否稳定**：ad-hoc 签名（`codesign -s -`）的 Designated Requirement 绑定 cdhash，每次构建都变，TCC 视为不同应用 → 授权失效；稳定证书签名的 DR 绑定证书 CN → 跨构建不变 → 授权持久（见 [issue #5](./.agents/issue.md)）。
+
+**本机一次性配置**（开发者，此后 `make app` 稳定签名、TCC 不再反复弹）：
+
+```bash
+bash scripts/create-signing-cert.sh   # 创建 10 年期自签名 codeSigning 证书（含一步 sudo 信任）
+                                       # 并自动写入仓库根 Makefile.local（gitignored）
+```
+
+**CI 一次性配置**（让 Release 产物同享稳定签名，下载用户 TCC 同样一次授权）：
+
+| GitHub 设置项                     | 类型     | 值                                                        |
+| --------------------------------- | -------- | ---------------------------------------------------------- |
+| `MACOS_SELFSIGN_P12`              | Secret   | `base64 -i .temp/signing/selfsign.p12 \| pbcopy` 的结果     |
+| `MACOS_SELFSIGN_P12_PWD`          | Secret   | 创建证书时输入的 p12 密码                                   |
+| `KEYCHAIN_PASSWORD`               | Secret   | 任意强密码（CI 临时 keychain 用）                           |
+| `SELFSIGN_IDENTITY`               | Variable | `GiveMeABreak Release`                                      |
+
+配置后 [release.yml](./.github/workflows/release.yml) 自动以同一证书重签 Release 产物（未配置则维持 ad-hoc，行为不变；Developer ID + 公证链路已逐字预留，购置后仅配置即启用）。
+
+> **迁移提示**：从 ad-hoc 版本升级到稳定签名版本时，TCC 权限需**最后一次**重新授权，此后跨版本持久；旧 ad-hoc 的孤儿授权记录可在系统设置手动移除，或经 `tccutil reset` 按权限整体重置。
+
 ## 快捷键
 
 | 快捷键 | 动作 | 生效范围 | 前置条件 |
@@ -122,7 +155,7 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
 | 菜单项裸字母（R/K/L/,/Q） | 对应菜单项 | 仅状态栏菜单展开时 | 无 |
 
 - ⌃⌥⌘K/⌃⌥⌘R 经系统 `RegisterEventHotKey`（Carbon HIToolbox）注册，事件被系统消费、**不会透传给前台应用**，也无需任何权限。
-- ⌃⌘Q 劫持依赖 `CGEventTap`：未授权「输入监控」时该组合键保持系统原生锁屏（预期降级，⌃⌥⌘K 不受影响）；**Ad-hoc 签名应用每次升级替换二进制后 TCC 授权会失效**，需在「系统设置 → 隐私与安全性 → 输入监控」重新添加 GiveMeABreak 并重启 App。
+- ⌃⌘Q 劫持依赖 `CGEventTap`：未授权「输入监控」时该组合键保持系统原生锁屏（预期降级，⌃⌥⌘K 不受影响）；授权后需重启 App 才生效。Release 产物与本机构建（配置 `Makefile.local` 后）均为**稳定自签名，TCC 授权跨版本持久**；从旧 ad-hoc 构建升级而来时需重新授权一次（见[签名与 TCC 授权](#签名与-tcc-授权一次授权跨版本持久)）。
 - 菜单项裸字母快捷键为 macOS 状态栏菜单的原生行为：仅在菜单展开时可选中所选项，**并非全局热键**。
 
 ## QQ 音乐与 Google 日历准备
