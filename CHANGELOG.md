@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+## v0.1.8 — 2026-09-07（GA · 稳定签名与一键安装）
+
+继 v0.1.7 后的工程基建与体验版本：签名链路升级为稳定自签名证书（TCC 授权一次、跨版本持久，从 ad-hoc 版本升级需最后一次重新授权）并新增 `install.sh` 一键安装/升级；设置窗 7 页签恢复默认平铺、支持自由调节宽高与尺寸/位置跨启动记忆。91 单测全绿，引擎 FSM 零改动。
+
 ### 核心改进
 
 - **稳定自签名：TCC 权限授权一次、跨版本持久**。根因修复「升级替换二进制后辅助功能 / 输入监控 / 日历反复要求重新授权」——ad-hoc 签名（`codesign -s -`）的 Designated Requirement 绑定 cdhash，每次构建都变，TCC 视为不同应用；改用稳定自签名代码签名证书（10 年期、codeSigning EKU）后 DR 跨构建稳定，TCC 授权持久。**从 ad-hoc 版本升级需最后一次重新授权**。配套：`scripts/create-signing-cert.sh`（一次性证书创建，OpenSSL/LibreSSL 双兼容 + sudo 信任 + 自动写入 `Makefile.local`）；`Makefile` 签名身份可插拔（`SIGNING_IDENTITY ?= -` + `sinclude Makefile.local`，默认行为不变）；`release.yml` 新增自签名重签步（`MACOS_SELFSIGN_P12` 等 secrets 门控、与 Developer ID 步互斥防双签，公证链路逐字保留）+ `signing.txt` 状态 marker（按产物实签判定）+ Release Note 三分支文案。
@@ -11,6 +15,10 @@
 - **设置窗 7 页签恢复默认平铺（不再折叠进 `>>` 溢出菜单）**。根因：根视图硬编码 `.frame(width: 560)` 钉死内容宽度，第 7 个页签「Agentic AI」加入后图文页签固有宽度超出可用宽度，macOS 26（工具栏式页签条）将放不下的页签折叠为 `>>` 呼出按钮。修复：页签规格（页签 / 标题 / 图标）收敛为唯一事实源 `SettingsTabMetrics`，渲染与宽度测算同源——运行期以系统字体实测文案宽度推算「平铺所需最小内容宽度」，经窗口 `contentMinSize` 硬性锁底；新增 / 改名页签自动重算，同类问题不再复发。页签文案同步精简为双字（通用 / 电源 / 作息 / 音效 / 日志 / 运动 / Agentic AI），窗口更紧凑。
 - **设置窗支持自由调节宽高（尺寸归用户所有）**。`styleMask` 增 `.resizable`；整体移除原「内容驱动尺寸」机制（`preferredContentSize` KVO、`didMove` 锚点、顶边锚定重排，净删约 60 行）——内容不再反向改写窗口尺寸，页签内容高于窗口时由 `Form`（grouped 即 ScrollView）内部滚动，与 macOS 系统设置行为一致。承载层由 `NSHostingController` 改为 `NSHostingView`（contentView 语义：视图适配窗口，而非窗口跟随内容 resize）。
 - **设置窗尺寸 / 位置跨启动记忆**。经 `setFrameAutosaveName` 原生持久化（随移动 / 缩放自动落盘）；首次打开走「默认尺寸 + 显式居中主屏可见区」（沿用 issue #7 协议），其后恢复上次位置尺寸并做离屏收口（多屏 / 拔屏兜底）。
+
+### Bug 修复
+
+- **`scripts/create-signing-cert.sh`：p12 打包改用 legacy 算法（3DES + SHA1 MAC）**。macOS `security import`（含 CI runner）不认新版默认 PBES2/SHA-256 MAC 的 p12，报「MAC verification failed during PKCS12 import (wrong password?)」——误导性文案，实为算法不支持；显式指定后导入成功。（#57 合并时遗漏的尾提交，本 PR 补入）
 
 ## v0.1.7 — 2026-09-07（GA · 防止空闲睡眠）
 
