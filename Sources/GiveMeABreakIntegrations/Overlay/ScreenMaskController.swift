@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import GiveMeABreakEngine
 
 /// 手动屏幕遮罩控制器：与 LiveOverlayController 结构对称（多屏 CGShieldingWindowLevel 面板 +
 /// 双击 Esc），但与调度引擎（FSM）零耦合——不读写 EngineState、不触发任何休息相关副作用。
@@ -9,26 +10,40 @@ final class ScreenMaskController {
     /// 遮罩真正收起的回调（仅状态切换时触发一次；幂等 no-op 不触发）。AppRoot 据此恢复心跳计时。
     var onDismiss: (() -> Void)?
 
+    /// 键盘白名单拦截器（遮罩期间吞掉除裸 Esc/Return 外的全部按键，含 ⌘Tab 等系统组合键）。
+    /// 由 AppRoot 注入、与休息遮罩共享同一实例：两者互斥（resting 守卫 + forceRestNow 先撤遮罩），
+    /// 幂等 bool 足矣；若未来互斥被破坏，首个 end() 即停拦截——fail-open，符合软强制哲学。
+    private let inputGuard: MaskInputGuard
+
+    init(inputGuard: MaskInputGuard) {
+        self.inputGuard = inputGuard
+    }
+
     private var panels: [OverlayPanel] = []
+    /// 本次升起所用的视觉配置（升起时快照：遮罩罩住一切期间无设置变更路径）。
+    private var settings = ScreenMaskSettings()
     private var escMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var lastEscAt: Date?  // 双击 Esc 检测：上次 Esc 时刻（0.4s 窗口，同休息遮罩）
 
     var isShown: Bool { !panels.isEmpty }
 
-    func show() {
+    func show(settings: ScreenMaskSettings = ScreenMaskSettings()) {
         guard panels.isEmpty else { return }  // 幂等
+        self.settings = settings
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
         installEscMonitor()
         observeScreens()
         NSApp.activate(ignoringOtherApps: true)
+        inputGuard.begin()  // 末句启用：面板建成且已激活后才吞键（毫秒级窗口内遮罩已在覆盖）
         NSLog("[GiveMeABreak][screenMask] show：\(panels.count) 屏")
     }
 
     func dismiss() {
         guard !panels.isEmpty else { return }  // 幂等
+        inputGuard.end()  // 首句停用：淡出前键盘即刻恢复；卡死的 fade 完成回调也无法滞留 tap
         removeEscMonitor()
         removeScreenObserver()
         for panel in panels {
@@ -59,10 +74,14 @@ final class ScreenMaskController {
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = false
+        // 层级不设任何调试旁路：曾为截图取证加过 DEBUG 降级到 .floating，
+        // 但那会让菜单栏/Dock 盖不住（.floating 仅 3，而屏蔽层级约 21 亿），
+        // 等于用「调试便利」换掉了遮罩的核心作用。取证改用 CGWindowListCopyWindowInfo
+        // 核验层级 + 用户肉眼确认（见 .agents/issue.md）。
         panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications]
 
-        let hosting = NSHostingView(rootView: ScreenMaskContentView())
+        let hosting = NSHostingView(rootView: ScreenMaskContentView(settings: settings))
         panel.contentView = hosting
         panel.setFrame(screen.frame, display: true)  // 显式 setFrame（macOS 15 已知零 frame 回退）
         panel.alphaValue = 0
@@ -112,6 +131,7 @@ final class ScreenMaskController {
     }
 
     private func rebuildPanels() {
+        // 热插拔重建不经 show/dismiss，遮罩从未离开屏幕——键盘拦截保持激活（不变量）。
         for p in panels { p.orderOut(nil) }
         panels.removeAll()
         for screen in NSScreen.screens {

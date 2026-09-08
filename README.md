@@ -18,7 +18,8 @@
 
 - **强制排版作息**：工作窗口内每累计 N 分钟（默认 50）→ 强制休息 M 分钟（默认 10）。
 - **全屏遮罩**：休息时遮罩所有显示器（`CGShieldingWindowLevel`，压过菜单栏/Dock/全屏），按 Esc 需**二次确认**才可提前结束（软强制，留逃生阀）。
-- **屏幕遮罩（手动）**：全局快捷键 **⌃⌥⌘K**、菜单「屏幕遮罩」或系统锁屏快捷键 Control+Command+Q（拦截后不真正锁屏，改为进入本 App 遮罩；需「输入监控」授权）随时手动进入同款全屏遮罩，电脑后台照常运行，仅阻断新的鼠标/键盘输入；双击 Esc 退出。遮罩期间**工作计时冻结**（计划性休息及其小结窗不会打断遮罩，遮罩时长也不计入工作累加）；「立即休息」（⌃⌥⌘R）仍可主动接管（遮罩自动让位）。
+- **高清动效屏保**：遮罩背景内置 5 组程序化动效——**涟漪光球 · 冷雾纤丝 · 字雨微光 · 水波光斑 · 丝绸流光**（Metal 片元着色器逐像素合成，零位图资产 → 4K/8K 同样清晰；原生 DPR + 超采样抗锯齿 + 高频细节层）。设置「通用」页切换，手动遮罩与休息遮罩共用；系统开启「减弱动态效果」时自动静帧，Metal 不可用时自动回退深色渐变。
+- **屏幕遮罩（手动）**：全局快捷键 **⌃⌥⌘K**、菜单「屏幕遮罩」或系统锁屏快捷键 Control+Command+Q（拦截后不真正锁屏，改为进入本 App 遮罩；需「输入监控」授权）随时手动进入同款全屏遮罩，电脑后台照常运行。遮罩期间在 HID 层**白名单拦截键盘**：除裸 Esc（双击退出）与裸 Return（休息确认框默认按钮）外全部吞掉——含 ⌘Tab / ⌘` / ⌃←→ / Mission Control / ⌘空格 / ⌘⇧345 / ⌘⌥Esc 等系统组合键（需「输入监控」授权，未授权时降级为面板级阻断，仅系统组合键放行）；媒体键/亮度不受影响。退出路径：双击 Esc、看门狗（30min 核实遮罩仍在屏则续期，不在则自动解除拦截）、`GIVEMEABREAK_DISABLE_INPUT_GUARD` 应急短路、ssh/他机 kill、电源键硬关机。遮罩期间**工作计时冻结**（计划性休息及其小结窗不会打断遮罩，遮罩时长也不计入工作累加）；「立即休息」（⌃⌥⌘R）仍可主动接管（遮罩自动让位）。
 - **休息音效**：进入休息播放**自定义音频**（在设置选择本地 mp3/m4a/aac/wav/flac 等文件，循环播放，取代内置粉噪音；文件不打包不分发，仅以本地路径引用，缺失/不可用自动回退粉噪音）或内置**粉噪音**（AVAudioEngine 实时合成，零音频文件、可靠）；可选叠加联动 QQ 音乐（经系统 Now Playing 路由的 CGEvent 媒体键）。结束休息自动停止。均可在设置中配置。
 - **Google 日历门控**：会议计为工作时间，但休息推迟到会议结束。例：工作 30min 后接 30min 会议 → 连续工作 60min，会议结束才开始 10min 休息。
 - **工作日志（认知闭合仪式）**：自然休息前弹一个轻量输入框，花 30 秒写下「刚刚完成了什么 + 可选下一步」，让大脑真正放下再休息（循证：Leroy 注意力残留 / Stubblebine 插值日记）。记录按时间段落盘，菜单「工作日志…」一键生成今日/本周/月报 Markdown，支持复制与导出。永不阻塞休息：回车提交 / Esc 跳过 / 关窗放行 / 到点自动放行（等待时长可在设置调整，默认 3 分钟）；亦可设「永久等待」让窗口停留至手动操作，或在设置关闭整个环节；「立即休息」不弹。
@@ -171,7 +172,7 @@ bash scripts/create-signing-cert.sh   # 创建 10 年期自签名 codeSigning �
 
 ```json
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "workWindows": [
     { "start": { "hours": 9 }, "end": { "hours": 12 } },
     { "start": { "hours": 13, "minutes": 40 }, "end": { "hours": 18 } }
@@ -188,17 +189,20 @@ bash scripts/create-signing-cert.sh   # 创建 10 年期自签名 codeSigning �
   "exercisePromptTimeoutSeconds": 180,
   "exerciseTypes": ["胯下击掌", "提膝击掌", "深蹲", "俯卧撑"],
   "agent": { "claudeExecutablePath": null, "claudeSettingsEditorBundleId": null },
-  "power": { "preventIdleSleepEnabled": false, "mode": "displayOnly" }
+  "power": { "preventIdleSleepEnabled": false, "mode": "displayOnly" },
+  "screenMask": { "effect": "orb" }
 }
 ```
 
 > **Agentic AI（v8 新增，功能预留）**：`agent` 子块为后续 Agentic AI 功能预留的配置——`claudeExecutablePath` 覆盖 Claude Code 可执行文件路径（`null`/空即自动从系统 `PATH` 探测，推荐）；`claudeSettingsEditorBundleId` 记住「Claude 设置」快捷打开所用编辑器的 bundle id（`null` 即系统默认关联应用）。二者仅持久化 + 设置界面可视化编辑，**当前尚未接入任何 Claude Code 调用**。
 >
+> **遮罩特效（v10 新增）**：`screenMask` 子块为遮罩视觉配置——`effect` 背景特效（`orb` 涟漪光球 / `fibers` 冷雾纤丝 / `letterRain` 字雨微光 / `caustics` 水波光斑 / `silk` 丝绸流光，默认 `orb`，未知值回退默认）。引擎不消费本子块（与调度逻辑完全正交），仅集成层 `Overlay/MaskEffects` 消费；着色器于首次遮罩升起时运行时编译（约 100ms，被 0.4s 淡入掩盖）。
+>
 > **电源（v9 新增）**：`power` 子块为「防止空闲睡眠」的配置——`preventIdleSleepEnabled` 总开关（默认 `false`，重启后自动恢复）；`mode` 防护范围（`displayOnly` = 仅显示器断言，等同 `caffeinate -d`；`displayAndSystem` = 显示器 + 系统双断言，等同 `caffeinate -d -i`）。引擎不消费本子块（与休息 / 工作 / 遮罩调度完全正交），仅集成层 `IdleSleepGuard` 消费。
 
 工作日志单独持久化为 `work-log.json`（同目录），schema 见 [shared/work-log.schema.json](./shared/work-log.schema.json)；报告生成（今日/本周/月报 Markdown）见菜单「工作日志…」。运动记录单独持久化为 `exercise-log.json`（同目录）；与工作日志合成的综合报告（周/月/季/年 Markdown）见菜单「综合报告…」。
 
-可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。设置窗口按功能域分页：**通用 · 电源 · 作息 · 休息音效 · 工作日志 · 运动记录 · Agentic AI**;其中「Agentic AI」页为后续 Agentic AI 功能预留——配置 Claude Code 可执行文件路径覆盖，并可在选定编辑器（自动探测已安装的 VS Code / Cursor 等）中一键打开 `~/.claude/settings.json`；「电源」页配置「防止空闲睡眠」（总开关即时生效，防护范围随「应用」提交）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单按动作分组：**立即休息 · 屏幕遮罩** ┃ **工作日志 · 综合报告**（查看）┃ **补录工作 · 补录运动**（录入）┃ **设置 · 防止睡眠 · 开机自启** ┃ **退出**（文案统一 2~4 字）；「开机自启」已迁入设置窗口的「一般」分组；「防止睡眠」总开关与「开机自启」同为即时生效的非草稿项，其防护范围配置在「电源」页。
+可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。设置窗口按功能域分页：**通用 · 电源 · 作息 · 休息音效 · 工作日志 · 运动记录 · Agentic AI**;其中「通用」页除「开机自启」外还可切换**遮罩特效**（随「应用」提交，下次遮罩升起生效）；「Agentic AI」页为后续 Agentic AI 功能预留——配置 Claude Code 可执行文件路径覆盖，并可在选定编辑器（自动探测已安装的 VS Code / Cursor 等）中一键打开 `~/.claude/settings.json`；「电源」页配置「防止空闲睡眠」（总开关即时生效，防护范围随「应用」提交）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单按动作分组：**立即休息 · 屏幕遮罩** ┃ **工作日志 · 综合报告**（查看）┃ **补录工作 · 补录运动**（录入）┃ **设置 · 防止睡眠 · 开机自启** ┃ **退出**（文案统一 2~4 字）；「开机自启」已迁入设置窗口的「一般」分组；「防止睡眠」总开关与「开机自启」同为即时生效的非草稿项，其防护范围配置在「电源」页。
 
 ## 验证
 
@@ -207,11 +211,11 @@ bash scripts/create-signing-cert.sh   # 创建 10 年期自签名 codeSigning �
 
 ## 已知限制（透明披露）
 
-- **强制休息无法阻止 force-quit**：Cmd-Opt-Esc / `kill` 始终可终止——这是 macOS 设计，非恶意软件。软强制提供摩擦而非硬锁。
+- **强制休息与遮罩期间 Cmd-Opt-Esc 被 HID 层拦截**（白名单外一律吞）；`kill`（含 ssh / 他机）始终可终止——这是 macOS 设计，非恶意软件。软强制提供摩擦而非硬锁：键盘侧的唯一即时出口是双击 Esc，另有 30 分钟看门狗自动核实（防僵尸拦截吞键）。
 - **QQ 音乐联动依赖外部条件**：媒体键控 QQ 音乐需 (a) 已安装 `/Applications/QQMusic.app`、(b) 已授辅助功能权限、(c) QQ 音乐注册为 Now Playing，任一不满足即静默失败（toggle 语义还可能在播放中误暂停）。**故默认叠加内置粉噪音**作为可靠休息音效——无论 QQ 音乐是否可用都有声。失败原因见 Console.app 日志（`[GiveMeABreak][music]`）。详见 [issue #3](./.agents/issue.md)。
 - **日历过滤近似**：「仅 Google」靠 `.calDAV` 源过滤；若有其他 CalDAV 账户（Yahoo/Fastmail）会被纳入。
 - **macOS 26 `canBecomeKey`**：遮罩面板设为可成为 key 以收 Esc；beta 期有崩溃报告，需目标版本实机回归（已预置 [issue](./.agents/issue.md)）。
-- **「屏幕遮罩」非真正锁屏，且仅拦截默认快捷键**：与强制休息同为「软强制」——Cmd-Opt-Esc 强制退出 App 仍可绕过。系统锁屏快捷键拦截固定为 macOS 默认的 Control+Command+Q；若你在「系统设置」自定义过锁屏快捷键，拦截不会跟随生效（仍可用菜单「屏幕遮罩」手动触发）。**如需触发真正的系统锁屏，请改用 Apple 菜单 →「锁定屏幕」**（或系统设置里你自定义的锁屏快捷键）。此外，任意 App 持有 Secure Input（如密码框、Terminal「安全键盘输入」）时，全机所有 `CGEventTap` 会被系统静默禁用，此刻按 Control+Command+Q 仍会触发真正锁屏——这是 macOS 设计，非本 App 缺陷。
+- **「屏幕遮罩」非真正锁屏，且仅拦截默认快捷键**：与强制休息同为「软强制」——遮罩期间 Cmd-Opt-Esc 已被键盘白名单拦截（须「输入监控」授权；授权前该组合键仍可绕过）。系统锁屏快捷键拦截固定为 macOS 默认的 Control+Command+Q；若你在「系统设置」自定义过锁屏快捷键，拦截不会跟随生效（仍可用菜单「屏幕遮罩」手动触发）。**如需触发真正的系统锁屏，请改用 Apple 菜单 →「锁定屏幕」**（或系统设置里你自定义的锁屏快捷键）。此外，任意 App 持有 Secure Input（如密码框、Terminal「安全键盘输入」）时，全机所有 `CGEventTap` 会被系统静默禁用，此刻按 Control+Command+Q 仍会触发真正锁屏——这是 macOS 设计，非本 App 缺陷。
 
 ## 项目结构
 

@@ -172,6 +172,52 @@ public struct PowerSettings: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - 遮罩特效
+
+/// 遮罩背景特效。全部为程序化渲染（逐像素着色 / 粒子计算，零位图资产），
+/// 故分辨率无关——4K/8K 下同样清晰。作用于**手动屏幕遮罩与休息遮罩两处**。
+/// rawValue 即 config.json 中的稳定标识（勿改；新增只追加），序列化为 camelCase 字符串
+/// （对齐 `EnginePhase` / `IdleSleepGuardMode` 先例）。
+public enum MaskEffect: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
+    /// 涟漪光球：半透明光球缓缓呼吸，球面流纹如水面波光徐徐流转。
+    case orb
+    /// 冷雾纤丝：雾蓝纤丝在低频呼吸中缓缓摆动，层层脊线漂出银白微光。
+    case fibers
+    /// 字雨微光：全屏字符点阵极淡闪烁，亮带自上而下巡回。
+    case letterRain
+    /// 水波光斑：阳光穿过水面在池底投下的焦散网纹，光斑明暗流转。
+    case caustics
+    /// 丝绸流光：缎面在无风中缓缓起伏，高光带沿褶皱流淌，泛薄荷与冰紫。
+    case silk
+}
+
+/// 「屏幕遮罩」功能域的正交配置子结构（遮罩视觉表现）。
+/// 引擎不消费本结构（同 `agent` / `power` 现状，携带即忽略）；
+/// Metal 渲染与文案粒子层均位于集成层 `Overlay/MaskEffects`。
+public struct ScreenMaskSettings: Codable, Equatable, Sendable {
+    /// 背景特效，默认涟漪光球。
+    public var effect: MaskEffect
+
+    public init(effect: MaskEffect = .orb) {
+        self.effect = effect
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case effect
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = ScreenMaskSettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // 须先解 String 再回退 rawValue：直接解枚举遇未知字符串会 throw，
+        // 进而导致整份 DayPlanConfig 解码失败回退全默认（用户配置全丢）。
+        let rawEffect = try c.decodeIfPresent(String.self, forKey: .effect)
+        effect = rawEffect.flatMap(MaskEffect.init(rawValue:)) ?? d.effect
+    }
+}
+
 // MARK: - 一日计划配置
 
 public struct DayPlanConfig: Codable, Equatable, Sendable {
@@ -218,6 +264,9 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     /// 电源功能域配置（防止空闲睡眠/熄屏）。
     /// v9 新增；正交子结构，引擎忽略，仅供集成层消费（`IdleSleepGuard`）。详见 `PowerSettings`。
     public var power: PowerSettings
+    /// 屏幕遮罩视觉配置（背景特效）。
+    /// v10 新增；正交子结构，引擎忽略，仅供集成层消费（`Overlay/MaskEffects`）。详见 `ScreenMaskSettings`。
+    public var screenMask: ScreenMaskSettings
 
     public init(
         schemaVersion: Int = DayPlanConfig.currentSchemaVersion,
@@ -237,7 +286,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         exerciseTypes: [String] = defaultExerciseTypes,
         restMusicPath: String? = nil,
         agent: AgentSettings = AgentSettings(),
-        power: PowerSettings = PowerSettings()
+        power: PowerSettings = PowerSettings(),
+        screenMask: ScreenMaskSettings = ScreenMaskSettings()
     ) {
         self.schemaVersion = schemaVersion
         self.workWindows = workWindows
@@ -254,6 +304,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         self.restMusicPath = restMusicPath
         self.agent = agent
         self.power = power
+        self.screenMask = screenMask
     }
 
     public static var defaultConfig: DayPlanConfig { DayPlanConfig() }
@@ -264,7 +315,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         case schemaVersion, workWindows, workIntervalSeconds, restDurationSeconds
         case afkThresholdSeconds, ambientSoundEnabled, controlQQMusic, workLogEnabled
         case workLogPromptTimeoutSeconds, exerciseLogEnabled, exercisePromptTimeoutSeconds
-        case exerciseTypes, restMusicPath, agent, power
+        case exerciseTypes, restMusicPath, agent, power, screenMask
     }
 
     public init(from decoder: Decoder) throws {
@@ -290,6 +341,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         agent = try c.decodeIfPresent(AgentSettings.self, forKey: .agent) ?? d.agent
         // 旧配置（v8 及以前）无此字段 → 补默认（关 + 仅显示器）；PowerSettings 自身亦容错解码。v9 新增。
         power = try c.decodeIfPresent(PowerSettings.self, forKey: .power) ?? d.power
+        // 旧配置（v9 及以前）无此字段 → 补默认（涟漪光球）；自身亦容错解码。v10 新增。
+        screenMask = try c.decodeIfPresent(ScreenMaskSettings.self, forKey: .screenMask) ?? d.screenMask
     }
 }
 

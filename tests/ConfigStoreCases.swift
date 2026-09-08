@@ -428,9 +428,61 @@ func runConfigStoreCases() {
         expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑"], "原 exerciseTypes 应保留")
     }
 
-    // MARK: - v10：Coding Proxy（AgentSettings 内嵌 codingProxy）
+    // MARK: - v10：遮罩特效（ScreenMaskSettings）与 Coding Proxy（AgentSettings.codingProxy）
 
-    test("schema 迁移：旧 v9 config 缺 agent.codingProxy → 升 v10 补默认（关 + 空目录 + 默认命令），旧字段保留") {
+    test("screenMask 默认：无文件 / 未设时为涟漪光球") {
+        let store = try! ConfigStore(directory: makeTempDir())
+        let loaded = store.loadConfig()
+        expectEqual(loaded.screenMask, ScreenMaskSettings(), "默认 screenMask 应为涟漪光球")
+        expectEqual(loaded.screenMask.effect, MaskEffect.orb, "默认背景特效应为 orb（涟漪光球）")
+    }
+
+    test("screenMask round-trip：各特效均原样读回") {
+        // 遍历全部 case：任一特效的 rawValue 若与 schema 失配，此处即失败
+        for fx in MaskEffect.allCases {
+            let store = try! ConfigStore(directory: makeTempDir())
+            var config = DayPlanConfig.defaultConfig
+            config.screenMask = ScreenMaskSettings(effect: fx)
+            try! store.saveConfig(config)
+
+            let loaded = store.loadConfig()
+            expectEqual(loaded.screenMask.effect, fx, "特效 \(fx.rawValue) 应原样读回")
+        }
+    }
+
+    test("ScreenMaskSettings 容错：缺字段补默认 + 未知 effect 回退（不炸整份配置）") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        var seed = DayPlanConfig.defaultConfig
+        seed.controlQQMusic = false
+        try! store.saveConfig(seed)
+        let cfgURL = dir.appendingPathComponent("config.json")
+
+        // ① 空对象（缺 effect）：effect 补默认
+        do {
+            var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+            json["screenMask"] = [String: Any]()
+            let data = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+            try! data.write(to: cfgURL)
+            let loaded = store.loadConfig()
+            expectEqual(loaded.screenMask.effect, MaskEffect.orb, "缺失的 effect 应容错补默认")
+        }
+
+        // ② 未知 effect rawValue：回退默认，顶层旧字段完好（钉死「不拖垮整份配置」）
+        do {
+            var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+            json["screenMask"] = ["effect": "bogus"]
+            let data = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+            try! data.write(to: cfgURL)
+            let loaded = store.loadConfig()
+            expectEqual(loaded.screenMask.effect, MaskEffect.orb, "未知 effect rawValue 应回退默认而非炸整份配置")
+            expectEqual(loaded.controlQQMusic, false, "顶层旧字段不应因子结构未知值而丢失")
+        }
+    }
+
+    // v10 同期引入两个新字段（screenMask 与 agent.codingProxy），故合为一例：
+    // 二者同时缺失时都应补默认，且 v9 旧字段全数保留——一次覆盖完整迁移面。
+    test("schema 迁移：旧 v9 config 缺 screenMask / agent.codingProxy → 升 v10 均补默认，旧字段保留") {
         let dir = makeTempDir()
         let store = try! ConfigStore(directory: dir)
         let seed = DayPlanConfig(
@@ -449,11 +501,12 @@ func runConfigStoreCases() {
             restMusicPath: "/tmp/a.mp3",
             agent: AgentSettings(claudeExecutablePath: "/opt/homebrew/bin/claude"),
             power: PowerSettings(preventIdleSleepEnabled: true, mode: .displayAndSystem)
-            // codingProxy 不传（v10 新增，模拟旧 v9 配置）
+            // screenMask / codingProxy 均不传（v10 新增，模拟旧 v9 配置）
         )
         try! store.saveConfig(seed)
         let cfgURL = dir.appendingPathComponent("config.json")
         var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        json.removeValue(forKey: "screenMask")     // 确保 v9 旧配置无此字段
         var agent = json["agent"] as! [String: Any]
         agent.removeValue(forKey: "codingProxy")   // 确保 v9 旧 agent 无此字段
         json["agent"] = agent
@@ -463,10 +516,13 @@ func runConfigStoreCases() {
 
         let loaded = store.loadConfig()
         expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "v9→v10 版本号应规范化为当前版本")
+        expectEqual(loaded.screenMask, ScreenMaskSettings(), "缺失的 screenMask 应补默认（涟漪光球）")
         expectEqual(loaded.agent.codingProxy, CodingProxySettings(), "缺失的 codingProxy 应补默认（关 + 空目录 + 默认命令）")
+        expect(loaded.power.preventIdleSleepEnabled == true, "原 power 应保留")
+        expectEqual(loaded.power.mode, IdleSleepGuardMode.displayAndSystem, "原 power.mode 应保留")
         expectEqual(loaded.agent.claudeExecutablePath, "/opt/homebrew/bin/claude", "agent 内旧字段应保留")
-        expectEqual(loaded.power.mode, IdleSleepGuardMode.displayAndSystem, "原 power 应保留")
         expectEqual(loaded.controlQQMusic, false, "原 controlQQMusic=false 应保留")
+        expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑"], "原 exerciseTypes 应保留")
     }
 
     test("codingProxy round-trip：自定义值完整持久化") {

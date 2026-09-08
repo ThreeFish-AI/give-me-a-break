@@ -185,6 +185,25 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ⚠️ **CLT SDK 注记**：`CGEventFlags` 无 `NSEvent.ModifierFlags.deviceIndependentFlagsMask` 对应物，需显式声明关心的修饰键位掩码后再求交集比较（实现时已验证于本项目 Command Line Tools 工具链下编译通过；`CGEvent.tapCreate`/`CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 均无 [issue #2](../.agents/issue.md) 那类符号缺失问题）。
 
+### 8.3.1 遮罩期间键盘白名单拦截（`MaskInputGuard`，v0.1.10）
+
+系统级组合键（⌘Tab / ⌘` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§8.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
+
+**谓词（判错即灾难，单表达式纯函数）**：`(keyCode == 53 || keyCode == 36) && flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty`。三个要点：
+
+1. **必须 flags-aware**：⌘⌥Esc 就是 keyCode 53 带修饰键——只看 keyCode 会放行，且强退面板的默认按钮恰好吃裸 Return（双重穿透，最坏会误杀无关应用）。
+2. **Shift / CapsLock / Fn 刻意不计入屏蔽集**：Caps Lock 常亮用户每次按键都携带 `.alphaShift`，计入即永久失去唯一键盘出口——比功能穿透更严重的灾难。
+3. Return 属「本软件相关功能」：休息确认框「继续休息」绑 `.defaultAction`；遮罩无对话框时裸 Return 是响应链空操作，放行无害。
+
+**生命周期（零泄漏闭环）**：两个控制器的 show/dismiss 全部入口汇聚于方法体（手动遮罩：AppRoot.enterScreenMask / 内部双击 Esc / forceRestNow；休息遮罩：engine tick ×2 / requestEarlyRestExit），故 `begin()` 挂 show 末句、`end()` 挂 dismiss 首句即对称覆盖；`rebuildPanels` 不经 show/dismiss（遮罩从未离屏，拦截保持）。单实例注入两控制器——互斥由 resting 守卫保证，幂等 bool 足矣；若互斥被破坏则 fail-open（首个 end() 停拦截），符合软强制哲学。崩溃/SIGKILL 由内核回收 tap（进程级资源），非泄漏路径。
+
+**双 tap 共存**：headInsert 使本 tap 排在锁屏劫持 tap 之前——遮罩期间 ⌃⌘Q 被先吞（enterScreenMask 本就幂等 + resting 守卫，无害）；Esc/Return 两 tap 均放行、无重复消费；`end()` 后锁屏劫持恢复正常。
+
+**看门狗（与被守护代码无关的兵底守卫）**：白名单下连 ⌘⌥Esc、⌃⌘Q、Apple 菜单键盘路径均不可用，重启不构成兜底（只剩电源键硬关机，丢未保存工作）。故 `begin()` 启动 30min 独立 `DispatchSourceTimer`（心跳在手动遮罩期间被挂起，不能承载；同 WorkLogPrompt 先例），到点**只读 WindowServer 真相**（`CGWindowListCopyWindowInfo` 查本进程 ≥ 屏蔽层级的屏上窗口，不读控制器状态）：遮罩仍在（含合法长遮罩、跨睡眠）→ 续期；不在（僵尸态：进程活、tap 活、遮罩没了）→ 强制 `end()`。环境变量 `GIVEMEABREAK_DISABLE_INPUT_GUARD`（存在即禁用）为应急短路。
+
+**降级与边界**：tap 创建失败（输入监控/辅助功能未授权）→ 一次日志后 no-op，维持面板级阻断（fail-open）；Secure Input 生效时与 §8.3 同一系统级边界（全机 tap 静默失效）；媒体键/亮度走 NX_SYSDEFINED 不受影响（休息听歌依赖之）；极端时序下遮罩升起瞬间 ⌘Tab 切换器已开、松 ⌘ 提交切换——任意点击落到全屏遮罩即自愈（重新激活、恢复 key 状态）。
+
+
 ### 8.4 快捷键体系（三层，各司其职）
 
 | 层 | 组合键 | 机制 | 权限 | 生效范围 |
@@ -196,6 +215,39 @@ tick() 检测 eff.showOverlay（.working → .resting）
 选择 ⌃⌥⌘ 修饰组合的原因：与常见应用内快捷键（⌘R/⌘K/⌘L 等）冲突面最小。v0.1.4 曾把裸字母展示为组合键、被用户按全局快捷键预期使用而无任何反应（「所有快捷键未生效」缺陷根因之一）——修复为即时动作挂真实全局热键 + 菜单如实展示 ⌃⌥⌘R/⌃⌥⌘K；窗口类菜单项保留菜单展开时快捷键（其原生生效域），不做全局注册（全局化窗口弹出/退出属于越权抢键，退出热键化更是灾难性脚枪）。
 
 ⚠️ **CLT SDK 注记（[issue #2](../.agents/issue.md) 同类）**：本 SDK 的 HIToolbox 头文件已不含 `RegisterEventHotKey` 声明，仅 `HIToolbox.tbd` 导出符号；Swift `import Carbon.HIToolbox` 仍可编译链接。已在独立无授权进程中探针验证 `InstallEventHandler`/`RegisterEventHotKey` 返回 `noErr`（零权限可用）。Carbon 文档已被 Apple 归档：[Documentation Archive](https://developer.apple.com/library/archive/navigation/index.html?filter=carbon)。
+
+### 8.5 遮罩特效引擎（v0.1.10 · 高清动效屏保）
+
+遮罩不再是静态深色渐变，而是 5 组**程序化高清动效**，手动遮罩与休息遮罩共用同一背景（`MaskEffectBackground` 为单一事实源，两处视觉恒一致）。
+
+**特效阵容**（源流为 [reactbits.dev](https://reactbits.dev) 的 MIT 组件，移植时按「清爽舒雅 · 波光流转」重构）：
+
+| 配置值 | 名称 | 形态 | 源流 |
+|---|---|---|---|
+| `orb` | 涟漪光球（默认） | 半透明光球呼吸，球面流纹如水面波光流转 | Orb（球面流纹重构） |
+| `fibers` | 冷雾纤丝 | 雾蓝纤丝低频摆动，层层脊线漂出银白微光 | GhostFibers |
+| `letterRain` | 字雨微光 | 字符点阵极淡闪烁，亮带自上而下巡回 | LetterGlitch（着色器化） |
+| `caustics` | 水波光斑 | 池底焦散网纹，光斑明暗流转 | 原创（迭代折叠焦散） |
+| `silk` | 丝绸流光 | 缎面褶皱流淌高光，泛薄荷与冰紫 | 原创（fbm 二次域扭曲） |
+
+**渲染架构**（`Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/`）：
+
+- **MTKView 而非 SwiftUI `Shader`**：`isPaused` 提供真暂停（「减弱动态效果」下保留末帧静帧，零开销）；`preferredFramesPerSecond` 可按特效降帧；`drawableSize` 可显式钳制。每帧主线程成本仅「写 4 个 uniform + 1 次 draw」，双击 Esc 退出延迟零回归。
+- **着色器运行时编译**：CLT 不含 `xcrun metal`（需完整 Xcode），且 `swift build` 不编译 `.metal`、Makefile 装配的 `.app` 不含 SPM 资源 bundle。故以 Swift 字符串常量存源码，`device.makeLibrary(source:)` 首次遮罩升起时编译（实测 Apple M4 约 95ms，被 0.4s 淡入完全掩盖），与「零打包资产」哲学一致（同 `AmbientSoundPlayer` 合成粉噪音）。
+- **分辨率无关**：全部为全屏三角形 + 片元着色器逐像素合成，噪声亦程序生成（零纹理）。构图以短边归一化 → 4K/8K 构图一致。
+- **清晰度三要素**：① 取满 `backingScaleFactor`（此前钳到 2 是主要损失点）；② SSAA 超采样（1.4–1.5×，字形类特效刻意为 1——直绘更锐）；③ `detail()` 高频细节层为高光/脊线补颗粒纹理，成本远低于给所有 fbm 加阶数。
+- **性能护栏**：后备缓冲总像素上限 1000 万，超出等比降采样（宁降分辨率不掉帧）；字雨微光限 30fps。
+- **降级链**：`MTLCreateSystemDefaultDevice()` 为 nil 或编译失败 → NSLog + 回退深色渐变，**绝不出现黑屏/空遮罩**（遮罩是强制性 UI，渲染失败不能削弱其遮蔽作用）。
+- **多屏相位**：进程级单一时间纪元（`CACurrentMediaTime()` 静态基准），各屏独立 MTKView 同相位；屏幕热插拔重建视图后时间轴连续不跳变。
+
+**文案**：普通文本（30pt 细体圆角，白色 85% 不透明），保持静止以保证可读性。
+
+曾实现过粒子聚字层（reactbits ParticleText 移植：CoreText 栅格化 → 网格采样 → 光点自目标位就近散开后聚拢，运动为时间的纯函数），但**已移除**——遮罩文案的第一要务是「读得清」，而 30pt 小字号下粒子必须细到亚像素才不糊笔画，可读性与观感均不及普通文本。移植期间沉淀的两条经验仍记录于此，以备后来者：
+
+- **小字号粒子化的三条硬约束**（偏离任一条字形即不可辨）：① 采样步长须锚定**屏幕像素**而非字号（按字号缩放会使每字只剩十余个点）；② 光点半径须**略小于**采样步长（大于则糊成实心字，远小于则笔画断开）；③ 散布与漂移幅度须以**字号**为基准且远小于笔画宽（按 DPR 缩放会把字抖散）。
+- **坐标系注记**：以 `premultipliedLast` 建的 `CGBitmapContext` 下，`CTLineDraw` 的输出在缓冲中**已自上而下正立**（行号 0 即画面顶部），与 SwiftUI `Canvas` 的 Y 向下同向。故既不做 CTM 翻转，采样时也不翻转行号——任一处多翻一次都会使文案上下镜像（曾两次踩中，最终以离线逐行打印位图 alpha 定案）。
+
+**验证取证**：`CGShieldingWindowLevel` 的窗口无法被 `screencapture` 捕获（见 [issue.md](../.agents/issue.md)）。⚠️ **切勿以「DEBUG 时降低窗口层级」换取截图便利**——`.floating` 仅为 3，而屏蔽层级约 21 亿，降级后菜单栏与 Dock 均盖不住，等于用调试便利换掉了遮罩的核心作用（本次已踩中，见 [issue.md](../.agents/issue.md) 同类记录）。取证应用 `CGWindowListCopyWindowInfo` 核验层级 + 用户肉眼确认。
 
 ## References
 

@@ -28,6 +28,9 @@
 | 引擎接线 + sleep/wake + fast-forward | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift` |
 | 多屏遮罩 + 软强制 Esc | `Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift` |
 | 主动屏幕遮罩（手动，遮罩期间心跳冻结计时）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
+| 遮罩高清动效（5 组 Metal 片元着色器 + 运行时编译 + 降级链） | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/MaskShaderSources.swift` + `MaskShaderLibrary.swift` + `MaskEffectView.swift` |
+| 遮罩期间键盘白名单拦截（HID tap + 30min 看门狗验尸 + 应急短路） | `Sources/GiveMeABreakIntegrations/Overlay/MaskInputGuard.swift` |
+| 遮罩背景合成（手动/休息遮罩共用单一事实源）+ 特效中文目录 | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/MaskEffectBackground.swift` |
 | 全局快捷键（⌃⌥⌘K/R，RegisterEventHotKey，零权限） | `Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift` |
 | 防止空闲睡眠/熄屏（IOKit 电源断言，等同 caffeinate -d/-i） | `Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift` |
 | Coding Proxy 子进程托管（Foundation.Process + 双管道日志流 + 控制台窗口；命令解析/校验/apply 决策纯逻辑在 Engine 层） | `Sources/GiveMeABreakIntegrations/CodingProxy/CodingProxyProcessController.swift` + `CodingProxyConsoleView.swift` + `CodingProxyConsoleWindowController.swift` + `Sources/GiveMeABreakEngine/CodingProxySupport.swift` |

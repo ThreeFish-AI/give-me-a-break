@@ -1,4 +1,5 @@
 import SwiftUI
+import GiveMeABreakEngine
 
 /// 遮罩共享状态：确认 UI 内嵌于遮罩面板内部，与遮罩同处 CGShieldingWindowLevel，
 /// 从根上消除「确认对话框被遮罩遮挡」的层级问题（替代 NSAlert.runModal 默认低层级模态窗，
@@ -17,19 +18,18 @@ final class OverlayViewModel: ObservableObject {
     }
 }
 
-/// 休息遮罩内容：舒缓渐变背景 + 大字倒计时 + Esc 确认双态。
+/// 休息遮罩内容：程序化高清背景特效 + 大字倒计时 + Esc 确认双态。
+/// 背景与手动遮罩共用 `MaskEffectBackground`（单一事实源），故两处视觉一致；
+/// 倒计时与确认 UI 叠加于其上，可读性由该视图内置的暗纱保证。
 /// 倒计时态显示剩余时间与 Esc 提示；确认态显示「继续休息 / 直接退出」按钮。
 struct OverlayContentView: View {
     @ObservedObject var viewModel: OverlayViewModel
+    /// 遮罩视觉配置；由 `LiveOverlayController` 在升起时快照传入。
+    let settings: ScreenMaskSettings
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.04, green: 0.05, blue: 0.09),
-                         Color(red: 0.09, green: 0.06, blue: 0.14)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .opacity(0.97)
+            MaskEffectBackground(effect: settings.effect)
 
             if viewModel.isConfirming {
                 confirmView
