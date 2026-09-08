@@ -74,14 +74,15 @@ public func augmentedPathEnvironment(currentPath: String?, home: String) -> Stri
     return components.joined(separator: ":")
 }
 
-/// 可执行解析：裸名按 PATH 顺序取首个可执行命中（绝对路径）；含 `/` 视为路径原样返回
-/// （存在性交由校验器）。全不命中 → nil。
+/// 可执行解析：裸名按 PATH 顺序取首个可执行命中（绝对路径）；含 `/` 视为显式路径，
+/// 就地判定可执行性（不可执行 → nil，令校验器统一以 `.executableNotFound` 明示，
+/// 而非留到 `Process.run()` 抛英文 NSError）。全不命中 → nil。
 public func resolveExecutablePath(_ parsed: ParsedCommandLine,
                                   pathEnvironment: String,
                                   isExecutableFile: (String) -> Bool) -> String? {
     let name = parsed.executable
-    if name.hasPrefix("/") || name.contains("/") {
-        return name
+    if name.contains("/") {
+        return isExecutableFile(name) ? name : nil
     }
     for dir in pathEnvironment.split(separator: ":") where !dir.isEmpty {
         let candidate = "\(dir)/\(name)"
@@ -199,6 +200,7 @@ public final class CodingProxyLogBuffer: @unchecked Sendable {
     public let maxLineLength: Int
     private let lock = NSLock()
     private var lines: [CodingProxyLogLine] = []
+    private var appendedTotal: UInt64 = 0
 
     public init(capacity: Int = 2000, maxLineLength: Int = 4000) {
         self.capacity = capacity
@@ -213,7 +215,17 @@ public final class CodingProxyLogBuffer: @unchecked Sendable {
         lock.lock()
         lines.append(CodingProxyLogLine(date: date, stream: stream, text: truncated))
         if lines.count > capacity { lines.removeFirst(lines.count - capacity) }
+        appendedTotal &+= 1
         lock.unlock()
+    }
+
+    /// 历史累计入队行数（单调，不受容量裁剪与 clear 影响）。
+    /// 用途：UI 合流刷新据此判定「快照拉取后是否又有新行」——满容量时 `count` 恒等于
+    /// capacity，无法充当该判据。
+    public var totalAppended: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return appendedTotal
     }
 
     /// 当前缓冲快照（深拷贝，主线程安全读取）。

@@ -42,6 +42,8 @@ final class CodingProxyProcessController: ObservableObject {
     private var stopping = false
     private var generation: UInt = 0
     private var lastApplied: CodingProxySettings?
+    /// 异步重启标志：停止终态落定后由 `handleProcessTerminated` 消费并拉起新进程。
+    private var pendingRestart = false
     private var logFlushPending = false
     /// 日志写入与合流标志的串行队列（stdout/stderr 双管道可能并发回调）。
     private let ingestQueue = DispatchQueue(label: "com.aurelius.givemeabreak.codingproxy.ingest")
@@ -150,6 +152,7 @@ final class CodingProxyProcessController: ObservableObject {
 
     /// 停止子进程（SIGTERM → 5s 宽限 SIGKILL 兜底；终态经 terminationHandler 回主线程）。
     func stop() {
+        pendingRestart = false   // 显式停止取消在途重启（关开关后不应被重启标志复活）
         guard let p = process, p.isRunning else { return }   // 对未运行 Process 调 terminate 会抛异常
         stopping = true
         runState = .stopping
@@ -167,16 +170,19 @@ final class CodingProxyProcessController: ObservableObject {
         }
     }
 
-    /// 重启 = 同步有界停止后立刻启动（确保旧进程死透再拉新，避免端口争用）。
+    /// 重启 = 异步有界停止（SIGTERM → 5s 宽限 SIGKILL），旧进程确认退出后于终态回调中拉新。
+    /// 不阻塞主线程（会话期的重启若走同步等待，子进程无视 SIGTERM 时将冻结 UI 至上限）；
+    /// 「旧进程死透再拉新」的次序保证不变——start 由 `handleProcessTerminated` 触发。
     func restart() {
         guard process?.isRunning == true else { start(); return }
-        stopForQuit()
-        start()
+        stop()                   // 内部会清零 pendingRestart，故置位须在其后
+        pendingRestart = true
     }
 
     /// App 退出路径：同步有界停止（SIGTERM → ≤2s 轮询 → SIGKILL → waitUntilExit 回收）。
-    /// 主线程短阻塞仅发生在退出期，通常 <100ms。
+    /// 全仓唯一的主线程阻塞点，仅发生在退出期（通常 <100ms）——运行期的停止/重启均走异步路径。
     func stopForQuit() {
+        pendingRestart = false   // 退出期不再拉新
         guard let p = process else { return }
         guard p.isRunning else {
             finalizeSynchronousStop(code: p.terminationStatus)
@@ -248,9 +254,18 @@ final class CodingProxyProcessController: ObservableObject {
         log.append(.system, detail)
         NSLog("[GiveMeABreak][codingProxy] \(detail)")
         scheduleLogFlush()
+
+        // 异步重启的第二拍：旧进程已确认退出，此刻拉新无端口争用。
+        // 标志仅由显式重启请求置位，故此处拉新不违「崩溃不自动重启」契约（该契约管的是
+        // 标志为假的自发退出）；即便旧进程恰好在 SIGTERM 前自行死亡，重启诉求依然兑现。
+        if pendingRestart {
+            pendingRestart = false
+            log.append(.system, "重启：旧进程已退出，正在启动新进程…")
+            start()
+        }
     }
 
-    /// 同步停止收尾（主线程，stopForQuit/restart）：就地落终态并作废在途 terminationHandler。
+    /// 同步停止收尾（主线程，仅 stopForQuit）：就地落终态并作废在途 terminationHandler。
     private func finalizeSynchronousStop(code: Int32) {
         generation += 1   // 作废仍排队中的 terminationHandler（其回主线程后 epoch 不匹配即忽略）
         detachPipes()
@@ -276,12 +291,24 @@ final class CodingProxyProcessController: ObservableObject {
         ingestQueue.async { [weak self] in
             guard let self else { return }
             for line in lines { self.log.append(stream, line) }
-            guard !self.logFlushPending else { return }
-            self.logFlushPending = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.logFlushInterval) { [weak self] in
-                guard let self else { return }
-                self.onLogAppended?()
-                self.ingestQueue.async { self.logFlushPending = false }
+            self.scheduleCoalescedFlushIfNeeded()
+        }
+    }
+
+    /// 安排一次 trailing 合流刷新（仅 ingestQueue 调用）。
+    /// 标志复位时比对累计行数：若刷新拉取快照之后又有新行入队（合流窗口内被判定为
+    /// 「已有在途刷新」而未自行排程的那些行），补排一次——否则进程静默前的末几行
+    /// 会滞留至下一行日志到来才可见。
+    private func scheduleCoalescedFlushIfNeeded() {
+        guard !logFlushPending else { return }
+        logFlushPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.logFlushInterval) { [weak self] in
+            guard let self else { return }
+            let flushedTotal = self.log.totalAppended
+            self.onLogAppended?()
+            self.ingestQueue.async {
+                self.logFlushPending = false
+                if self.log.totalAppended > flushedTotal { self.scheduleCoalescedFlushIfNeeded() }
             }
         }
     }

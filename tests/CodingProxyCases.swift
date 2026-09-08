@@ -103,10 +103,20 @@ func runCodingProxyCases() {
                "PATH 无命中应返回 nil")
     }
 
-    test("resolveExecutablePath：含 / 视为路径原样返回") {
+    test("resolveExecutablePath：含 / 的显式路径就地判定可执行性") {
         let parsed = ParsedCommandLine(executable: "./local/tool", arguments: [])
-        expectEqual(resolveExecutablePath(parsed, pathEnvironment: "/usr/bin") { _ in false }, "./local/tool",
-                    "相对路径应原样返回（存在性交由校验器）")
+        expectEqual(resolveExecutablePath(parsed, pathEnvironment: "/usr/bin") { $0 == "./local/tool" },
+                    "./local/tool", "可执行的显式路径应原样返回，不走 PATH 搜索")
+        expect(resolveExecutablePath(parsed, pathEnvironment: "/usr/bin") { _ in false } == nil,
+               "不可执行的显式路径应返回 nil（而非留到 Process.run() 抛错）")
+    }
+
+    test("resolveExecutablePath：绝对路径不存在 → nil") {
+        let parsed = ParsedCommandLine(executable: "/opt/homebrew/bin/uv", arguments: ["run"])
+        expect(resolveExecutablePath(parsed, pathEnvironment: "/usr/bin:/bin") { _ in false } == nil,
+               "被移动/卸载的绝对路径应返回 nil")
+        expectEqual(resolveExecutablePath(parsed, pathEnvironment: "/usr/bin") { $0 == "/opt/homebrew/bin/uv" },
+                    "/opt/homebrew/bin/uv", "存在且可执行的绝对路径应原样返回")
     }
 
     // MARK: validateCodingProxySettings
@@ -155,6 +165,19 @@ func runCodingProxyCases() {
         let s = CodingProxySettings(autoStartEnabled: true, workingDirectory: "~/proj")
         expectEqual(validate(s, paths: ["/Users/tester/proj": (true, true)],
                              executables: ["/opt/homebrew/bin/uv"]), .ok, "目录与命令均有效应返回 ok")
+    }
+
+    test("validate：显式路径可执行文件失效 → executableNotFound（不留到 run 抛英文错）") {
+        let broken = CodingProxySettings(workingDirectory: "~/proj",
+                                         launchCommand: "/opt/homebrew/bin/uv run coding-proxy start")
+        expectEqual(validate(broken, paths: ["/Users/tester/proj": (true, true)], executables: []),
+                    .executableNotFound, "绝对路径不可执行时应由校验器明示")
+        let tilde = CodingProxySettings(workingDirectory: "~/proj", launchCommand: "~/.local/bin/uv run")
+        expectEqual(validate(tilde, paths: ["/Users/tester/proj": (true, true)], executables: []),
+                    .executableNotFound, "~ 展开后的路径不可执行时同样应明示")
+        expectEqual(validate(tilde, paths: ["/Users/tester/proj": (true, true)],
+                             executables: ["/Users/tester/.local/bin/uv"]),
+                    .ok, "~ 展开后命中可执行文件应返回 ok")
     }
 
     // MARK: codingProxyTransition
@@ -223,6 +246,17 @@ func runCodingProxyCases() {
         buffer.append(.stderr, "new")
         expectEqual(snap.count, 3, "先取的 snapshot 不应受后续 append 影响（深拷贝）")
         expectEqual(buffer.snapshot.last?.stream, .stderr, "新行流类型应正确")
+    }
+
+    test("CodingProxyLogBuffer：totalAppended 单调（满容量与 clear 后仍递增）") {
+        let buffer = CodingProxyLogBuffer(capacity: 2)
+        expectEqual(buffer.totalAppended, 0, "初始累计应为 0")
+        for i in 1...5 { buffer.append(.stdout, "line\(i)") }
+        expectEqual(buffer.count, 2, "count 受容量收口")
+        expectEqual(buffer.totalAppended, 5, "满容量后累计仍应递增（合流刷新据此判定新行）")
+        buffer.clear()
+        buffer.append(.stdout, "after-clear")
+        expectEqual(buffer.totalAppended, 6, "clear 不应重置累计计数")
     }
 
     test("CodingProxyLogBuffer：单行超长物理截断并标记") {
