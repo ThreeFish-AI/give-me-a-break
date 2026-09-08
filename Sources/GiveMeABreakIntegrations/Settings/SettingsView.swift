@@ -176,7 +176,7 @@ struct SettingsView: View {
     @ViewBuilder
     private func content(for tab: SettingsTab) -> some View {
         switch tab {
-        case .general:   Form { generalSection; aboutSection }       // 通用：开机自启 + 关于
+        case .general:   Form { generalSection; maskEffectSection; aboutSection }  // 通用：开机自启 + 遮罩特效 + 关于
         case .power:     Form { powerSection }                       // 电源：防止空闲睡眠/熄屏（IOKit 断言，与休息/工作/遮罩引擎零耦合）
         case .schedule:  Form { workWindowsSection; rhythmSection }  // 作息：工作时段 + 节律（何时工作、工作多久休息一次）
         case .sound:     Form { soundSection }                       // 休息音效：休息时听什么（自定义音频 / 白噪音 / QQ 音乐）
@@ -202,6 +202,33 @@ struct SettingsView: View {
             Text("一般")
         } footer: {
             Text("如需关闭，也可在「系统设置 → 通用 → 登录项」中管理。")
+        }
+    }
+
+    // MARK: - 遮罩特效（手动遮罩与休息遮罩共用的视觉表现）
+
+    private var maskEffectSection: some View {
+        Section {
+            Picker("背景特效", selection: $draft.screenMask.effect) {
+                ForEach(MaskEffect.allCases, id: \.self) { fx in
+                    Text(MaskEffectCatalog.displayName(fx)).tag(fx)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityHint(MaskEffectCatalog.summary(draft.screenMask.effect))
+
+            Text(MaskEffectCatalog.summary(draft.screenMask.effect))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Toggle("文案以粒子聚成", isOn: $draft.screenMask.particleText)
+                .accessibilityHint("遮罩文案由光点聚拢而成；关闭则显示为普通文字")
+        } header: {
+            Text("遮罩特效")
+        } footer: {
+            Text("作用于「屏幕遮罩」（菜单 / ⌃⌥⌘K / ⌃⌘Q）与定时休息遮罩两处，下次遮罩升起时生效。"
+                 + "全部为程序化渲染，4K/8K 下同样清晰；系统开启「减弱动态效果」时自动静帧，"
+                 + "Metal 不可用时自动回退为深色渐变。")
         }
     }
 

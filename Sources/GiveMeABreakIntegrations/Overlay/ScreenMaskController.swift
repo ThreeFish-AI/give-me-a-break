@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import GiveMeABreakEngine
 
 /// 手动屏幕遮罩控制器：与 LiveOverlayController 结构对称（多屏 CGShieldingWindowLevel 面板 +
 /// 双击 Esc），但与调度引擎（FSM）零耦合——不读写 EngineState、不触发任何休息相关副作用。
@@ -10,14 +11,17 @@ final class ScreenMaskController {
     var onDismiss: (() -> Void)?
 
     private var panels: [OverlayPanel] = []
+    /// 本次升起所用的视觉配置（升起时快照：遮罩罩住一切期间无设置变更路径）。
+    private var settings = ScreenMaskSettings()
     private var escMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var lastEscAt: Date?  // 双击 Esc 检测：上次 Esc 时刻（0.4s 窗口，同休息遮罩）
 
     var isShown: Bool { !panels.isEmpty }
 
-    func show() {
+    func show(settings: ScreenMaskSettings = ScreenMaskSettings()) {
         guard panels.isEmpty else { return }  // 幂等
+        self.settings = settings
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
@@ -59,10 +63,14 @@ final class ScreenMaskController {
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = false
-        panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        // DEBUG 模式降级到 .floating：CGShieldingWindowLevel 的窗口无法被 screencapture 捕获
+        // （见 .agents/issue.md），故视觉取证时须降层。仅调试用，生产路径不变。
+        panel.level = ProcessInfo.processInfo.environment["GIVEMEABREAK_DEBUG"] != nil
+            ? .floating
+            : NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications]
 
-        let hosting = NSHostingView(rootView: ScreenMaskContentView())
+        let hosting = NSHostingView(rootView: ScreenMaskContentView(settings: settings))
         panel.contentView = hosting
         panel.setFrame(screen.frame, display: true)  // 显式 setFrame（macOS 15 已知零 frame 回退）
         panel.alphaValue = 0

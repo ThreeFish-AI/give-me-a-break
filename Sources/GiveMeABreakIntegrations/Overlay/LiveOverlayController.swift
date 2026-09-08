@@ -10,6 +10,10 @@ import GiveMeABreakEngine
 /// 对话框会渲染在遮罩之下不可见，导致 Esc 退出永远失效。
 final class LiveOverlayController: OverlayController {
     var onRequestEarlyExit: (() -> Void)?
+    /// 遮罩视觉配置的提供者（由 AppRoot 注入，读取当前 config）。
+    /// 经闭包注入而非扩展 `OverlayController` 协议：协议签名须保持无 AppKit/视觉概念，
+    /// 且引擎与既有测试桩不应因视觉特性而改动（边界管理）。
+    var settingsProvider: (() -> ScreenMaskSettings)?
 
     private var panels: [OverlayPanel] = []
     private var escMonitor: Any?
@@ -74,7 +78,8 @@ final class LiveOverlayController: OverlayController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications]
 
         // resting 期间 viewModel 必非 nil（show 创建、dismiss 才置 nil）；多屏共享同一实例
-        let hosting = NSHostingView(rootView: OverlayContentView(viewModel: viewModel!))
+        let settings = settingsProvider?() ?? ScreenMaskSettings()
+        let hosting = NSHostingView(rootView: OverlayContentView(viewModel: viewModel!, settings: settings))
         panel.contentView = hosting
         panel.setFrame(screen.frame, display: true)  // 显式 setFrame（macOS 15 已知零 frame 回退）
         panel.alphaValue = 0

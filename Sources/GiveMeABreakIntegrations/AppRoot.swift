@@ -135,6 +135,8 @@ final public class AppRoot {
         self.sensors = sensors
 
         let overlay = LiveOverlayController()
+        // 休息遮罩与手动遮罩共用视觉配置（单一事实源）；每次升起时读当前 config。
+        overlay.settingsProvider = { [weak self] in self?.engine?.config.screenMask ?? ScreenMaskSettings() }
         overlay.onRequestEarlyExit = { [weak self] in self?.engine?.requestEarlyRestExit() }
         self.overlayController = overlay
 
@@ -256,7 +258,7 @@ final public class AppRoot {
             return
         }
         guard let mask = screenMaskController, !mask.isShown else { return }  // 已显示：幂等忽略
-        mask.show()
+        mask.show(settings: engine?.config.screenMask ?? ScreenMaskSettings())
         heartbeat?.suspend()  // 遮罩 ⇒ 引擎冻结（与 handleWake 的 resume 严格配对，见 didWake 守卫）
         NSLog("[GiveMeABreak][screenMask] 遮罩期间工作计时已冻结")
     }
