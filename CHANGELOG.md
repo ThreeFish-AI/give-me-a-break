@@ -8,13 +8,9 @@
 
 ### Bug 修复
 
-- **Release 产物启用稳定自签名重签（TCC 授权一次、跨版本持久）**。补配 CI secrets（`MACOS_SELFSIGN_P12` / `MACOS_SELFSIGN_P12_PWD` / `KEYCHAIN_PASSWORD`）与 variable `SELFSIGN_IDENTITY`；期间旧证书私钥经钥匙串导出被系统拒绝（不可导出标记），因存量安装均为 ad-hoc（换证 TCC 代价恰为零）重建同名证书（SHA-1 `616A1FEC…`）并复刻本机专用钥匙串环境，本地干跑 CI 导入链全绿；v0.1.10 Release 资产已以新证书重签替换。**从 v0.1.10 及更早 ad-hoc 版本升级需最后一次重新授权**，此后跨版本不再弹。
+- **Release 产物启用稳定自签名重签（TCC 授权一次、跨版本持久）**。补配 CI secrets（`MACOS_SELFSIGN_P12` / `MACOS_SELFSIGN_P12_PWD` / `KEYCHAIN_PASSWORD`）与 variable `SELFSIGN_IDENTITY`；期间旧证书私钥经钥匙串导出被系统拒绝（不可导出标记），因存量安装均为 ad-hoc（换证 TCC 代价恰为零）重建同名证书（SHA-1 `616A1FEC…`）并复刻本机专用钥匙串环境；并修通 ③b 在无头 runner 上的三处 CI 特有障碍（用户域 `add-trusted-cert` 等 GUI 授权挂起 → sudo 写系统域；`codesign --keychain` 对自签证书解析不到 identity → 钥匙串入搜索列表；`--timestamp` 请求挂起 → 移除），均经诊断 workflow 双 job 双变体实机验证。**稳定签名自本版本起生效；v0.1.10 及更早 Release 资产保持 ad-hoc 不重发**。**从 v0.1.10 及更早 ad-hoc 版本升级需最后一次重新授权**，此后跨版本不再弹。
 - **`release.yml` 新增发布门禁**：产物实签为 ad-hoc 即 fail（macos job 失败 → release job 永不执行），根治 secrets 缺失时的静默降级；逃生门 repo variable `ALLOW_ADHOC_RELEASE=true`（默认拒绝、settings 可审计）。
 - **一键安装 URL 404 修复**：Release Note 与 README 的 curl 命令引用 `master/install.sh`（master 停在 v0.1.1 时代，实测 404），分别改为 tag 引用（`v%s/install.sh`，随版本永存）与开发主干引用（`feature/1.x.x/install.sh`）。
-- **Coding Proxy 控制台窗口尺寸修复**（PR #66）：打开不再缩回最小值，尺寸/位置真正跨打开、跨启动记忆。引擎零改动，仅 `CodingProxy/` 一文件。
-
-### Bug 修复
-
 - **「Coding Proxy…」控制台窗口每次打开都缩到最小尺寸（680×420），调大无效且跨启动记不住**。根因：`show()` 每次都以 `NSHostingController` 赋值 `contentViewController`，AppKit 随即把窗口内容尺寸收到 SwiftUI fitting size（日志区为弹性 ScrollView，fitting 高度极小）→ 被 `contentMinSize` 兜底压扁，且 autosave 把缩水 frame 反持久化、覆盖用户尺寸（与设置窗 v0.1.8 修复过的「内容驱动尺寸」同族）。修复：承载层对齐设置窗范式——`NSHostingView` + `sizingOptions = []`（视图适配窗口，尺寸归用户所有）、复用窗口只换内容视图不动 frame、恢复持久化帧后屏内收口（多屏/拔屏兜底）；持久化键换新（旧键已被缺陷版本写满缩水值），升级后首开回默认 840×540 并显式居中。
 
 ## v0.1.10 — 2026-09-08（feat · 遮罩高清动效屏保 + Coding Proxy 托管 + 叶子品牌图标）
