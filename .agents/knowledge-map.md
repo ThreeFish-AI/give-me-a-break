@@ -30,7 +30,6 @@
 | 主动屏幕遮罩（手动，遮罩期间心跳冻结计时）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
 | 遮罩高清动效（5 组 Metal 片元着色器 + 运行时编译 + 降级链） | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/MaskShaderSources.swift` + `MaskShaderLibrary.swift` + `MaskEffectView.swift` |
 | 遮罩背景合成（手动/休息遮罩共用单一事实源）+ 特效中文目录 | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/MaskEffectBackground.swift` |
-| 遮罩粒子文案（CoreText 栅格化 + 时间纯函数粒子动效） | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/ParticleTextView.swift` |
 | 全局快捷键（⌃⌥⌘K/R，RegisterEventHotKey，零权限） | `Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift` |
 | 防止空闲睡眠/熄屏（IOKit 电源断言，等同 caffeinate -d/-i） | `Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift` |
 | 休息音效（粉噪音 + QQ 音乐联动） | `Sources/GiveMeABreakIntegrations/LiveMusicController.swift` + `AmbientSoundPlayer.swift` |

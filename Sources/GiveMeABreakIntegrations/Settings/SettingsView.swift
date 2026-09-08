@@ -220,9 +220,6 @@ struct SettingsView: View {
             Text(MaskEffectCatalog.summary(draft.screenMask.effect))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            Toggle("文案以粒子聚成", isOn: $draft.screenMask.particleText)
-                .accessibilityHint("遮罩文案由光点聚拢而成；关闭则显示为普通文字")
         } header: {
             Text("遮罩特效")
         } footer: {

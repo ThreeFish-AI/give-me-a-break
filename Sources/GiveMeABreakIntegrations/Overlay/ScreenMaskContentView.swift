@@ -14,7 +14,7 @@ struct ScreenMaskContentView: View {
     var body: some View {
         ZStack {
             MaskEffectBackground(effect: settings.effect)
-            MaskCaption(text: Self.caption, particle: settings.particleText)
+            MaskCaption(text: Self.caption)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

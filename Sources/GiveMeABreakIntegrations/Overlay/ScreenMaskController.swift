@@ -63,11 +63,11 @@ final class ScreenMaskController {
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = false
-        // DEBUG 模式降级到 .floating：CGShieldingWindowLevel 的窗口无法被 screencapture 捕获
-        // （见 .agents/issue.md），故视觉取证时须降层。仅调试用，生产路径不变。
-        panel.level = ProcessInfo.processInfo.environment["GIVEMEABREAK_DEBUG"] != nil
-            ? .floating
-            : NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        // 层级不设任何调试旁路：曾为截图取证加过 DEBUG 降级到 .floating，
+        // 但那会让菜单栏/Dock 盖不住（.floating 仅 3，而屏蔽层级约 21 亿），
+        // 等于用「调试便利」换掉了遮罩的核心作用。取证改用 CGWindowListCopyWindowInfo
+        // 核验层级 + 用户肉眼确认（见 .agents/issue.md）。
+        panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications]
 
         let hosting = NSHostingView(rootView: ScreenMaskContentView(settings: settings))

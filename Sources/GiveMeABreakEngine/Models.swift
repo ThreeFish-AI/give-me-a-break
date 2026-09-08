@@ -151,19 +151,15 @@ public enum MaskEffect: String, Codable, Equatable, Hashable, Sendable, CaseIter
 public struct ScreenMaskSettings: Codable, Equatable, Sendable {
     /// 背景特效，默认涟漪光球。
     public var effect: MaskEffect
-    /// 文案以粒子聚成（源自 reactbits ParticleText），默认开。
-    /// 字号与静态文案一致，仅呈现方式不同；关闭则回退为普通文本。
-    public var particleText: Bool
 
-    public init(effect: MaskEffect = .orb, particleText: Bool = true) {
+    public init(effect: MaskEffect = .orb) {
         self.effect = effect
-        self.particleText = particleText
     }
 
     // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
 
     private enum CodingKeys: String, CodingKey {
-        case effect, particleText
+        case effect
     }
 
     public init(from decoder: Decoder) throws {
@@ -173,7 +169,6 @@ public struct ScreenMaskSettings: Codable, Equatable, Sendable {
         // 进而导致整份 DayPlanConfig 解码失败回退全默认（用户配置全丢）。
         let rawEffect = try c.decodeIfPresent(String.self, forKey: .effect)
         effect = rawEffect.flatMap(MaskEffect.init(rawValue:)) ?? d.effect
-        particleText = try c.decodeIfPresent(Bool.self, forKey: .particleText) ?? d.particleText
     }
 }
 
@@ -222,7 +217,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     /// 电源功能域配置（防止空闲睡眠/熄屏）。
     /// v9 新增；正交子结构，引擎忽略，仅供集成层消费（`IdleSleepGuard`）。详见 `PowerSettings`。
     public var power: PowerSettings
-    /// 屏幕遮罩视觉配置（背景特效 / 粒子文案）。
+    /// 屏幕遮罩视觉配置（背景特效）。
     /// v10 新增；正交子结构，引擎忽略，仅供集成层消费（`Overlay/MaskEffects`）。详见 `ScreenMaskSettings`。
     public var screenMask: ScreenMaskSettings
 
@@ -299,7 +294,7 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         agent = try c.decodeIfPresent(AgentSettings.self, forKey: .agent) ?? d.agent
         // 旧配置（v8 及以前）无此字段 → 补默认（关 + 仅显示器）；PowerSettings 自身亦容错解码。v9 新增。
         power = try c.decodeIfPresent(PowerSettings.self, forKey: .power) ?? d.power
-        // 旧配置（v9 及以前）无此字段 → 补默认（涟漪光球 + 粒子文案）；自身亦容错解码。v10 新增。
+        // 旧配置（v9 及以前）无此字段 → 补默认（涟漪光球）；自身亦容错解码。v10 新增。
         screenMask = try c.decodeIfPresent(ScreenMaskSettings.self, forKey: .screenMask) ?? d.screenMask
     }
 }

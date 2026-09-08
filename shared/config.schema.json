@@ -178,11 +178,6 @@
             "silk"
           ],
           "default": "orb"
-        },
-        "particleText": {
-          "type": "boolean",
-          "description": "遮罩文案以粒子聚成；关闭则显示为普通文字（字号不变）。",
-          "default": true
         }
       }
     }

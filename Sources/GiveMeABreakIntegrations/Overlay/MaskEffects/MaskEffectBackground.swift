@@ -38,21 +38,17 @@ struct MaskEffectBackground: View {
     }
 }
 
-/// 遮罩文案：按配置以粒子聚成或普通文本呈现。字号一致，仅呈现方式不同。
+/// 遮罩文案：简约清晰的普通文本（保持静止以保证可读性）。
+/// 曾试过粒子聚字（reactbits ParticleText 移植），但 30pt 小字号下粒子必须细到
+/// 亚像素才不糊笔画，可读性与观感均不及普通文本，故移除——遮罩文案的第一要务是「读得清」。
 struct MaskCaption: View {
     let text: String
-    let particle: Bool
     var fontSize: CGFloat = 30
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if particle {
-            ParticleTextView(text: text, fontSize: fontSize, reduceMotion: reduceMotion)
-        } else {
-            Text(text)
-                .font(.system(size: fontSize, weight: .light, design: .rounded))
-                .foregroundStyle(.white.opacity(0.85))
-        }
+        Text(text)
+            .font(.system(size: fontSize, weight: .light, design: .rounded))
+            .foregroundStyle(.white.opacity(0.85))
     }
 }
 

@@ -125,3 +125,13 @@
 - **验证**（沿用 #7 方法论：`CGWindowListCopyWindowInfo` + `screencapture -l`）：默认宽/最小宽（注入超小 frame 被 contentMinSize 收口）下均平铺无 `>>`；注入 900×650 精确还原；真实 .app bundle 跨启动位置精确还原、页签平铺；91 单测全绿。
 - **后续防范**：**页签/导航项文案与承载窗口宽度必须同源测算**（经 `SettingsTabMetrics` 类 SSOT），禁止硬编码窗口宽度；给 `NSHostingView` 显式设 `sizingOptions = []` 以切断 SwiftUI 内容尺寸对窗口的隐式反压。注意 macOS 26 工具栏式页签条仅显示文字不显示 SF 图标（系统样式行为，非缺陷）。
 - **同类影响**：所有「顶部 TabView 页签数量会增长」的 macOS 设置窗；`NSHostingController` 作为 contentViewController 且用户可缩放窗口的组合（内容理想尺寸变化会弹回用户手动调节）。
+
+## #12 遮罩降级到 `.floating` 层级导致菜单栏/Dock 盖不住（用调试便利换掉核心作用）
+
+- **表因**：接入遮罩特效后，手动遮罩不再遮住菜单栏与 Dock；此前正常。用户同时质疑鼠标/键盘输入是否仍被阻断。
+- **根因**：为解决「`CGShieldingWindowLevel` 窗口无法被 `screencapture` 捕获」（同 #6 记录的取证限制）以便自我验证特效画面，我在 `ScreenMaskController.makePanel` 加了 `GIVEMEABREAK_DEBUG` 时降级到 `.floating` 的旁路。`.floating` 仅为 **3**，而屏蔽层级约 **21 亿**——降级后遮罩沉到菜单栏/Dock 之下。根因不是写错常量，而是**为调试便利在生产代码里改了功能语义**：遮罩的核心作用就是「压过一切」，任何削弱层级的旁路都直接摧毁该作用。输入阻断机制（`ignoresMouseEvents = false` + `collectionBehavior` + Esc 本地监听）实际未受影响，但层级下沉后用户无法区分二者，合理地一并质疑。
+- **处理方式**：删除该旁路，层级恒为 `CGShieldingWindowLevel`，并在原处留注释说明「曾踩此坑、勿再加调试降级」。
+- **后续防范**：
+  - **取证手段不得改动生产语义**。窗口层级、事件吞吐、`collectionBehavior` 这类「功能即语义」的属性禁止设调试旁路；需要取证时用 `CGWindowListCopyWindowInfo` 核验层级/尺寸（#7、#11 已建立此方法论）+ 请用户肉眼确认，而非降级窗口去迁就截图工具。
+  - 自我验证的便利性与功能正确性冲突时，一律牺牲前者。
+- **同类影响**：`LiveOverlayController`（休息遮罩）与任何 `CGShieldingWindowLevel` 面板；也适用于「为便于调试而临时放宽权限校验/关闭守卫」的一切同构改动。
