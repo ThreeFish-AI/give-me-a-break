@@ -2,6 +2,14 @@
 
 本文件记录 Give me a break 的版本变更事件。
 
+## Unreleased
+
+Coding Proxy 控制台窗口尺寸修复：打开不再缩回最小值，尺寸/位置真正跨打开、跨启动记忆。引擎零改动，仅 `CodingProxy/` 一文件。
+
+### Bug 修复
+
+- **「Coding Proxy…」控制台窗口每次打开都缩到最小尺寸（680×420），调大无效且跨启动记不住**。根因：`show()` 每次都以 `NSHostingController` 赋值 `contentViewController`，AppKit 随即把窗口内容尺寸收到 SwiftUI fitting size（日志区为弹性 ScrollView，fitting 高度极小）→ 被 `contentMinSize` 兜底压扁，且 autosave 把缩水 frame 反持久化、覆盖用户尺寸（与设置窗 v0.1.8 修复过的「内容驱动尺寸」同族）。修复：承载层对齐设置窗范式——`NSHostingView` + `sizingOptions = []`（视图适配窗口，尺寸归用户所有）、复用窗口只换内容视图不动 frame、恢复持久化帧后屏内收口（多屏/拔屏兜底）；持久化键换新（旧键已被缺陷版本写满缩水值），升级后首开回默认 840×540 并显式居中。
+
 ## v0.1.10 — 2026-09-08（feat · 遮罩高清动效屏保 + Coding Proxy 托管 + 叶子品牌图标）
 
 继 v0.1.9 后的功能版本：遮罩背景由静态深色渐变升级为 5 组 Metal 程序化渲染高清动效屏保（4K/8K 一致清晰、零打包资产）；新增「Coding Proxy 托管」——本地命令行工具（如 `uv run coding-proxy start`）随应用托管运行，设置「Agentic AI」页配置工作目录与启动命令，开启后随应用自动启动并保持运行、退出时一并停止，菜单「Coding Proxy…」打开控制台查看彩色日志流并会话级启停；菜单栏图标统一为叶子品牌图标、颜色承载状态语义。配置 schema 升至 v10（容错迁移，旧配置无感），129 单测全绿（+38），引擎 FSM 零改动。
