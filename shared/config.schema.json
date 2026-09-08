@@ -5,35 +5,186 @@
   "description": "Give me a break 跨平台一日计划配置权威定义。Swift Codable 与 C# System.Text.Json 双向兼容；容错解码（缺字段补默认）+ schema 迁移见 docs/windows-port-design.md §6。TimeOfDay 序列化为裸整数（自午夜秒），EnginePhase 序列化为 camelCase 字符串。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "workWindows", "workIntervalSeconds", "restDurationSeconds", "afkThresholdSeconds"],
+  "required": [
+    "schemaVersion",
+    "workWindows",
+    "workIntervalSeconds",
+    "restDurationSeconds",
+    "afkThresholdSeconds"
+  ],
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "description": "配置 schema 版本。当前为 5；高于此版本两端回退默认，低于则规范化后升级。",
-      "const": 5
+      "description": "配置 schema 版本。当前为 10；高于此版本两端回退默认，低于则规范化后升级。",
+      "const": 10
     },
     "workWindows": {
       "type": "array",
       "description": "工作时段列表，支持跨午夜。",
-      "default": [{ "start": 32400, "end": 43200 }, { "start": 49200, "end": 64800 }],
+      "default": [
+        {
+          "start": 32400,
+          "end": 43200
+        },
+        {
+          "start": 49200,
+          "end": 64800
+        }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["start", "end"],
+        "required": [
+          "start",
+          "end"
+        ],
         "properties": {
-          "start": { "type": "integer", "minimum": 0, "maximum": 86399, "description": "自午夜起的秒数 [0,86400)" },
-          "end": { "type": "integer", "minimum": 0, "maximum": 86399, "description": "自午夜起的秒数 [0,86400)；start>end 表示跨午夜" }
+          "start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86399,
+            "description": "自午夜起的秒数 [0,86400)"
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86399,
+            "description": "自午夜起的秒数 [0,86400)；start>end 表示跨午夜"
+          }
         }
       }
     },
-    "workIntervalSeconds": { "type": "number", "default": 3000, "minimum": 0, "description": "触发休息的工作累计阈值（秒），默认 50 分钟" },
-    "restDurationSeconds": { "type": "number", "default": 600, "minimum": 0, "description": "单次休息时长（秒），默认 10 分钟" },
-    "afkThresholdSeconds": { "type": "number", "default": 180, "minimum": 0, "description": "系统空闲超过此值视为 AFK，暂停累加（秒），默认 180" },
-    "ambientSoundEnabled": { "type": "boolean", "default": true, "description": "休息时播放内置粉噪音，默认开" },
-    "controlQQMusic": { "type": "boolean", "default": true, "description": "休息时联动 QQ 音乐媒体键，默认开" },
-    "workLogEnabled": { "type": "boolean", "default": true, "description": "自然休息前弹轻量输入框记录工作内容与成果（工作日志），默认开。仅自然休息触发；「立即休息」不弹。记录见 work-log.json，报告见菜单「工作日志…」。v3 新增。" },
-    "workLogPromptTimeoutSeconds": { "type": "number", "default": 180, "minimum": 0, "description": "工作日志小结窗的自动放行等待时长（秒），默认 180=3min；超时未操作即等同跳过、自动进入休息。0=永久等待（不自动跳过/不自动进入休息，须手动操作）。仅 workLogEnabled 开启时生效。v4 新增。" },
-    "restMusicPath": { "type": ["string", "null"], "default": null, "description": "休息模式自定义音频文件的本地绝对路径（mp3/m4a/aac/wav/flac/aiff 等 AVAudioPlayer 支持格式）。设置后休息时循环播放，取代内置粉噪音；为 null/空则回退粉噪音（受 ambientSoundEnabled 控制）。文件由用户本地提供，不打包、不分发；App 非沙盒，故直接以路径引用。v5 新增。" },
-    "graphClientId": { "type": ["string", "null"], "default": null, "description": "Microsoft Graph 日历门控 Azure 应用 client id（用户在 Azure portal 注册公共客户端应用，允许设备码 flow）。空=禁用日历门控，降级为无会议（Phase 3）。" }
+    "workIntervalSeconds": {
+      "type": "number",
+      "default": 3000,
+      "minimum": 0,
+      "description": "触发休息的工作累计阈值（秒），默认 50 分钟"
+    },
+    "restDurationSeconds": {
+      "type": "number",
+      "default": 600,
+      "minimum": 0,
+      "description": "单次休息时长（秒），默认 10 分钟"
+    },
+    "afkThresholdSeconds": {
+      "type": "number",
+      "default": 180,
+      "minimum": 0,
+      "description": "系统空闲超过此值视为 AFK，暂停累加（秒），默认 180"
+    },
+    "ambientSoundEnabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "休息时播放内置粉噪音，默认开"
+    },
+    "controlQQMusic": {
+      "type": "boolean",
+      "default": true,
+      "description": "休息时联动 QQ 音乐媒体键，默认开"
+    },
+    "workLogEnabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "自然休息前弹轻量输入框记录工作内容与成果（工作日志），默认开。仅自然休息触发；「立即休息」不弹。记录见 work-log.json，报告见菜单「工作日志…」。v3 新增。"
+    },
+    "workLogPromptTimeoutSeconds": {
+      "type": "number",
+      "default": 180,
+      "minimum": 0,
+      "description": "工作日志小结窗的自动放行等待时长（秒），默认 180=3min；超时未操作即等同跳过、自动进入休息。0=永久等待（不自动跳过/不自动进入休息，须手动操作）。仅 workLogEnabled 开启时生效。v4 新增。"
+    },
+    "restMusicPath": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "description": "休息模式自定义音频文件的本地绝对路径（mp3/m4a/aac/wav/flac/aiff 等 AVAudioPlayer 支持格式）。设置后休息时循环播放，取代内置粉噪音；为 null/空则回退粉噪音（受 ambientSoundEnabled 控制）。文件由用户本地提供，不打包、不分发；App 非沙盒，故直接以路径引用。v5 新增。"
+    },
+    "graphClientId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "description": "Microsoft Graph 日历门控 Azure 应用 client id（用户在 Azure portal 注册公共客户端应用，允许设备码 flow）。空=禁用日历门控，降级为无会议（Phase 3）。"
+    },
+    "exerciseLogEnabled": {
+      "type": "boolean",
+      "description": "休息结束后弹出运动记录录入窗。v6 新增。",
+      "default": true
+    },
+    "exercisePromptTimeoutSeconds": {
+      "type": "number",
+      "description": "运动记录窗自动关闭前的等待秒数；0 表示永久等待。v6 新增。",
+      "minimum": 0,
+      "default": 180
+    },
+    "exerciseTypes": {
+      "type": "array",
+      "description": "运动类型候选列表（用户可增删）。空数组表示用户主动清空，两端均须尊重。v7 新增。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "agent": {
+      "type": "object",
+      "description": "Agentic AI 功能域配置。引擎不消费，携带即忽略。v8 新增。",
+      "additionalProperties": false,
+      "properties": {
+        "claudeExecutablePath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Claude Code 可执行文件路径覆盖；为 null/空则走 PATH 探测。"
+        }
+      }
+    },
+    "power": {
+      "type": "object",
+      "description": "电源功能域配置（防止空闲睡眠/熄屏）。引擎不消费，携带即忽略。v9 新增。",
+      "additionalProperties": false,
+      "properties": {
+        "preventIdleSleepEnabled": {
+          "type": "boolean",
+          "description": "持有电源断言以阻止空闲睡眠/熄屏。",
+          "default": false
+        },
+        "mode": {
+          "type": "string",
+          "description": "防护模式：displayOnly 仅显示器；displayAndSystem 额外持有系统断言。未知值回退 displayOnly。",
+          "enum": [
+            "displayOnly",
+            "displayAndSystem"
+          ],
+          "default": "displayOnly"
+        }
+      }
+    },
+    "screenMask": {
+      "type": "object",
+      "description": "屏幕遮罩视觉配置（手动遮罩与休息遮罩共用）。引擎不消费，携带即忽略。v10 新增。",
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "type": "string",
+          "description": "背景特效（程序化渲染，分辨率无关）。未知值回退 orb。",
+          "enum": [
+            "orb",
+            "fibers",
+            "letterRain",
+            "caustics",
+            "silk"
+          ],
+          "default": "orb"
+        },
+        "particleText": {
+          "type": "boolean",
+          "description": "遮罩文案以粒子聚成；关闭则显示为普通文字（字号不变）。",
+          "default": true
+        }
+      }
+    }
   }
 }
