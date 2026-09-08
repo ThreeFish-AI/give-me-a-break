@@ -16,6 +16,7 @@ final class StatusItemController: NSObject {
     private let onOpenBackfillWorkLog: () -> Void
     private let onOpenCombinedReport: () -> Void
     private let onOpenBackfillExercise: () -> Void
+    private let onOpenCodingProxyConsole: () -> Void
     /// 「防止睡眠」勾选项（menuWillOpen 时刷新勾选态，须持有引用）。
     private var preventSleepItem: NSMenuItem?
     /// 菜单状态行（只读；title 由心跳按秒刷新）。
@@ -34,7 +35,8 @@ final class StatusItemController: NSObject {
          onOpenWorkLog: @escaping () -> Void,
          onOpenBackfillWorkLog: @escaping () -> Void,
          onOpenCombinedReport: @escaping () -> Void,
-         onOpenBackfillExercise: @escaping () -> Void) {
+         onOpenBackfillExercise: @escaping () -> Void,
+         onOpenCodingProxyConsole: @escaping () -> Void) {
         self.onForceRest = onForceRest
         self.onEnterScreenMask = onEnterScreenMask
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
@@ -45,6 +47,7 @@ final class StatusItemController: NSObject {
         self.onOpenBackfillWorkLog = onOpenBackfillWorkLog
         self.onOpenCombinedReport = onOpenCombinedReport
         self.onOpenBackfillExercise = onOpenBackfillExercise
+        self.onOpenCodingProxyConsole = onOpenCodingProxyConsole
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         statusItem.button?.image = Self.statusBarLeafImage(for: nil)  // 初始灰叶，心跳首秒覆盖
@@ -97,6 +100,13 @@ final class StatusItemController: NSObject {
         combined.target = self
         combined.image = Self.menuSymbol("chart.bar.doc.horizontal", description: "综合报告")
         menu.addItem(combined)
+
+        // Coding Proxy 控制台（专有名词豁免 2~4 字惯例，同「Agentic AI」页签）：
+        // 查看子进程日志流 + 会话级启动/停止/重启。
+        let codingProxy = NSMenuItem(title: "Coding Proxy…", action: #selector(openCodingProxyConsole), keyEquivalent: "")
+        codingProxy.target = self
+        codingProxy.image = Self.menuSymbol("terminal", description: "Coding Proxy")
+        menu.addItem(codingProxy)
 
         menu.addItem(.separator())
 
@@ -218,6 +228,8 @@ final class StatusItemController: NSObject {
     @objc private func openCombinedReport() { onOpenCombinedReport() }
 
     @objc private func openBackfillExercise() { onOpenBackfillExercise() }
+
+    @objc private func openCodingProxyConsole() { onOpenCodingProxyConsole() }
 
     @objc private func toggleLogin(_ sender: NSMenuItem) {
         let newState = sender.state != .on

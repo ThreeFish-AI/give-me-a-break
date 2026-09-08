@@ -503,7 +503,83 @@ struct SettingsView: View {
             } footer: {
                 Text("在选定编辑器中快捷打开 Claude Code 用户配置文件 ~/.claude/settings.json；点「在…中打开」右侧箭头可切换编辑器（自动探测已安装的 VS Code / Cursor 等，另有「系统默认」与「其他应用…」）。文件不存在时在访达中定位 ~/.claude 目录。")
             }
+
+            // Coding Proxy：本地工具子进程托管（v10 groundwork 的首个落地能力）。
+            Section {
+                codingProxySection
+            } header: {
+                Text("Coding Proxy")
+            } footer: {
+                Text("在本机托管启动命令（默认 uv run coding-proxy start，于工作目录执行）。开启后随本应用自动启动并保持运行，退出本应用时一并停止；进程意外退出不自动重启。环境 PATH 已自动补充 Homebrew 与用户 bin 目录。全部改动随「应用」提交：运行中修改目录或命令将自动重启进程。运行日志与启动/停止控制见菜单栏「Coding Proxy…」。")
+            }
         }
+    }
+
+    // MARK: - Coding Proxy（子进程托管 · 随「应用」提交，非即时）
+
+    /// 开关与目录/命令同为 draft 字段：避免「开关即时、目录还是旧草稿」组合下的静默启动失败
+    /// （与「防止睡眠」的即时通道语义不同，二者不共用范式）；运行期手动启停由控制台窗口承担。
+    private var codingProxySection: some View {
+        Group {
+            Toggle("随应用自动启动", isOn: $draft.agent.codingProxy.autoStartEnabled)
+                .accessibilityHint("开启后随本应用启动 Coding Proxy 子进程并保持运行，退出本应用时一并停止")
+            codingProxyWorkingDirectoryRow
+            codingProxyLaunchCommandRow
+        }
+    }
+
+    /// 工作目录行：TextField + 目录校验警示 + 浏览（NSOpenPanel 选目录）。空值不警示（未配置不算错）。
+    private var codingProxyWorkingDirectoryRow: some View {
+        let warning = CodingProxyProcessController.liveWorkingDirectoryWarning(draft.agent.codingProxy.workingDirectory)
+        return HStack(spacing: 8) {
+            TextField("工作目录", text: $draft.agent.codingProxy.workingDirectory,
+                      prompt: Text(verbatim: "/Users/cm.huang/Documents/projects/aurelius/attention"))
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Coding Proxy 工作目录")
+            if let warning {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help(warning)
+                    .accessibilityLabel("工作目录无效：\(warning)")
+            }
+            Button { pickCodingProxyWorkingDirectory() } label: {
+                Image(systemName: "folder")
+            }
+            .help("浏览选择 Coding Proxy 工作目录")
+            .accessibilityLabel("浏览选择工作目录")
+        }
+    }
+
+    /// 启动命令行：TextField + 解析/可执行校验警示（非阻断，不接「应用」禁用）。
+    private var codingProxyLaunchCommandRow: some View {
+        let warning = CodingProxyProcessController.liveLaunchCommandWarning(draft.agent.codingProxy.launchCommand)
+        return HStack(spacing: 8) {
+            TextField("启动命令", text: $draft.agent.codingProxy.launchCommand,
+                      prompt: Text(verbatim: "uv run coding-proxy start"))
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Coding Proxy 启动命令")
+            if let warning {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help(warning)
+                    .accessibilityLabel("启动命令无效：\(warning)")
+            }
+        }
+    }
+
+    /// NSOpenPanel 选 Coding Proxy 工作目录（只允许选文件夹）。
+    private func pickCodingProxyWorkingDirectory() {
+        let panel = NSOpenPanel()
+        panel.title = "选择 Coding Proxy 工作目录"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.showsHiddenFiles = true
+        panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        draft.agent.codingProxy.workingDirectory = url.path
     }
 
     /// 可执行路径行：TextField（可键入）+ 非阻塞无效提示 + 浏览按钮 + 复位为系统探测。
