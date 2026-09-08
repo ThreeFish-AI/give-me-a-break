@@ -197,6 +197,42 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ⚠️ **CLT SDK 注记（[issue #2](../.agents/issue.md) 同类）**：本 SDK 的 HIToolbox 头文件已不含 `RegisterEventHotKey` 声明，仅 `HIToolbox.tbd` 导出符号；Swift `import Carbon.HIToolbox` 仍可编译链接。已在独立无授权进程中探针验证 `InstallEventHandler`/`RegisterEventHotKey` 返回 `noErr`（零权限可用）。Carbon 文档已被 Apple 归档：[Documentation Archive](https://developer.apple.com/library/archive/navigation/index.html?filter=carbon)。
 
+### 8.5 遮罩特效引擎（v0.1.10 · 高清动效屏保）
+
+遮罩不再是静态深色渐变，而是 5 组**程序化高清动效**，手动遮罩与休息遮罩共用同一背景（`MaskEffectBackground` 为单一事实源，两处视觉恒一致）。
+
+**特效阵容**（源流为 [reactbits.dev](https://reactbits.dev) 的 MIT 组件，移植时按「清爽舒雅 · 波光流转」重构）：
+
+| 配置值 | 名称 | 形态 | 源流 |
+|---|---|---|---|
+| `orb` | 涟漪光球（默认） | 半透明光球呼吸，球面流纹如水面波光流转 | Orb（球面流纹重构） |
+| `fibers` | 冷雾纤丝 | 雾蓝纤丝低频摆动，层层脊线漂出银白微光 | GhostFibers |
+| `letterRain` | 字雨微光 | 字符点阵极淡闪烁，亮带自上而下巡回 | LetterGlitch（着色器化） |
+| `caustics` | 水波光斑 | 池底焦散网纹，光斑明暗流转 | 原创（迭代折叠焦散） |
+| `silk` | 丝绸流光 | 缎面褶皱流淌高光，泛薄荷与冰紫 | 原创（fbm 二次域扭曲） |
+
+**渲染架构**（`Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/`）：
+
+- **MTKView 而非 SwiftUI `Shader`**：`isPaused` 提供真暂停（「减弱动态效果」下保留末帧静帧，零开销）；`preferredFramesPerSecond` 可按特效降帧；`drawableSize` 可显式钳制。每帧主线程成本仅「写 4 个 uniform + 1 次 draw」，双击 Esc 退出延迟零回归。
+- **着色器运行时编译**：CLT 不含 `xcrun metal`（需完整 Xcode），且 `swift build` 不编译 `.metal`、Makefile 装配的 `.app` 不含 SPM 资源 bundle。故以 Swift 字符串常量存源码，`device.makeLibrary(source:)` 首次遮罩升起时编译（实测 Apple M4 约 95ms，被 0.4s 淡入完全掩盖），与「零打包资产」哲学一致（同 `AmbientSoundPlayer` 合成粉噪音）。
+- **分辨率无关**：全部为全屏三角形 + 片元着色器逐像素合成，噪声亦程序生成（零纹理）。构图以短边归一化 → 4K/8K 构图一致。
+- **清晰度三要素**：① 取满 `backingScaleFactor`（此前钳到 2 是主要损失点）；② SSAA 超采样（1.4–1.5×，字形类特效刻意为 1——直绘更锐）；③ `detail()` 高频细节层为高光/脊线补颗粒纹理，成本远低于给所有 fbm 加阶数。
+- **性能护栏**：后备缓冲总像素上限 1000 万，超出等比降采样（宁降分辨率不掉帧）；字雨微光限 30fps。
+- **降级链**：`MTLCreateSystemDefaultDevice()` 为 nil 或编译失败 → NSLog + 回退深色渐变，**绝不出现黑屏/空遮罩**（遮罩是强制性 UI，渲染失败不能削弱其遮蔽作用）。
+- **多屏相位**：进程级单一时间纪元（`CACurrentMediaTime()` 静态基准），各屏独立 MTKView 同相位；屏幕热插拔重建视图后时间轴连续不跳变。
+
+**粒子文案层**（`ParticleTextView`）：文案经 CoreText 栅格化后按网格采样，每个不透明像素成一枚光点，自目标位就近散开后聚拢。运动为「时间的纯函数」（与项目既有 `TimelineView` 动效约定一致：无状态、确定性、任意时刻可冻结）。
+
+小字号粒子化有三条硬约束（浏览器原型 + 真机实测所得，偏离任一条字形即不可辨）：
+
+1. 采样步长须锚定**屏幕像素**而非字号——按字号缩放会使每字只剩十余个点；
+2. 光点半径须**略小于**采样步长——大于则糊成实心字，远小于则笔画断开；
+3. 散布与漂移幅度须以**字号**为基准且远小于笔画宽——按 DPR 缩放会把字抖散。
+
+⚠️ **坐标系注记**：以 `premultipliedLast` 建的 `CGBitmapContext` 下，`CTLineDraw` 的输出在缓冲中**已自上而下正立**（行号 0 即画面顶部），与 SwiftUI `Canvas` 的 Y 向下同向。故既不做 CTM 翻转，采样时也不翻转行号——任一处多翻一次都会使文案上下镜像（真机曾两次踩中，最终以离线逐行打印位图 alpha 定案）。
+
+**验证取证**：`CGShieldingWindowLevel` 的窗口无法被 `screencapture` 捕获（见 [issue.md](../.agents/issue.md)），故 `GIVEMEABREAK_DEBUG=1` 时遮罩面板降级至 `.floating` 以便截图取证（仅调试用，生产路径不变）。
+
 ## References
 
 <a id="ref1"></a>[1] Apple Inc., "NSWindow.Level.screenSaver — Window Levels," *AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct/screensaver
