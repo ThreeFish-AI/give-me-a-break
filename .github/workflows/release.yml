@@ -123,7 +123,9 @@ jobs:
           security add-trusted-cert -r trustRoot -p codeSign -k "$KC" "$CERT_PEM"
           echo "==> 可用签名 identity（排障）："
           security find-identity -v -p codesigning "$KC"
-          codesign --force --deep --options runtime --timestamp \
+          # 无 --timestamp：secure timestamp 仅公证（Developer ID）需要；自签证书下该请求
+          # 向 timestamp.apple.com 发起，runner 网络上实测挂起 45min 无响应致 job 超时。
+          codesign --force --deep --options runtime \
             --entitlements Resources/GiveMeABreakRelease.entitlements \
             --keychain "$KC" -s "$SELFSIGN_IDENTITY" GiveMeABreak.app
           rm -f "$CERT_FILE" "$CERT_PEM"
