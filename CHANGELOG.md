@@ -2,9 +2,16 @@
 
 本文件记录 Give me a break 的版本变更事件。
 
-## Unreleased
+## v0.1.11 — 2026-09-08（patch · Release 产物稳定签名落地 + 发布门禁 + Coding Proxy 窗口尺寸修复）
 
-Coding Proxy 控制台窗口尺寸修复：打开不再缩回最小值，尺寸/位置真正跨打开、跨启动记忆。引擎零改动，仅 `CodingProxy/` 一文件。
+根因修复「从 Release 安装新版本后辅助功能等 TCC 授权反复弹窗」：v0.1.8 的稳定签名只落地了本机半边，CI secrets 漏配致 `release.yml` 自签重签步被静默跳过，**全部历史 Release 产物（至 v0.1.10）实为 ad-hoc 签名**——ad-hoc 的 Designated Requirement 绑定 cdhash（每次构建必变），TCC 视为新应用，每次升级必重新授权。本版本起 Release 产物由 10 年期自签名证书统一重签（DR 绑定证书叶哈希，跨版本稳定），并新增发布门禁杜绝 ad-hoc 产物再次流出。应用代码零改动，129 单测全绿。
+
+### Bug 修复
+
+- **Release 产物启用稳定自签名重签（TCC 授权一次、跨版本持久）**。补配 CI secrets（`MACOS_SELFSIGN_P12` / `MACOS_SELFSIGN_P12_PWD` / `KEYCHAIN_PASSWORD`）与 variable `SELFSIGN_IDENTITY`；期间旧证书私钥经钥匙串导出被系统拒绝（不可导出标记），因存量安装均为 ad-hoc（换证 TCC 代价恰为零）重建同名证书（SHA-1 `616A1FEC…`）并复刻本机专用钥匙串环境，本地干跑 CI 导入链全绿；v0.1.10 Release 资产已以新证书重签替换。**从 v0.1.10 及更早 ad-hoc 版本升级需最后一次重新授权**，此后跨版本不再弹。
+- **`release.yml` 新增发布门禁**：产物实签为 ad-hoc 即 fail（macos job 失败 → release job 永不执行），根治 secrets 缺失时的静默降级；逃生门 repo variable `ALLOW_ADHOC_RELEASE=true`（默认拒绝、settings 可审计）。
+- **一键安装 URL 404 修复**：Release Note 与 README 的 curl 命令引用 `master/install.sh`（master 停在 v0.1.1 时代，实测 404），分别改为 tag 引用（`v%s/install.sh`，随版本永存）与开发主干引用（`feature/1.x.x/install.sh`）。
+- **Coding Proxy 控制台窗口尺寸修复**（PR #66）：打开不再缩回最小值，尺寸/位置真正跨打开、跨启动记忆。引擎零改动，仅 `CodingProxy/` 一文件。
 
 ### Bug 修复
 
