@@ -187,6 +187,19 @@ jobs:
           fi
           echo "==> 签名状态：$(cat signing.txt)"
 
+      # ⑦b 发布门禁：ad-hoc 产物禁止流出。secrets 缺失曾致 ③b 静默跳过、v0.1.10 以 ad-hoc 发布，
+      # 下载用户每次升级 TCC 授权失效（v0.1.8 修复只覆盖本机 make app 路径，CI 路径漏配）。
+      # 按产物实签判定（对 Developer ID 误配同样生效）；逃生门 variable ALLOW_ADHOC_RELEASE=true（默认拒绝）。
+      - name: Gate — block ad-hoc release artifacts
+        env:
+          ALLOW_ADHOC_RELEASE: ${{ vars.ALLOW_ADHOC_RELEASE }}
+        run: |
+          set -euo pipefail
+          if [ "$(cat signing.txt)" = "adhoc" ] && [ "${ALLOW_ADHOC_RELEASE}" != "true" ]; then
+            echo "::error::Release 产物为 ad-hoc 签名（secrets 缺失或证书导入失败）——TCC 授权将随每次升级失效，已阻断发布。请配置 secrets MACOS_SELFSIGN_P12 / MACOS_SELFSIGN_P12_PWD / KEYCHAIN_PASSWORD 与 variable SELFSIGN_IDENTITY（见 scripts/create-signing-cert.sh 尾部指引）；确需 ad-hoc 内测发布时临时设置 variable ALLOW_ADHOC_RELEASE=true。"
+            exit 1
+          fi
+
       - name: Upload macOS zip artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -310,7 +323,7 @@ jobs:
             if [ "${NOTARIZED}" = "true" ]; then
               printf '> ✅ 已通过 Apple 公证（Notarized）+ Developer ID 签名，Gatekeeper 可直接放行，双击即开。\n\n'
             elif [ "${SIGNING}" = "selfsign" ]; then
-              printf '> 🔏 稳定自签名（未公证）。**TCC 权限（辅助功能/输入监控/日历）授权一次、升级后不再重复**。推荐一键安装（自动去隔离 + 装入 /Applications）：\n>\n> ```bash\n> curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/master/install.sh -o install.sh && bash install.sh v%s\n> ```\n>\n> 手动安装则解压拖入 `/Applications` 后执行 `xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app`（macOS 15.1 Sequoia 起「右键→打开」已失效）。\n\n' "$RELEASE_VERSION"
+              printf '> 🔏 稳定自签名（未公证）。**TCC 权限（辅助功能/输入监控/日历）授权一次、升级后不再重复**。推荐一键安装（自动去隔离 + 装入 /Applications）：\n>\n> ```bash\n> curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/v%s/install.sh -o install.sh && bash install.sh v%s\n> ```\n>\n> 手动安装则解压拖入 `/Applications` 后执行 `xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app`（macOS 15.1 Sequoia 起「右键→打开」已失效）。\n\n' "$RELEASE_VERSION" "$RELEASE_VERSION"
             else
               printf '> ⚠️ 此版本为 ad-hoc 签名（未签名/未公证）。首次打开会被 Gatekeeper 拦截，请执行 `xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app` 放行（macOS 15.1 Sequoia 起「右键→打开」已失效），仅供内测。\n\n'
             fi
