@@ -129,7 +129,7 @@
     },
     "agent": {
       "type": "object",
-      "description": "Agentic AI 功能域配置。引擎不消费，携带即忽略。v8 新增。",
+      "description": "Agentic AI 功能域配置。引擎不消费，携带即忽略。v8 新增（v10 增 codingProxy）。",
       "additionalProperties": false,
       "properties": {
         "claudeExecutablePath": {
@@ -138,6 +138,28 @@
             "null"
           ],
           "description": "Claude Code 可执行文件路径覆盖；为 null/空则走 PATH 探测。"
+        },
+        "codingProxy": {
+          "type": "object",
+          "description": "Coding Proxy 子进程托管配置（随 App 自动启动并保持运行）。v10 新增。",
+          "additionalProperties": false,
+          "properties": {
+            "autoStartEnabled": {
+              "type": "boolean",
+              "description": "随应用自动启动并保持运行。",
+              "default": false
+            },
+            "workingDirectory": {
+              "type": "string",
+              "description": "子进程工作目录（绝对路径或 ~ 前缀）；空串 = 未配置，开启也不会启动。",
+              "default": ""
+            },
+            "launchCommand": {
+              "type": "string",
+              "description": "启动命令（按空白切分，支持引号包夹参数）。",
+              "default": "uv run coding-proxy start"
+            }
+          }
         }
       }
     },

@@ -126,7 +126,24 @@
 - **后续防范**：**页签/导航项文案与承载窗口宽度必须同源测算**（经 `SettingsTabMetrics` 类 SSOT），禁止硬编码窗口宽度；给 `NSHostingView` 显式设 `sizingOptions = []` 以切断 SwiftUI 内容尺寸对窗口的隐式反压。注意 macOS 26 工具栏式页签条仅显示文字不显示 SF 图标（系统样式行为，非缺陷）。
 - **同类影响**：所有「顶部 TabView 页签数量会增长」的 macOS 设置窗；`NSHostingController` 作为 contentViewController 且用户可缩放窗口的组合（内容理想尺寸变化会弹回用户手动调节）。
 
-## #12 遮罩降级到 `.floating` 层级导致菜单栏/Dock 盖不住（用调试便利换掉核心作用）
+## #12 Coding Proxy 子进程托管三处缺陷（autosave 被居中覆盖 / 显式路径绕过校验 / 同步重启冻结 UI）
+
+- **表因**：v10「Coding Proxy 托管」代码评审发现三处缺陷 + 一处日志滞留竞态：(a) 控制台窗口每次启动都回到主屏居中，用户摆放位置不被记忆（尺寸却记住了）；(b) 启动命令写绝对路径（如 `/opt/homebrew/bin/uv`）且该文件被移动/卸载时，设置页无警示、控制台显示「配置有效」，直到启动才抛英文 NSError；(c) 控制台「重启」按钮及运行中改目录/命令的 apply 会冻结 UI 最长 2s；(d) 进程静默前的末几行日志可能滞留不显示。
+- **根因**：
+  - (a) `setFrameAutosaveName` 设置成功且存在历史 frame 时会**同步恢复**该 frame，其后无条件 `setFrameOrigin` 居中把恢复结果覆盖掉。`setFrameOrigin` 只改 origin，故尺寸「幸存」而位置丢失——这种「部分生效」的表象极易掩盖根因。
+  - (b) `resolveExecutablePath` 对含 `/` 的可执行段原样返回、不做 `isExecutableFile` 判定，使 `.executableNotFound` 分支对显式路径**不可达**，把错误发现时机从「配置校验期（中文提示）」推迟到「进程启动期（英文 NSError）」。
+  - (c) `restart()` 复用了为 App 退出设计的 `stopForQuit()`（同步轮询 ≤2s）。退出期阻塞主线程可接受，会话期则是沙滩球——**同一停止语义在两种生命周期下的可接受代价不同，不可无差别复用**。
+  - (d) 合流刷新的 `logFlushPending` 标志复位与 snapshot 拉取之间存在窄窗口：某行 append 晚于 flush 拉取、又早于标志复位，则既不在本次快照中也无后续刷新计划。满容量时 `count` 恒等于 capacity，无法充当「是否有新行」的判据。
+- **处理方式**：
+  - (a) 照搬 `SettingsWindowController` 范式：`if !w.setFrameUsingName(name) { 居中 }`——二者互斥而非叠加。
+  - (b) `resolveExecutablePath` 对显式路径就地判定可执行性，不命中返回 nil，令校验器统一以 `.executableNotFound` 中文明示（校验 / 设置页 Tooltip / 启动失败三处文案同源）。
+  - (c) `restart()` 改异步两拍：`stop()` 发 SIGTERM（5s 宽限 SIGKILL）→ 旧进程终态回调 `handleProcessTerminated` 中消费 `pendingRestart` 标志拉新。「旧进程死透再拉新」的次序保证不变，主线程零阻塞；`stop()` 内清零该标志以防「关开关后被重启标志复活」（故 `restart()` 中置位须在 `stop()` 之后）。`stopForQuit()` 退化为退出期专用的唯一阻塞点。
+  - (d) `CodingProxyLogBuffer` 增单调计数 `totalAppended`（不受容量裁剪与 clear 影响）；合流回调在标志复位后比对该计数，有增长则补排一次刷新。
+- **验证**（真机 E2E，假命令流避免与真实实例端口冲突）：注入假 `emitter.sh`（持续输出中文 + stderr、SIGTERM 后延时 1s 退出）实测——控制台正确恢复到 autosave 保存的 frame `-1269 901 680 452`（外接显示器负坐标，旧代码会强制居中）；点「重启」期间 AX 探测耗时 194–289ms（与基线同量级，无 1s 级阻塞），日志证实 SIGTERM→旧进程优雅退出（code 0）→新进程拉起的完整两拍；`burst.sh`（突发 200 行后永久静默）验证末行哨兵完整可见无滞留；菜单退出后无孤儿进程。126 单测全绿（+3）。
+- **后续防范**：**窗口 frame 持久化与显式居中互斥，勿叠加**；**校验器的「不可达分支」是信号**——若某错误枚举对某类输入永远不可能返回，说明校验被短路，错误将推迟到更差的时机以更差的形式暴露；**同步阻塞的辅助方法勿跨生命周期复用**，退出期与会话期的代价容忍度不同；环形缓冲的 `count` 因容量收口不具单调性，判定「是否有新增」须用独立的单调计数。
+- **同类影响**：所有用 `setFrameAutosaveName` + 手动定位的窗口控制器；所有「解析→校验→执行」三段式中校验器依赖解析器返回值的链路；后续若新增其他子进程托管（同一 `Foundation.Process` 范式）。
+
+## #13 遮罩降级到 `.floating` 层级导致菜单栏/Dock 盖不住（用调试便利换掉核心作用）
 
 - **表因**：接入遮罩特效后，手动遮罩不再遮住菜单栏与 Dock；此前正常。用户同时质疑鼠标/键盘输入是否仍被阻断。
 - **根因**：为解决「`CGShieldingWindowLevel` 窗口无法被 `screencapture` 捕获」（同 #6 记录的取证限制）以便自我验证特效画面，我在 `ScreenMaskController.makePanel` 加了 `GIVEMEABREAK_DEBUG` 时降级到 `.floating` 的旁路。`.floating` 仅为 **3**，而屏蔽层级约 **21 亿**——降级后遮罩沉到菜单栏/Dock 之下。根因不是写错常量，而是**为调试便利在生产代码里改了功能语义**：遮罩的核心作用就是「压过一切」，任何削弱层级的旁路都直接摧毁该作用。输入阻断机制（`ignoresMouseEvents = false` + `collectionBehavior` + Esc 本地监听）实际未受影响，但层级下沉后用户无法区分二者，合理地一并质疑。

@@ -22,6 +22,10 @@ final public class AppRoot {
     // 防止空闲睡眠/熄屏（IOKit 电源断言，与引擎 FSM 完全正交）
     private var idleSleepGuard: IdleSleepGuard?
 
+    // Coding Proxy 子进程托管（Foundation.Process，与引擎 FSM 完全正交）
+    private var codingProxyController: CodingProxyProcessController?
+    private var codingProxyConsoleController: CodingProxyConsoleWindowController?
+
     // 主动屏幕遮罩（遮罩期间挂起心跳冻结引擎，不触碰调度决策状态）+ 系统锁屏快捷键接管 + 全局快捷键
     private var screenMaskController: ScreenMaskController?
     private var lockShortcutMonitor: LockShortcutMonitor?
@@ -165,6 +169,12 @@ final public class AppRoot {
         powerGuard.apply(config.power)
         idleSleepGuard = powerGuard
 
+        // Coding Proxy 子进程托管：启动即按持久化配置恢复（默认关则零行为；与引擎 FSM 完全正交）
+        let codingProxy = CodingProxyProcessController()
+        codingProxy.apply(config.agent.codingProxy)
+        codingProxyController = codingProxy
+        codingProxyConsoleController = CodingProxyConsoleWindowController(controller: codingProxy)
+
         statusItem = StatusItemController(
             onForceRest: { [weak self] in self?.forceRestNow() },
             onEnterScreenMask: { [weak self] in self?.enterScreenMask() },
@@ -178,7 +188,8 @@ final public class AppRoot {
             onOpenWorkLog: { [weak self] in self?.openWorkLog() },
             onOpenBackfillWorkLog: { [weak self] in self?.openBackfillWorkLog() },
             onOpenCombinedReport: { [weak self] in self?.openCombinedReport() },
-            onOpenBackfillExercise: { [weak self] in self?.openBackfillExercise() }
+            onOpenBackfillExercise: { [weak self] in self?.openBackfillExercise() },
+            onOpenCodingProxyConsole: { [weak self] in self?.openCodingProxyConsole() }
         )
 
         let heartbeat = HeartbeatTimer(queue: .main)  // 主队列：副作用（overlay/music）均 UI 安全
@@ -186,7 +197,7 @@ final public class AppRoot {
             guard let self else { return }
             self.engine?.tick()
             if let phase = self.engine?.state.phase {
-                self.statusItem?.setStatus(text: self.statusText(for: phase, engine: self.engine))
+                self.statusItem?.setPhase(phase, statusText: self.statusText(for: phase, engine: self.engine))
             }
         }
         self.heartbeat = heartbeat
@@ -206,6 +217,8 @@ final public class AppRoot {
                 }
                 self.engine?.updateConfig(applied)
                 self.idleSleepGuard?.apply(applied.power)   // 防护范围（mode）随「应用」生效
+                // Coding Proxy：随「应用」提交（含开关/目录/命令；运行中改目录或命令自动重启）
+                self.codingProxyController?.apply(applied.agent.codingProxy)
                 NSLog("[GiveMeABreak] 配置已应用：\(applied.workWindows.count) 个工作窗口 / 工作 \(Int(applied.workIntervalSeconds/60))min / 休息 \(Int(applied.restDurationSeconds/60))min / 白噪音\(applied.ambientSoundEnabled ? "开" : "关") / QQ音乐\(applied.controlQQMusic ? "开" : "关") / 防止睡眠\(applied.power.preventIdleSleepEnabled ? "开" : "关")")
             },
             onToggleLogin: { LoginService.setEnabled($0) },
@@ -227,6 +240,10 @@ final public class AppRoot {
         if ProcessInfo.processInfo.environment["GIVEMEABREAK_SHOW_COMBINED"] != nil {
             openCombinedReport()
         }
+        // 调试：启动即打开 Coding Proxy 控制台（便于验证日志流与启停按钮）
+        if ProcessInfo.processInfo.environment["GIVEMEABREAK_SHOW_CODINGPROXY"] != nil {
+            openCodingProxyConsole()
+        }
     }
 
     /// 应用退出前落盘最终状态。
@@ -235,6 +252,7 @@ final public class AppRoot {
         heartbeat?.stop()
         lockShortcutMonitor?.stop()
         idleSleepGuard?.release()
+        codingProxyController?.stopForQuit()   // 同步有界停止子进程（SIGTERM → ≤2s → SIGKILL），不留孤儿
         for observer in sleepObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
@@ -291,6 +309,11 @@ final public class AppRoot {
         let lastEnd = workLogStore?.loadEntries().last?.endedAt
         let defaultStart = lastEnd ?? Date().addingTimeInterval(-50 * 60)
         workLogBackfillController?.show(defaultStart: defaultStart)
+    }
+
+    /// 打开「Coding Proxy 控制台」窗口（菜单入口）：日志流查看 + 会话级启动/停止/重启。
+    func openCodingProxyConsole() {
+        codingProxyConsoleController?.show()
     }
 
     // MARK: - 运动记录
@@ -463,22 +486,22 @@ final public class AppRoot {
         lastSaveAt = now
     }
 
-    // MARK: - 菜单栏倒计时文案
+    // MARK: - 菜单栏状态文案（Tooltip / 菜单状态行共用）
 
     private func statusText(for phase: EnginePhase, engine: LiveGiveMeABreakEngine?) -> String {
-        guard let engine else { return "🍅" }
+        guard let engine else { return "引擎未就绪" }
         switch phase {
         case .working:
             let remain = max(0, engine.config.workIntervalSeconds - engine.state.workAccumulatedSeconds)
-            return "Work \(Int(ceil(remain / 60)))′"
+            return "工作中 · 距下次休息 \(Int(ceil(remain / 60))) 分钟"
         case .resting:
-            guard let start = engine.state.restStartedAt else { return "Break" }
+            guard let start = engine.state.restStartedAt else { return "休息中" }
             let deadline = start.addingTimeInterval(engine.config.restDurationSeconds)
             let remain = max(0, deadline.timeIntervalSince(Date()))
-            return "Break \(Int(ceil(remain / 60)))′"
-        case .inMeeting: return "Meeting"
-        case .idle: return "Paused"
-        case .offDuty: return "Off"
+            return "休息中 · 剩余 \(Int(ceil(remain / 60))) 分钟"
+        case .inMeeting: return "会议中 · 暂停计时"
+        case .idle: return "已暂停"
+        case .offDuty: return "非工作时段"
         }
     }
 

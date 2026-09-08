@@ -1,7 +1,8 @@
 import AppKit
+import GiveMeABreakEngine
 
 /// 菜单栏状态项控制器（AppKit：NSStatusItem 无 SwiftUI 对等物）。
-/// 状态文案 + 倒计时 + 下拉菜单（立即休息 / 屏幕遮罩 / 防止睡眠 / 开机自启 / 退出）。
+/// 叶子品牌图标（颜色承载状态语义）+ 悬停 Tooltip + 下拉菜单（立即休息 / 屏幕遮罩 / 防止睡眠 / 开机自启 / 退出）。
 /// 继承 NSObject 以承载 NSMenuDelegate（menuWillOpen 自愈刷新勾选态）。
 final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
@@ -15,8 +16,14 @@ final class StatusItemController: NSObject {
     private let onOpenBackfillWorkLog: () -> Void
     private let onOpenCombinedReport: () -> Void
     private let onOpenBackfillExercise: () -> Void
+    private let onOpenCodingProxyConsole: () -> Void
     /// 「防止睡眠」勾选项（menuWillOpen 时刷新勾选态，须持有引用）。
     private var preventSleepItem: NSMenuItem?
+    /// 菜单状态行（只读；title 由心跳按秒刷新）。
+    private var statusLineItem: NSMenuItem?
+    /// 当前已渲染的 phase / 状态文案（缓存去重，心跳每秒调用仅变化时写 UI）。
+    private var currentPhase: EnginePhase?
+    private var currentStatusText: String?
 
     init(onForceRest: @escaping () -> Void,
          onEnterScreenMask: @escaping () -> Void,
@@ -28,7 +35,8 @@ final class StatusItemController: NSObject {
          onOpenWorkLog: @escaping () -> Void,
          onOpenBackfillWorkLog: @escaping () -> Void,
          onOpenCombinedReport: @escaping () -> Void,
-         onOpenBackfillExercise: @escaping () -> Void) {
+         onOpenBackfillExercise: @escaping () -> Void,
+         onOpenCodingProxyConsole: @escaping () -> Void) {
         self.onForceRest = onForceRest
         self.onEnterScreenMask = onEnterScreenMask
         self.onSetLaunchAtLogin = onSetLaunchAtLogin
@@ -39,8 +47,10 @@ final class StatusItemController: NSObject {
         self.onOpenBackfillWorkLog = onOpenBackfillWorkLog
         self.onOpenCombinedReport = onOpenCombinedReport
         self.onOpenBackfillExercise = onOpenBackfillExercise
+        self.onOpenCodingProxyConsole = onOpenCodingProxyConsole
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
+        statusItem.button?.image = Self.statusBarLeafImage(for: nil)  // 初始灰叶，心跳首秒覆盖
         configureMenu(loginEnabled: loginEnabled)
     }
 
@@ -52,6 +62,12 @@ final class StatusItemController: NSObject {
         header.image = Self.leafHeaderImage()
         header.isEnabled = false
         menu.addItem(header)
+
+        // 状态行：当前状态与倒计时（只读、禁用态呈标题观感；title 由心跳按秒刷新）。
+        let statusLine = NSMenuItem(title: "启动中…", action: nil, keyEquivalent: "")
+        statusLine.isEnabled = false
+        menu.addItem(statusLine)
+        statusLineItem = statusLine
 
         // 分组（文案统一 2~4 字；「…」尾缀遵循 macOS「打开窗口」约定，不计入字数）：
         //  即时动作 ┃ 查看（报告）┃ 录入（补录）┃ 偏好 ┃ 退出
@@ -84,6 +100,13 @@ final class StatusItemController: NSObject {
         combined.target = self
         combined.image = Self.menuSymbol("chart.bar.doc.horizontal", description: "综合报告")
         menu.addItem(combined)
+
+        // Coding Proxy 控制台（专有名词豁免 2~4 字惯例，同「Agentic AI」页签）：
+        // 查看子进程日志流 + 会话级启动/停止/重启。
+        let codingProxy = NSMenuItem(title: "Coding Proxy…", action: #selector(openCodingProxyConsole), keyEquivalent: "")
+        codingProxy.target = self
+        codingProxy.image = Self.menuSymbol("terminal", description: "Coding Proxy")
+        menu.addItem(codingProxy)
 
         menu.addItem(.separator())
 
@@ -154,11 +177,42 @@ final class StatusItemController: NSObject {
         return img
     }
 
-    /// 更新菜单栏倒计时标题（等宽数字防抖动）。
-    func setStatus(text: String) {
+    /// 更新菜单栏叶子图标（颜色=状态语义）+ 悬停 Tooltip + 菜单状态行文案。
+    /// 心跳每秒调用；缓存 phase/文案，仅变化时写 UI，避免无谓刷新。
+    func setPhase(_ phase: EnginePhase?, statusText: String) {
         guard let button = statusItem.button else { return }
-        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
-        button.attributedTitle = NSAttributedString(string: text, attributes: [.font: font])
+        if currentPhase != phase {
+            currentPhase = phase
+            button.image = Self.statusBarLeafImage(for: phase)
+        }
+        if currentStatusText != statusText {
+            currentStatusText = statusText
+            button.toolTip = statusText
+            statusLineItem?.title = statusText
+        }
+    }
+
+    /// 状态栏叶子配色：形状统一承载品牌，颜色承载状态语义（深浅菜单栏均可辨）。
+    private static func leafColor(for phase: EnginePhase?) -> NSColor {
+        switch phase {
+        case .working: return .systemTeal                                  // 专注工作（品牌色）
+        case .resting: return .systemGreen                                 // 休息恢复
+        case .inMeeting: return .systemOrange                              // 会议中（暂停计时）
+        case .idle: return .systemGray                                     // 暂停
+        case .offDuty: return .systemGray.withAlphaComponent(0.45)         // 非工作时段：淡灰
+        case nil: return .systemGray                                       // 引擎未就绪兜底
+        }
+    }
+
+    /// 状态栏叶子（按 phase 染色、非 template 保留品牌色；14pt 适配菜单栏约 18pt 可用高度）。
+    private static func statusBarLeafImage(for phase: EnginePhase?) -> NSImage? {
+        let cfg = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+            .applying(.init(scale: .medium))
+            .applying(.init(hierarchicalColor: leafColor(for: phase)))
+        let img = NSImage(systemSymbolName: "leaf.fill", accessibilityDescription: "Give me a break")?
+            .withSymbolConfiguration(cfg)
+        img?.isTemplate = false
+        return img
     }
 
     @objc private func forceRest() { onForceRest() }
@@ -174,6 +228,8 @@ final class StatusItemController: NSObject {
     @objc private func openCombinedReport() { onOpenCombinedReport() }
 
     @objc private func openBackfillExercise() { onOpenBackfillExercise() }
+
+    @objc private func openCodingProxyConsole() { onOpenCodingProxyConsole() }
 
     @objc private func toggleLogin(_ sender: NSMenuItem) {
         let newState = sender.state != .on

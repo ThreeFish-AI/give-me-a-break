@@ -428,7 +428,7 @@ func runConfigStoreCases() {
         expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑"], "原 exerciseTypes 应保留")
     }
 
-    // MARK: - v10：遮罩特效（ScreenMaskSettings）
+    // MARK: - v10：遮罩特效（ScreenMaskSettings）与 Coding Proxy（AgentSettings.codingProxy）
 
     test("screenMask 默认：无文件 / 未设时为涟漪光球") {
         let store = try! ConfigStore(directory: makeTempDir())
@@ -480,7 +480,9 @@ func runConfigStoreCases() {
         }
     }
 
-    test("schema 迁移：旧 v9 config 缺 screenMask → 升 v10 补默认，旧字段保留") {
+    // v10 同期引入两个新字段（screenMask 与 agent.codingProxy），故合为一例：
+    // 二者同时缺失时都应补默认，且 v9 旧字段全数保留——一次覆盖完整迁移面。
+    test("schema 迁移：旧 v9 config 缺 screenMask / agent.codingProxy → 升 v10 均补默认，旧字段保留") {
         let dir = makeTempDir()
         let store = try! ConfigStore(directory: dir)
         let seed = DayPlanConfig(
@@ -499,12 +501,15 @@ func runConfigStoreCases() {
             restMusicPath: "/tmp/a.mp3",
             agent: AgentSettings(claudeExecutablePath: "/opt/homebrew/bin/claude"),
             power: PowerSettings(preventIdleSleepEnabled: true, mode: .displayAndSystem)
-            // screenMask 不传（v10 新增，模拟旧 v9 配置）
+            // screenMask / codingProxy 均不传（v10 新增，模拟旧 v9 配置）
         )
         try! store.saveConfig(seed)
         let cfgURL = dir.appendingPathComponent("config.json")
         var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
-        json.removeValue(forKey: "screenMask")   // 确保 v9 旧配置无此字段
+        json.removeValue(forKey: "screenMask")     // 确保 v9 旧配置无此字段
+        var agent = json["agent"] as! [String: Any]
+        agent.removeValue(forKey: "codingProxy")   // 确保 v9 旧 agent 无此字段
+        json["agent"] = agent
         json["schemaVersion"] = 9
         let rewritten = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
         try! rewritten.write(to: cfgURL)
@@ -512,10 +517,42 @@ func runConfigStoreCases() {
         let loaded = store.loadConfig()
         expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "v9→v10 版本号应规范化为当前版本")
         expectEqual(loaded.screenMask, ScreenMaskSettings(), "缺失的 screenMask 应补默认（涟漪光球）")
+        expectEqual(loaded.agent.codingProxy, CodingProxySettings(), "缺失的 codingProxy 应补默认（关 + 空目录 + 默认命令）")
         expect(loaded.power.preventIdleSleepEnabled == true, "原 power 应保留")
         expectEqual(loaded.power.mode, IdleSleepGuardMode.displayAndSystem, "原 power.mode 应保留")
-        expectEqual(loaded.agent.claudeExecutablePath, "/opt/homebrew/bin/claude", "原 agent 应保留")
+        expectEqual(loaded.agent.claudeExecutablePath, "/opt/homebrew/bin/claude", "agent 内旧字段应保留")
         expectEqual(loaded.controlQQMusic, false, "原 controlQQMusic=false 应保留")
         expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑"], "原 exerciseTypes 应保留")
+    }
+
+    test("codingProxy round-trip：自定义值完整持久化") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        var config = DayPlanConfig.defaultConfig
+        config.agent.codingProxy = CodingProxySettings(
+            autoStartEnabled: true,
+            workingDirectory: "/Users/cm.huang/Documents/projects/aurelius/attention",
+            launchCommand: "uv run coding-proxy start --verbose")
+        try! store.saveConfig(config)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.agent.codingProxy, config.agent.codingProxy, "codingProxy 三字段应 round-trip 保留")
+    }
+
+    test("codingProxy 部分字段容错：仅 autoStartEnabled 存在时其余补默认") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        var config = DayPlanConfig.defaultConfig
+        try! store.saveConfig(config)
+        let cfgURL = dir.appendingPathComponent("config.json")
+        var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        json["agent"] = ["codingProxy": ["autoStartEnabled": true]]   // 其余键缺失
+        try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+            .write(to: cfgURL)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.agent.codingProxy.autoStartEnabled, true, "显式存在的字段应保留")
+        expectEqual(loaded.agent.codingProxy.workingDirectory, "", "缺失字段应补默认空目录")
+        expectEqual(loaded.agent.codingProxy.launchCommand, "uv run coding-proxy start", "缺失字段应补默认命令")
     }
 }
