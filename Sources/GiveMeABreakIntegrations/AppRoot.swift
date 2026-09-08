@@ -184,7 +184,7 @@ final public class AppRoot {
             guard let self else { return }
             self.engine?.tick()
             if let phase = self.engine?.state.phase {
-                self.statusItem?.setStatus(text: self.statusText(for: phase, engine: self.engine))
+                self.statusItem?.setPhase(phase, statusText: self.statusText(for: phase, engine: self.engine))
             }
         }
         self.heartbeat = heartbeat
@@ -461,22 +461,22 @@ final public class AppRoot {
         lastSaveAt = now
     }
 
-    // MARK: - 菜单栏倒计时文案
+    // MARK: - 菜单栏状态文案（Tooltip / 菜单状态行共用）
 
     private func statusText(for phase: EnginePhase, engine: LiveGiveMeABreakEngine?) -> String {
-        guard let engine else { return "🍅" }
+        guard let engine else { return "引擎未就绪" }
         switch phase {
         case .working:
             let remain = max(0, engine.config.workIntervalSeconds - engine.state.workAccumulatedSeconds)
-            return "Work \(Int(ceil(remain / 60)))′"
+            return "工作中 · 距下次休息 \(Int(ceil(remain / 60))) 分钟"
         case .resting:
-            guard let start = engine.state.restStartedAt else { return "Break" }
+            guard let start = engine.state.restStartedAt else { return "休息中" }
             let deadline = start.addingTimeInterval(engine.config.restDurationSeconds)
             let remain = max(0, deadline.timeIntervalSince(Date()))
-            return "Break \(Int(ceil(remain / 60)))′"
-        case .inMeeting: return "Meeting"
-        case .idle: return "Paused"
-        case .offDuty: return "Off"
+            return "休息中 · 剩余 \(Int(ceil(remain / 60))) 分钟"
+        case .inMeeting: return "会议中 · 暂停计时"
+        case .idle: return "已暂停"
+        case .offDuty: return "非工作时段"
         }
     }
 
