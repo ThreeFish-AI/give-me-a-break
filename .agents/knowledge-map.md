@@ -30,6 +30,7 @@
 | 主动屏幕遮罩（手动，遮罩期间心跳冻结计时）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
 | 全局快捷键（⌃⌥⌘K/R，RegisterEventHotKey，零权限） | `Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift` |
 | 防止空闲睡眠/熄屏（IOKit 电源断言，等同 caffeinate -d/-i） | `Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift` |
+| Coding Proxy 子进程托管（Foundation.Process + 双管道日志流 + 控制台窗口；命令解析/校验/apply 决策纯逻辑在 Engine 层） | `Sources/GiveMeABreakIntegrations/CodingProxy/CodingProxyProcessController.swift` + `CodingProxyConsoleView.swift` + `CodingProxyConsoleWindowController.swift` + `Sources/GiveMeABreakEngine/CodingProxySupport.swift` |
 | 休息音效（粉噪音 + QQ 音乐联动） | `Sources/GiveMeABreakIntegrations/LiveMusicController.swift` + `AmbientSoundPlayer.swift` |
 | 内置粉噪音合成（AVAudioEngine） | `Sources/GiveMeABreakIntegrations/AmbientSoundPlayer.swift` |
 | 设置界面（一般/电源/工作时段/节律/休息音效/工作日志/运动记录/Agentic AI） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |

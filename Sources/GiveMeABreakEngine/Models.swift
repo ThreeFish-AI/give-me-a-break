@@ -47,11 +47,50 @@ public struct WorkWindow: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+// MARK: - Coding Proxy 设置（本地工具子进程托管）
+
+/// 「Coding Proxy」功能域的正交配置子结构（v10 新增，嵌套于 `AgentSettings`，
+/// 保持「Agentic AI 页签 ↔ agent 域」1:1 映射）。
+/// 引擎不消费本结构（同 `power` 现状，携带即忽略）；命令解析/校验/apply 决策等纯逻辑位于
+/// `CodingProxySupport`，进程托管本体位于集成层 `CodingProxyProcessController`。
+/// 生命周期语义：开启 = 随本应用启动并保持运行；退出应用时一并停止（不留孤儿进程）。
+public struct CodingProxySettings: Codable, Equatable, Sendable {
+    /// 总开关（随应用自动启动并保持运行），默认关（升级用户零行为变化）。
+    public var autoStartEnabled: Bool
+    /// 子进程工作目录（绝对路径或 `~` 前缀），空串 = 未配置（开启也不会启动，控制台明示原因）。
+    public var workingDirectory: String
+    /// 启动命令（按空白切分、支持引号包夹参数），默认 `uv run coding-proxy start`。
+    public var launchCommand: String
+
+    public init(autoStartEnabled: Bool = false,
+                workingDirectory: String = "",
+                launchCommand: String = "uv run coding-proxy start") {
+        self.autoStartEnabled = autoStartEnabled
+        self.workingDirectory = workingDirectory
+        self.launchCommand = launchCommand
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 PowerSettings 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case autoStartEnabled, workingDirectory, launchCommand
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = CodingProxySettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        autoStartEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoStartEnabled) ?? d.autoStartEnabled
+        workingDirectory = try c.decodeIfPresent(String.self, forKey: .workingDirectory) ?? d.workingDirectory
+        launchCommand = try c.decodeIfPresent(String.self, forKey: .launchCommand) ?? d.launchCommand
+    }
+}
+
 // MARK: - Agentic AI 设置（Claude Code 相关配置)
 
-/// 「Agentic AI」功能域的正交配置子结构（为后续引入 Agentic AI 特性预留的 groundwork）。
-/// 仅承载纯 Foundation 的 `String?` 字段，零 AppKit 依赖——编辑器探测/打开等 AppKit 逻辑
-/// 位于集成层 `ClaudeSettingsLauncher`。引擎不消费本结构（同 `restMusicPath` 现状，携带即忽略）。
+/// 「Agentic AI」功能域的正交配置子结构（为引入 Agentic AI 特性预留的 groundwork）。
+/// 零 AppKit 依赖——编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`；
+/// Coding Proxy 子进程托管位于集成层 `CodingProxyProcessController`。
+/// 引擎不消费本结构（同 `restMusicPath` 现状，携带即忽略）。
 /// 与外围扁平字段正交解耦：Agentic AI 相关配置集中于此，独立生长、互不污染。
 public struct AgentSettings: Codable, Equatable, Sendable {
     /// Claude Code 可执行文件的自定义绝对路径覆盖。
@@ -61,23 +100,30 @@ public struct AgentSettings: Codable, Equatable, Sendable {
     /// 打开 `~/.claude/settings.json` 所用编辑器的 bundle id（如 `com.microsoft.VSCode`）。
     /// `nil` = 使用系统默认关联应用打开；所选编辑器未安装时集成层回退系统默认。
     public var claudeSettingsEditorBundleId: String?
+    /// Coding Proxy 子进程托管配置（v10 新增）。详见 `CodingProxySettings`。
+    public var codingProxy: CodingProxySettings
 
     public init(claudeExecutablePath: String? = nil,
-                claudeSettingsEditorBundleId: String? = nil) {
+                claudeSettingsEditorBundleId: String? = nil,
+                codingProxy: CodingProxySettings = CodingProxySettings()) {
         self.claudeExecutablePath = claudeExecutablePath
         self.claudeSettingsEditorBundleId = claudeSettingsEditorBundleId
+        self.codingProxy = codingProxy
     }
 
-    // MARK: - Codable（容错解码：缺字段补 nil，与 DayPlanConfig 范式一致，预留字段生长空间）
+    // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
 
     private enum CodingKeys: String, CodingKey {
-        case claudeExecutablePath, claudeSettingsEditorBundleId
+        case claudeExecutablePath, claudeSettingsEditorBundleId, codingProxy
     }
 
     public init(from decoder: Decoder) throws {
+        let d = AgentSettings()
         let c = try decoder.container(keyedBy: CodingKeys.self)
         claudeExecutablePath = try c.decodeIfPresent(String.self, forKey: .claudeExecutablePath)
         claudeSettingsEditorBundleId = try c.decodeIfPresent(String.self, forKey: .claudeSettingsEditorBundleId)
+        // 旧配置（v9 及以前）无此字段 → 补默认（关 + 空目录 + 默认命令）；CodingProxySettings 自身亦容错解码。
+        codingProxy = try c.decodeIfPresent(CodingProxySettings.self, forKey: .codingProxy) ?? d.codingProxy
     }
 }
 
@@ -129,7 +175,7 @@ public struct PowerSettings: Codable, Equatable, Sendable {
 // MARK: - 一日计划配置
 
 public struct DayPlanConfig: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 9
+    public static let currentSchemaVersion = 10
 
     public var schemaVersion: Int
     public var workWindows: [WorkWindow]
@@ -165,8 +211,9 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     /// 设置后休息时循环播放该文件，**取代内置粉噪音**；为 nil/空则回退粉噪音（受 `ambientSoundEnabled` 控制）。
     /// 文件由用户本地提供，**不打包、不分发**；App 非沙盒，故直接以路径引用（文件移动/删除会导致回退）。
     public var restMusicPath: String?
-    /// Agentic AI 功能域配置（Claude Code 可执行路径覆盖 / `~/.claude/settings.json` 打开编辑器）。
-    /// v8 新增；正交子结构，引擎忽略，仅供集成层消费。详见 `AgentSettings`。
+    /// Agentic AI 功能域配置（Claude Code 可执行路径覆盖 / `~/.claude/settings.json` 打开编辑器 /
+    /// Coding Proxy 子进程托管）。v8 新增、v10 内嵌 codingProxy；正交子结构，引擎忽略，
+    /// 仅供集成层消费。详见 `AgentSettings` / `CodingProxySettings`。
     public var agent: AgentSettings
     /// 电源功能域配置（防止空闲睡眠/熄屏）。
     /// v9 新增；正交子结构，引擎忽略，仅供集成层消费（`IdleSleepGuard`）。详见 `PowerSettings`。

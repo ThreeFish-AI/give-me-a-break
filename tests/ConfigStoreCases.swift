@@ -427,4 +427,76 @@ func runConfigStoreCases() {
         expectEqual(loaded.controlQQMusic, false, "原 controlQQMusic=false 应保留")
         expectEqual(loaded.exerciseTypes, ["深蹲", "俯卧撑"], "原 exerciseTypes 应保留")
     }
+
+    // MARK: - v10：Coding Proxy（AgentSettings 内嵌 codingProxy）
+
+    test("schema 迁移：旧 v9 config 缺 agent.codingProxy → 升 v10 补默认（关 + 空目录 + 默认命令），旧字段保留") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        let seed = DayPlanConfig(
+            schemaVersion: 9,
+            workWindows: [WorkWindow(start: TimeOfDay(hours: 9), end: TimeOfDay(hours: 12))],
+            workIntervalSeconds: 3000,
+            restDurationSeconds: 600,
+            afkThresholdSeconds: 180,
+            ambientSoundEnabled: true,
+            controlQQMusic: false,
+            workLogEnabled: true,
+            workLogPromptTimeoutSeconds: 240,
+            exerciseLogEnabled: true,
+            exercisePromptTimeoutSeconds: 120,
+            exerciseTypes: ["深蹲", "俯卧撑"],
+            restMusicPath: "/tmp/a.mp3",
+            agent: AgentSettings(claudeExecutablePath: "/opt/homebrew/bin/claude"),
+            power: PowerSettings(preventIdleSleepEnabled: true, mode: .displayAndSystem)
+            // codingProxy 不传（v10 新增，模拟旧 v9 配置）
+        )
+        try! store.saveConfig(seed)
+        let cfgURL = dir.appendingPathComponent("config.json")
+        var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        var agent = json["agent"] as! [String: Any]
+        agent.removeValue(forKey: "codingProxy")   // 确保 v9 旧 agent 无此字段
+        json["agent"] = agent
+        json["schemaVersion"] = 9
+        let rewritten = try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+        try! rewritten.write(to: cfgURL)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.schemaVersion, DayPlanConfig.currentSchemaVersion, "v9→v10 版本号应规范化为当前版本")
+        expectEqual(loaded.agent.codingProxy, CodingProxySettings(), "缺失的 codingProxy 应补默认（关 + 空目录 + 默认命令）")
+        expectEqual(loaded.agent.claudeExecutablePath, "/opt/homebrew/bin/claude", "agent 内旧字段应保留")
+        expectEqual(loaded.power.mode, IdleSleepGuardMode.displayAndSystem, "原 power 应保留")
+        expectEqual(loaded.controlQQMusic, false, "原 controlQQMusic=false 应保留")
+    }
+
+    test("codingProxy round-trip：自定义值完整持久化") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        var config = DayPlanConfig.defaultConfig
+        config.agent.codingProxy = CodingProxySettings(
+            autoStartEnabled: true,
+            workingDirectory: "/Users/cm.huang/Documents/projects/aurelius/attention",
+            launchCommand: "uv run coding-proxy start --verbose")
+        try! store.saveConfig(config)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.agent.codingProxy, config.agent.codingProxy, "codingProxy 三字段应 round-trip 保留")
+    }
+
+    test("codingProxy 部分字段容错：仅 autoStartEnabled 存在时其余补默认") {
+        let dir = makeTempDir()
+        let store = try! ConfigStore(directory: dir)
+        var config = DayPlanConfig.defaultConfig
+        try! store.saveConfig(config)
+        let cfgURL = dir.appendingPathComponent("config.json")
+        var json = try! JSONSerialization.jsonObject(with: Data(contentsOf: cfgURL)) as! [String: Any]
+        json["agent"] = ["codingProxy": ["autoStartEnabled": true]]   // 其余键缺失
+        try! JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+            .write(to: cfgURL)
+
+        let loaded = store.loadConfig()
+        expectEqual(loaded.agent.codingProxy.autoStartEnabled, true, "显式存在的字段应保留")
+        expectEqual(loaded.agent.codingProxy.workingDirectory, "", "缺失字段应补默认空目录")
+        expectEqual(loaded.agent.codingProxy.launchCommand, "uv run coding-proxy start", "缺失字段应补默认命令")
+    }
 }
