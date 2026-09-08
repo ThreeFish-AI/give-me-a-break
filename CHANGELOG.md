@@ -2,19 +2,22 @@
 
 本文件记录 Give me a break 的版本变更事件。
 
-## Unreleased
+## v0.1.10 — 2026-09-08（feat · 遮罩高清动效屏保 + Coding Proxy 托管 + 叶子品牌图标）
 
-新增「Coding Proxy 托管」：把本地命令行工具（如 `uv run coding-proxy start`）交给本应用托管——设置「Agentic AI」页配置工作目录与启动命令，开启后随应用自动启动并保持运行，退出应用时一并停止；菜单「Coding Proxy…」打开控制台查看彩色日志流并会话级启停。配置 schema 升至 v10（容错迁移，旧配置无感），126 单测全绿（+35），引擎 FSM 零改动。
+继 v0.1.9 后的功能版本：遮罩背景由静态深色渐变升级为 5 组 Metal 程序化渲染高清动效屏保（4K/8K 一致清晰、零打包资产）；新增「Coding Proxy 托管」——本地命令行工具（如 `uv run coding-proxy start`）随应用托管运行，设置「Agentic AI」页配置工作目录与启动命令，开启后随应用自动启动并保持运行、退出时一并停止，菜单「Coding Proxy…」打开控制台查看彩色日志流并会话级启停；菜单栏图标统一为叶子品牌图标、颜色承载状态语义。配置 schema 升至 v10（容错迁移，旧配置无感），129 单测全绿（+38），引擎 FSM 零改动。
 
 ### 核心改进
 
+- **遮罩内置 5 组高清动效屏保（Metal 程序化渲染，4K/8K 清晰）**。遮罩背景由静态深色渐变升级为程序化动效：涟漪光球（默认）· 冷雾纤丝 · 字雨微光 · 水波光斑 · 丝绸流光（源流为 reactbits.dev 的 MIT 组件，移植时按「清爽舒雅 · 波光流转」重构，后两组为原创）；手动遮罩与休息遮罩共用同一背景合成（单一事实源，两处视觉恒一致）。渲染架构：`MTKView` 而非 SwiftUI Shader——`isPaused` 真暂停（「减弱动态效果」下保留末帧静帧、零开销）且每帧主线程成本仅「写 4 个 uniform + 1 次 draw」，双击 Esc 退出延迟零回归；着色器运行时编译（实测 Apple M4 约 95ms，被 0.4s 淡入完全掩盖），延续「零打包资产」哲学；全屏三角形 + 片元着色器逐像素合成、构图以短边归一化（分辨率无关），取满 backingScaleFactor + SSAA 超采样保 4K/8K 一致清晰；性能护栏（后备缓冲总像素上限 1000 万，超出等比降采样；字雨微光限 30fps）与降级链（Metal 设备缺失或编译失败 → NSLog + 回退深色渐变，绝不空遮罩）；进程级单一时间纪元，多屏热插拔重建后时间轴连续不跳变。配套**粒子文案层**：CoreText 栅格化后按网格采样，光点自目标位就近散开后聚拢，运动为时间的纯函数（无状态、可冻结，与既有 TimelineView 动效约定一致）。设置「通用」页新增「遮罩特效」分区（特效选择 + 粒子文案开关，随「应用」提交，下次遮罩升起生效）。
 - **新增「Coding Proxy 托管」（全仓首个 `Foundation.Process` 子进程用例）**。托管生命周期语义：开启 = 随本应用启动并保持运行；**退出应用时同步有界停止**（SIGTERM → ≤2s 轮询 → SIGKILL → 回收，不留孤儿进程，为全应用唯一的主线程阻塞点）；运行期的停止与重启均走**异步**路径（SIGTERM → 5s 宽限 SIGKILL），重启在旧进程终态回调中拉新，保「旧进程死透再拉新」次序的同时不冻结 UI；进程意外退出**不自动重启**（防无退避重启风暴），控制台可手动再启动。环境 PATH 自动增强（前置 `~/.local/bin` / `~/bin` / `/opt/homebrew/bin` / `/usr/local/bin`）——App 从 Finder 启动无 shell PATH 也能解析 `uv`；并注入 `PYTHONUNBUFFERED=1` 防 Python 子进程块缓冲导致日志迟滞。
 - **控制台窗口（菜单「Coding Proxy…」）**：彩色等宽日志流（stdout 默认色 / stderr 橙色 / 生命周期蓝灰，时间戳灰色）、运行状态与 PID、会话级「启动 / 停止 / 重启 / 清空日志」、自动滚底开关与「回到底部」。日志为会话级环形缓冲（2000 行 / 单行 4000 字符截断），窗口关闭再开不丢失；stdout/stderr 双管道流式捕获（UTF-8 跨 chunk 安全拼行，汉字被劈开不产生乱码），UI 刷新 ≥250ms 合流（合流窗口边界经单调计数校验，进程静默前的末几行不滞留）。
 - **设置「Agentic AI」页新增 Coding Proxy 分区**：「随应用自动启动」开关 + 工作目录（目录选择器 / 存在性校验警示）+ 启动命令（解析与可执行校验警示），全部随「应用」提交——运行中修改目录或命令**自动重启进程**，仅翻转开关不打扰运行中的进程；配置无效不阻断「应用」、不杀死正在运行的旧进程（仅行内橙叹号 + 控制台状态 + 日志警示）。与「防止睡眠」的即时通道语义刻意不同：开关与目录/命令同为草稿，避免「开关即时生效、目录还是旧草稿」组合下的静默启动失败。
 
+- **菜单栏图标统一为叶子品牌图标，颜色承载状态语义**。状态栏不再以文字（Work/Break/Meeting/Paused/Off）呈现状态，统一渲染 `leaf.fill` 叶子：工作=teal / 休息=绿 / 会议=橙 / 暂停=灰 / 非工作时段=淡灰（引擎未就绪兜底灰叶）；状态信息保留双通道——悬停 Tooltip + 菜单标题下新增只读状态行（如「工作中 · 距下次休息 50 分钟」）；`setStatus(text:)` 收敛为 `setPhase(_:statusText:)`（缓存 phase/文案去重，心跳每秒调用仅变化时写 UI）；状态文案中文化，倒计时计算逻辑不变。
+
 ### 工程
 
-- 配置 schema 9→10：`AgentSettings` 内嵌正交子结构 `codingProxy: CodingProxySettings`（`autoStartEnabled: Bool` 默认 false / `workingDirectory: String` 默认空 / `launchCommand: String` 默认 `uv run coding-proxy start`），容错解码平滑迁移（旧 v9 缺 `codingProxy` 补默认），保持「Agentic AI 页签 ↔ agent 域」1:1 映射。纯逻辑全部下沉 Engine 层新文件 `CodingProxySupport.swift`（命令行解析含引号包夹与 `~` 展开 / PATH 增强与可执行解析 / 配置校验 / apply 决策纯函数 / 线程安全环形日志缓冲 / UTF-8 安全行拼装器），进程托管本体在集成层 `CodingProxy/` 三文件（`CodingProxyProcessController` 仅主线程控制 + epoch 机制作废同步停止后在途的 terminationHandler 回调，规避状态竞态；`CodingProxyConsoleView` + `CodingProxyConsoleWindowController` 仿 WorkLog 报告窗范式，尺寸位置经 `setFrameAutosaveName` 跨启动记忆，有历史 frame 则恢复、无则显式居中——二者互斥不叠加）。apply 决策核心不变式：**配置未变绝不触碰进程**（用户在控制台手动停止的进程不会被无关「应用」复活）。单元测试 91→126（+35：命令解析各例 / PATH 去重与显式路径可执行性判定 / 校验分支 / 决策表 / 缓冲裁剪与单行截断与单调计数 / 汉字跨 chunk 拼合 / v9→v10 迁移与 round-trip），全绿。
+- 配置 schema 9→10：`AgentSettings` 内嵌正交子结构 `codingProxy: CodingProxySettings`（`autoStartEnabled: Bool` 默认 false / `workingDirectory: String` 默认空 / `launchCommand: String` 默认 `uv run coding-proxy start`），容错解码平滑迁移（旧 v9 缺 `codingProxy` 补默认），保持「Agentic AI 页签 ↔ agent 域」1:1 映射；遮罩特效 `ScreenMaskSettings`（`effect: MaskEffect` 五枚举 orb / fibers / letterRain / caustics / silk 默认 orb + `particlesEnabled: Bool` 粒子文案开关默认 true）同入 v10，严格复刻 `PowerSettings` 范式（String-first 容错解码：未知 rawValue 仅回退该字段，不拖垮整份配置），引擎不消费（仅集成层 `Overlay/MaskEffects` 消费），保持调度逻辑与视觉表现正交。`shared/config.schema.json` 顺带修复既有漂移——镜像此前停在 `const: 5`、缺 v6–v9 全部字段（exerciseLog / agent / power 等），本次一并回填同步至 v10，恢复 C# 端契约诚实。纯逻辑全部下沉 Engine 层新文件 `CodingProxySupport.swift`（命令行解析含引号包夹与 `~` 展开 / PATH 增强与可执行解析 / 配置校验 / apply 决策纯函数 / 线程安全环形日志缓冲 / UTF-8 安全行拼装器），进程托管本体在集成层 `CodingProxy/` 三文件（`CodingProxyProcessController` 仅主线程控制 + epoch 机制作废同步停止后在途的 terminationHandler 回调，规避状态竞态；`CodingProxyConsoleView` + `CodingProxyConsoleWindowController` 仿 WorkLog 报告窗范式，尺寸位置经 `setFrameAutosaveName` 跨启动记忆，有历史 frame 则恢复、无则显式居中——二者互斥不叠加）。apply 决策核心不变式：**配置未变绝不触碰进程**（用户在控制台手动停止的进程不会被无关「应用」复活）。单元测试 91→129（+38：CodingProxy 命令解析各例 / PATH 去重与显式路径可执行性判定 / 校验分支 / 决策表 / 缓冲裁剪与单行截断与单调计数 / 汉字跨 chunk 拼合 / 迁移与 round-trip；遮罩特效四例——默认值 / 全枚举 round-trip / 容错回退 / v9→v10 迁移），全绿。
 - 已知边界（v1 不做，YAGNI）：停止契约 = 直接子进程（`uv run` 在 Unix 上 exec 子进程，SIGTERM 直达；若自定义命令自身再派生孙进程则不保证波及，后续可升级 posix_spawn 进程组击杀）；App 被强杀/崩溃可能遗留子进程（`applicationWillTerminate` 非强保证），下次启动若端口冲突会在控制台日志中自愈式暴露；不做端口占用/已在运行探测、日志不落盘（仅会话内缓冲）。
 
 ## v0.1.9 — 2026-09-07（patch · 页签条自绘等间距 + 签名脚本兼容修复）
