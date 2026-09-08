@@ -187,7 +187,7 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ### 8.3.1 遮罩期间键盘白名单拦截（`MaskInputGuard`，v0.1.10）
 
-系统级组合键（⌘Tab / ⌘` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§8.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
+系统级组合键（⌘Tab / ⌘\` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§8.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
 
 **谓词（判错即灾难，单表达式纯函数）**：`(keyCode == 53 || keyCode == 36) && flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty`。三个要点：
 
@@ -202,7 +202,6 @@ tick() 检测 eff.showOverlay（.working → .resting）
 **看门狗（与被守护代码无关的兵底守卫）**：白名单下连 ⌘⌥Esc、⌃⌘Q、Apple 菜单键盘路径均不可用，重启不构成兜底（只剩电源键硬关机，丢未保存工作）。故 `begin()` 启动 30min 独立 `DispatchSourceTimer`（心跳在手动遮罩期间被挂起，不能承载；同 WorkLogPrompt 先例），到点**只读 WindowServer 真相**（`CGWindowListCopyWindowInfo` 查本进程 ≥ 屏蔽层级的屏上窗口，不读控制器状态）：遮罩仍在（含合法长遮罩、跨睡眠）→ 续期；不在（僵尸态：进程活、tap 活、遮罩没了）→ 强制 `end()`。环境变量 `GIVEMEABREAK_DISABLE_INPUT_GUARD`（存在即禁用）为应急短路。
 
 **降级与边界**：tap 创建失败（输入监控/辅助功能未授权）→ 一次日志后 no-op，维持面板级阻断（fail-open）；Secure Input 生效时与 §8.3 同一系统级边界（全机 tap 静默失效）；媒体键/亮度走 NX_SYSDEFINED 不受影响（休息听歌依赖之）；极端时序下遮罩升起瞬间 ⌘Tab 切换器已开、松 ⌘ 提交切换——任意点击落到全屏遮罩即自愈（重新激活、恢复 key 状态）。
-
 
 ### 8.4 快捷键体系（三层，各司其职）
 
