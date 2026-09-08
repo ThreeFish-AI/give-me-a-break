@@ -152,3 +152,11 @@
   - **取证手段不得改动生产语义**。窗口层级、事件吞吐、`collectionBehavior` 这类「功能即语义」的属性禁止设调试旁路；需要取证时用 `CGWindowListCopyWindowInfo` 核验层级/尺寸（#7、#11 已建立此方法论）+ 请用户肉眼确认，而非降级窗口去迁就截图工具。
   - 自我验证的便利性与功能正确性冲突时，一律牺牲前者。
 - **同类影响**：`LiveOverlayController`（休息遮罩）与任何 `CGShieldingWindowLevel` 面板；也适用于「为便于调试而临时放宽权限校验/关闭守卫」的一切同构改动。
+
+## #14 Coding Proxy 控制台窗口每次打开缩到最小尺寸（NSHostingController 尺寸反压 + autosave 记录污染）
+
+- **表因**：控制台每次打开都缩到 680×420（`contentMinSize`），日志区仅两三行高；用户调大后关闭再开又缩回，跨启动也记不住。
+- **根因**：`show()` 在 `if window == nil` 块外无条件执行 `window?.contentViewController = NSHostingController(rootView:)`——赋值 contentViewController 时 AppKit 把窗口内容尺寸收到 VC 的 `preferredContentSize`（NSHostingController 报 SwiftUI fitting size；日志区是弹性 ScrollView，fitting 高度极小）→ 窗口被压到 `contentMinSize` 兜底，且已注册的 autosave 随即把缩水 frame 持久化、覆盖用户尺寸。与 #7(b)/#11「内容驱动尺寸」同族：控制台抄了 Settings 的 autosave 却没抄 NSHostingView 承载。**#12(a) 的验证为何没拦住**：当时只核对了「恢复 frame == 保存值」的一致性，未察觉保存值本身已被本缺陷污染（实机记录 `-1269 901 680 452`，宽 680 即缩水值）——「恢复一致性」验证给污染值放了行。
+- **处理方式**：照 #11/Settings 范式迁移：承载层 `NSHostingView` + `sizingOptions = []`（视图适配窗口，切断尺寸反压）；复用分支只换 `contentView` 不动 frame；恢复帧后 `clampToVisibleScreen` 屏内收口（min 补足 + 离屏压回，#7 语义）；每次 show 新建 hosting 视图保 `@State` 干净初始化（#9）与日志「关即退订、开即重拉快照」订阅语义。**一次性换 autosave 键**（`CodingProxyConsoleWindow` → `-v2`）：缺陷版本每次 show 必写缩水值、存量记录无幸存好值，保留旧键会让升级用户首开仍见 680×420；换键首开回默认 840×540 居中，残留旧键 defaults 条目无害。
+- **后续防范**：`.resizable` 窗口禁用 NSHostingController 作 contentViewController（`preferredContentSize` 跟随机制与「尺寸归用户所有」互斥，承载一律 NSHostingView + `sizingOptions = []`）；autosave 键被缺陷尺寸污染后应换键作废而非保留；**验证「frame 恢复」须同时断言「被恢复值本身合法」（不小于期望尺寸），仅比对「恢复 == 保存」会给污染值放行**。
+- **同类影响**：`WorkLogReportWindowController`（min 600×460）与 `CombinedReportWindowController`（min 620×480）同为 resizable + 每次 show 重赋 contentViewController 范式，存在同款「每次打开压回 contentMinSize」缺陷（无 autosave、每次重新居中，不涉及持久化污染）；固定尺寸弹窗不受影响。待后续按同范式迁移。
