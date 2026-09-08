@@ -118,16 +118,21 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KC"
           security import "$CERT_FILE" -P "$MACOS_SELFSIGN_P12_PWD" -A -t cert -f pkcs12 -k "$KC"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KC"
-          # 自签名证书必须显式信任为 code signing 根，否则 find-identity 视为 invalid
+          # 自签名证书必须显式信任为 code signing 根，否则 find-identity 视为 invalid。
+          # 信任必须经 sudo 写系统域：用户域 add-trusted-cert 在无头 runner 上会等待 GUI 授权
+          # 确认而永久挂起（双 job 诊断实锤）；root 写系统域免 GUI（与本机 create-signing-cert.sh 指引同域）。
           openssl pkcs12 -in "$CERT_FILE" -passin "pass:$MACOS_SELFSIGN_P12_PWD" -nokeys -clcerts -out "$CERT_PEM"
-          security add-trusted-cert -r trustRoot -p codeSign -k "$KC" "$CERT_PEM"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$CERT_PEM"
+          # 临时钥匙串置于用户搜索列表头再签名（GitHub 官方 Developer ID 流写法）：
+          # runner 上对自签证书 codesign --keychain 找不到 identity（T2/T3 双变体诊断定位）。
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
           echo "==> 可用签名 identity（排障）："
           security find-identity -v -p codesigning "$KC"
           # 无 --timestamp：secure timestamp 仅公证（Developer ID）需要；自签证书下该请求
           # 向 timestamp.apple.com 发起，runner 网络上实测挂起 45min 无响应致 job 超时。
           codesign --force --deep --options runtime \
             --entitlements Resources/GiveMeABreakRelease.entitlements \
-            --keychain "$KC" -s "$SELFSIGN_IDENTITY" GiveMeABreak.app
+            -s "$SELFSIGN_IDENTITY" GiveMeABreak.app
           rm -f "$CERT_FILE" "$CERT_PEM"
           security delete-keychain "$KC"
 
