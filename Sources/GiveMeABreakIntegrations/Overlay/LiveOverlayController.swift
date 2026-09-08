@@ -10,6 +10,13 @@ import GiveMeABreakEngine
 /// 对话框会渲染在遮罩之下不可见，导致 Esc 退出永远失效。
 final class LiveOverlayController: OverlayController {
     var onRequestEarlyExit: (() -> Void)?
+
+    /// 键盘白名单拦截器（与手动遮罩共享同一实例；两者互斥，见 ScreenMaskController 同名注释）。
+    private let inputGuard: MaskInputGuard
+
+    init(inputGuard: MaskInputGuard) {
+        self.inputGuard = inputGuard
+    }
     /// 遮罩视觉配置的提供者（由 AppRoot 注入，读取当前 config）。
     /// 经闭包注入而非扩展 `OverlayController` 协议：协议签名须保持无 AppKit/视觉概念，
     /// 且引擎与既有测试桩不应因视觉特性而改动（边界管理）。
@@ -37,11 +44,13 @@ final class LiveOverlayController: OverlayController {
         installEscMonitor()
         observeScreens()
         NSApp.activate(ignoringOtherApps: true)
+        inputGuard.begin()  // 末句启用：与 ScreenMaskController.show 对称
         NSLog("[GiveMeABreak][overlay] show：\(panels.count) 屏，deadline=\(restDeadline)")
     }
 
     func dismiss() {
         guard !panels.isEmpty else { return }  // 幂等
+        inputGuard.end()  // 首句停用：与 ScreenMaskController.dismiss 对称
         removeEscMonitor()
         removeScreenObserver()
         for panel in panels {
@@ -138,6 +147,7 @@ final class LiveOverlayController: OverlayController {
     }
 
     private func rebuildPanels() {
+        // 热插拔重建不经 show/dismiss，遮罩从未离开屏幕——键盘拦截保持激活（不变量）。
         for p in panels { p.orderOut(nil) }
         panels.removeAll()
         for screen in NSScreen.screens {

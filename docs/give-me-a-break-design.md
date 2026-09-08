@@ -185,6 +185,25 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ⚠️ **CLT SDK 注记**：`CGEventFlags` 无 `NSEvent.ModifierFlags.deviceIndependentFlagsMask` 对应物，需显式声明关心的修饰键位掩码后再求交集比较（实现时已验证于本项目 Command Line Tools 工具链下编译通过；`CGEvent.tapCreate`/`CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 均无 [issue #2](../.agents/issue.md) 那类符号缺失问题）。
 
+### 8.3.1 遮罩期间键盘白名单拦截（`MaskInputGuard`，v0.1.10）
+
+系统级组合键（⌘Tab / ⌘` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§8.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
+
+**谓词（判错即灾难，单表达式纯函数）**：`(keyCode == 53 || keyCode == 36) && flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty`。三个要点：
+
+1. **必须 flags-aware**：⌘⌥Esc 就是 keyCode 53 带修饰键——只看 keyCode 会放行，且强退面板的默认按钮恰好吃裸 Return（双重穿透，最坏会误杀无关应用）。
+2. **Shift / CapsLock / Fn 刻意不计入屏蔽集**：Caps Lock 常亮用户每次按键都携带 `.alphaShift`，计入即永久失去唯一键盘出口——比功能穿透更严重的灾难。
+3. Return 属「本软件相关功能」：休息确认框「继续休息」绑 `.defaultAction`；遮罩无对话框时裸 Return 是响应链空操作，放行无害。
+
+**生命周期（零泄漏闭环）**：两个控制器的 show/dismiss 全部入口汇聚于方法体（手动遮罩：AppRoot.enterScreenMask / 内部双击 Esc / forceRestNow；休息遮罩：engine tick ×2 / requestEarlyRestExit），故 `begin()` 挂 show 末句、`end()` 挂 dismiss 首句即对称覆盖；`rebuildPanels` 不经 show/dismiss（遮罩从未离屏，拦截保持）。单实例注入两控制器——互斥由 resting 守卫保证，幂等 bool 足矣；若互斥被破坏则 fail-open（首个 end() 停拦截），符合软强制哲学。崩溃/SIGKILL 由内核回收 tap（进程级资源），非泄漏路径。
+
+**双 tap 共存**：headInsert 使本 tap 排在锁屏劫持 tap 之前——遮罩期间 ⌃⌘Q 被先吞（enterScreenMask 本就幂等 + resting 守卫，无害）；Esc/Return 两 tap 均放行、无重复消费；`end()` 后锁屏劫持恢复正常。
+
+**看门狗（与被守护代码无关的兵底守卫）**：白名单下连 ⌘⌥Esc、⌃⌘Q、Apple 菜单键盘路径均不可用，重启不构成兜底（只剩电源键硬关机，丢未保存工作）。故 `begin()` 启动 30min 独立 `DispatchSourceTimer`（心跳在手动遮罩期间被挂起，不能承载；同 WorkLogPrompt 先例），到点**只读 WindowServer 真相**（`CGWindowListCopyWindowInfo` 查本进程 ≥ 屏蔽层级的屏上窗口，不读控制器状态）：遮罩仍在（含合法长遮罩、跨睡眠）→ 续期；不在（僵尸态：进程活、tap 活、遮罩没了）→ 强制 `end()`。环境变量 `GIVEMEABREAK_DISABLE_INPUT_GUARD`（存在即禁用）为应急短路。
+
+**降级与边界**：tap 创建失败（输入监控/辅助功能未授权）→ 一次日志后 no-op，维持面板级阻断（fail-open）；Secure Input 生效时与 §8.3 同一系统级边界（全机 tap 静默失效）；媒体键/亮度走 NX_SYSDEFINED 不受影响（休息听歌依赖之）；极端时序下遮罩升起瞬间 ⌘Tab 切换器已开、松 ⌘ 提交切换——任意点击落到全屏遮罩即自愈（重新激活、恢复 key 状态）。
+
+
 ### 8.4 快捷键体系（三层，各司其职）
 
 | 层 | 组合键 | 机制 | 权限 | 生效范围 |

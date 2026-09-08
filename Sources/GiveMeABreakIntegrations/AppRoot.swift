@@ -29,6 +29,8 @@ final public class AppRoot {
     // 主动屏幕遮罩（遮罩期间挂起心跳冻结引擎，不触碰调度决策状态）+ 系统锁屏快捷键接管 + 全局快捷键
     private var screenMaskController: ScreenMaskController?
     private var lockShortcutMonitor: LockShortcutMonitor?
+    /// 遮罩期间的键盘白名单拦截器（单实例，注入两处遮罩控制器）。
+    private var inputGuard: MaskInputGuard?
     private var globalHotkeyCenter: GlobalHotkeyCenter?
 
     // 工作日志（休息前记录 + 周期报告 + 补录漏掉的时段）
@@ -55,7 +57,10 @@ final public class AppRoot {
     public func start() {
         AccessibilityChecker.bootstrap()  // 引导 Accessibility 授权（媒体键控制必需）
 
-        screenMaskController = ScreenMaskController()
+        // 键盘白名单拦截器：单实例注入两处遮罩（互斥共享）；遮罩升/落对称 begin/end。
+        let inputGuard = MaskInputGuard()
+        self.inputGuard = inputGuard
+        screenMaskController = ScreenMaskController(inputGuard: inputGuard)
         screenMaskController?.onDismiss = { [weak self] in self?.handleScreenMaskDismissed() }
         let lockShortcut = LockShortcutMonitor()
         lockShortcut.onTriggered = { [weak self] in self?.enterScreenMask() }
@@ -138,7 +143,7 @@ final public class AppRoot {
         let sensors = SystemSensors()
         self.sensors = sensors
 
-        let overlay = LiveOverlayController()
+        let overlay = LiveOverlayController(inputGuard: inputGuard)
         // 休息遮罩与手动遮罩共用视觉配置（单一事实源）；每次升起时读当前 config。
         overlay.settingsProvider = { [weak self] in self?.engine?.config.screenMask ?? ScreenMaskSettings() }
         overlay.onRequestEarlyExit = { [weak self] in self?.engine?.requestEarlyRestExit() }
@@ -250,6 +255,7 @@ final public class AppRoot {
     public func shutdown() {
         if let state = engine?.state { configStore?.saveState(state) }
         heartbeat?.stop()
+        inputGuard?.end()  // 遮罩中退出的路径：随锁屏劫持一并停（进程回收为兜底）
         lockShortcutMonitor?.stop()
         idleSleepGuard?.release()
         codingProxyController?.stopForQuit()   // 同步有界停止子进程（SIGTERM → ≤2s → SIGKILL），不留孤儿
@@ -528,6 +534,7 @@ final public class AppRoot {
             }
             self.engine?.handleWake()
             self.lockShortcutMonitor?.recheckHealth()  // 唤醒时顺带核实锁屏快捷键 tap 是否仍处于启用状态
+            self.inputGuard?.recheckHealth()            // 遮罩跨睡眠存活 → 其键盘拦截 tap 同样核实
             NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(promptPresenting ? "（小结窗开启，心跳保持挂起）" : maskShown ? "（屏幕遮罩中，心跳保持挂起）" : " + 恢复心跳")")
         }
         sleepObservers = [will, did]
