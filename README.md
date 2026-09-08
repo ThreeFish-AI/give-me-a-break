@@ -68,7 +68,7 @@ flowchart LR
 **macOS 一键安装（推荐，安装/升级通用）**：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/master/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/feature/1.x.x/install.sh -o install.sh
 bash install.sh              # 最新正式版；指定版本：bash install.sh v0.1.8
 ```
 
@@ -143,7 +143,7 @@ bash scripts/create-signing-cert.sh   # 创建 10 年期自签名 codeSigning �
 | `KEYCHAIN_PASSWORD`               | Secret   | 任意强密码（CI 临时 keychain 用）                           |
 | `SELFSIGN_IDENTITY`               | Variable | `GiveMeABreak Release`                                      |
 
-配置后 [release.yml](./.github/workflows/release.yml) 自动以同一证书重签 Release 产物（未配置则维持 ad-hoc，行为不变；Developer ID + 公证链路已逐字预留，购置后仅配置即启用）。
+配置后 [release.yml](./.github/workflows/release.yml) 自动以同一证书重签 Release 产物（**已配置**，2026-09-08 起生效；未配置/导入失败时发布被**硬门禁阻断**——ad-hoc 产物禁止流出，见 release.yml「Gate — block ad-hoc release artifacts」步，曾因 secrets 漏配致 v0.1.10 以 ad-hoc 发布、TCC 授权升级失效复发。Developer ID + 公证链路已逐字预留，购置后仅配置即启用）。
 
 > **迁移提示**：从 ad-hoc 版本升级到稳定签名版本时，TCC 权限需**最后一次**重新授权，此后跨版本持久；旧 ad-hoc 的孤儿授权记录可在系统设置手动移除，或经 `tccutil reset` 按权限整体重置。
 
