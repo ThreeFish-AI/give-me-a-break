@@ -42,9 +42,11 @@ final class WorkLogPromptWindowController: NSObject, NSWindowDelegate {
             onSkip: { [weak self] in self?.skip() }
         )
 
+        // 每次重建 NSHostingController：强制 SwiftUI 视为新视图树，`@State`（summary/nextAction/nextExpanded）
+        // 干净初始化。此前在稳定 hosting 上反复赋 `rootView`，SwiftUI 因 root 身份不变而**保留 @State**，
+        // 导致「输入文字 → 跳过」后下次弹窗文字仍在（视觉=复用上次记录，用户报告的 bug 根因）。
         if window == nil {
-            let hosting = NSHostingController(rootView: view)
-            let w = NSWindow(contentViewController: hosting)
+            let w = NSWindow()
             w.title = "记录这段工作"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
@@ -52,9 +54,8 @@ final class WorkLogPromptWindowController: NSObject, NSWindowDelegate {
             w.delegate = self  // 红色关闭按钮经 windowWillClose 等同「跳过」
             w.setContentSize(NSSize(width: 440, height: 300))
             window = w
-        } else {
-            (window?.contentViewController as? NSHostingController<WorkLogPromptView>)?.rootView = view
         }
+        window?.contentViewController = NSHostingController(rootView: view)
 
         centerOnMainScreen()
         NSApp.activate(ignoringOtherApps: true)

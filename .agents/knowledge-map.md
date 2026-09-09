@@ -27,9 +27,17 @@
 | 调度核心（FSM + evaluate 纯函数） | `Sources/GiveMeABreakEngine/Engine.swift` |
 | 引擎接线 + sleep/wake + fast-forward | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift` |
 | 多屏遮罩 + 软强制 Esc | `Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift` |
+| 主动屏幕遮罩（手动，遮罩期间心跳冻结计时）+ 系统锁屏快捷键接管 | `Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift` + `Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift` |
+| 遮罩高清动效（5 组 Metal 片元着色器 + 运行时编译 + 降级链） | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/MaskShaderSources.swift` + `MaskShaderLibrary.swift` + `MaskEffectView.swift` |
+| 遮罩期间键盘白名单拦截（HID tap + 30min 看门狗验尸 + 应急短路） | `Sources/GiveMeABreakIntegrations/Overlay/MaskInputGuard.swift` |
+| 遮罩背景合成（手动/休息遮罩共用单一事实源）+ 特效中文目录 | `Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/MaskEffectBackground.swift` |
+| 全局快捷键（⌃⌥⌘K/R，RegisterEventHotKey，零权限） | `Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift` |
+| 防止空闲睡眠/熄屏（IOKit 电源断言，等同 caffeinate -d/-i） | `Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift` |
+| Coding Proxy 子进程托管（Foundation.Process + 双管道日志流 + 控制台窗口；命令解析/校验/apply 决策纯逻辑在 Engine 层） | `Sources/GiveMeABreakIntegrations/CodingProxy/CodingProxyProcessController.swift` + `CodingProxyConsoleView.swift` + `CodingProxyConsoleWindowController.swift` + `Sources/GiveMeABreakEngine/CodingProxySupport.swift` |
 | 休息音效（粉噪音 + QQ 音乐联动） | `Sources/GiveMeABreakIntegrations/LiveMusicController.swift` + `AmbientSoundPlayer.swift` |
 | 内置粉噪音合成（AVAudioEngine） | `Sources/GiveMeABreakIntegrations/AmbientSoundPlayer.swift` |
-| 设置界面（一般/工作时段/节律/休息音效/工作日志/运动记录） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |
+| 设置界面（一般/电源/工作时段/节律/休息音效/工作日志/运动记录/Agentic AI） | `Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift` |
+| Claude 设置编辑器探测与打开（Agentic AI 页 groundwork） | `Sources/GiveMeABreakIntegrations/Settings/ClaudeSettingsLauncher.swift` |
 | 应用图标生成脚本（leaf.fill + squircle） | `scripts/generate_icon.swift` |
 | 配置 schema 迁移（容错解码） | `Sources/GiveMeABreakEngine/Models.swift` + `ConfigStore.swift` |
 | 工作日志（休息前记录 + 周期报告） | `Sources/GiveMeABreakEngine/WorkLogStore.swift` + `WorkLogReport.swift` + `Sources/GiveMeABreakIntegrations/WorkLog/` |
@@ -40,5 +48,7 @@
 | pre-break 拦截 + completeDeferredRest 不变量 | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift`（见 issue #6） |
 | post-break 回调（仅休息自然结束触发运动录入） | `Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift`（onPostBreak） |
 | Google 日历 EventKit 门控 | `Sources/GiveMeABreakIntegrations/LiveCalendarProvider.swift` |
-| .app 装配 + 图标生成 + 签名 | `Makefile` |
+| 稳定自签名证书创建（一次性；TCC 授权跨版本持久） | `scripts/create-signing-cert.sh` |
+| 一键安装/升级（下载 + 去隔离 + 装配 + 启动） | `install.sh` |
+| .app 装配 + 图标生成 + 签名（身份可插拔，`Makefile.local` 本机覆写） | `Makefile` |
 | CI/CD 工作流（测试 / 文档门禁 / 发布） | `.github/workflows/` |
