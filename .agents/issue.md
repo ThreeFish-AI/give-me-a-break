@@ -49,7 +49,9 @@
 - **表因**：本机未装 Xcode，无法 `xcodebuild` 生成 `.xcodeproj`。
 - **根因**：方案原定 `.xcodeproj`，但环境约束不允许。
 - **处理方式**：改用 Swift Package Manager（`Package.swift` 三目标）+ `Makefile` 手工装配 `.app`（`Contents/MacOS` + `Info.plist` + `PkgInfo` + `codesign` ad-hoc + Hardened Runtime + entitlements + `xattr` 清 quarantine）。比 `.xcodeproj` 更简约，且 `codesign`/`notarytool` 随 CLT 可用。
-- **后续防范**：公开分发时用 Developer ID + `notarytool` + `stapler`（Makefile 已预留注释）；个人用 ad-hoc 即可。
+- **后续防范**（2026-09 更新）：稳定签名已落地——`scripts/create-signing-cert.sh` 一次性创建自签名 codeSigning 证书 + `Makefile` `SIGNING_IDENTITY`/`Makefile.local` + `release.yml` 自签名重签步，所有构建共享同一签名身份（DR 绑定证书叶哈希而非 cdhash），TCC 授权跨版本持久（v0.1.5 曾因 ad-hoc 身份漂移复发，见 #3/#7 关联记录）；从 ad-hoc 迁移需最后一次重新授权。Gatekeeper 对下载产物的**首次**拦截仍需 Developer ID + `notarytool` + `stapler` 公证（release.yml 已预留，购证后仅配置即启用），现阶段以根目录 `install.sh`（下载 + 去隔离 + 装配 + 启动一条命令）压低摩擦。
+- **复发记录**（2026-09-08，v0.1.10）：「Release 下载用户每次升级 TCC 重新弹授权」复发。**表因**：v0.1.8 落地稳定签名时只完成了本机半边，CI 侧 GitHub secrets（`MACOS_SELFSIGN_P12` 等）始终未配置，`release.yml` ③b 自签重签步被 `if: has_selfsign` **静默跳过**，全部 Release 产物（至 v0.1.10）实为 ad-hoc。**根因**：签名三态 marker（signing.txt）只用于 Release Note 文案分支、不阻断发布——「基础设施半配置」在流水线中零信号，静默降级。**处理**：补配 secrets/variable（p12 经 base64 管道直灌）→ 修通 ③b 在无头 runner 上的三处 CI 特有障碍（见下）→ 以 **v0.1.11 为首个稳定签名版本发布**（v0.1.10 及更早资产保持 ad-hoc 不重发，其 Release Note 已如实标注）。期间旧证书私钥在专用钥匙串被标记为不可导出（`security export`/`SecKeyCopyExternalRepresentation` 均拒，`CSSMERR_CSP_INVALID_KEYATTR_MASK`），因所有存量安装均为 ad-hoc（换证 TCC 代价恰为零），重建同名证书（SHA-1 `616A1FEC…`，10 年）并复刻专用钥匙串环境。**防范**：① `release.yml` 新增发布门禁——产物实签为 adhoc 即 fail（逃生门 variable `ALLOW_ADHOC_RELEASE=true`，默认拒绝，settings 可审计）；② 基础设施类修复必须「双端同批闭环」——本机 + CI 配置缺一不可，CI 条件步骤漏配时要有硬失败兜底而非静默跳过；③ 一键安装 URL 引用 `master/install.sh` 实为 404（master 停在 v0.1.1 时代），已改 tag/分支引用（`v%s` / `feature/1.x.x`）；④ **无头 runner 上的自签证书签名三陷阱**（均经诊断 workflow 双 job 双变体实锤，本地有 GUI 会话全部掩盖）：用户域 `security add-trusted-cert` 等待 GUI 授权确认永久挂起（须 `sudo … -d -k /Library/Keychains/System.keychain` 写系统域）；`codesign --keychain` 指定钥匙串对自签证书解析不到 identity（须 `security list-keychains -d user -s "$KC" <既有列表>` 置搜索列表头、codesign 不带 `--keychain`）；`codesign --timestamp` 向 timestamp.apple.com 请求挂起 45min 致 job 超时（自签证书下无功能价值，直接去掉）。
+- **同类影响**：任何无 Xcode 的 macOS 应用构建；以及一切「条件执行 + 静默降级」的 CI 步骤（secrets 门控步漏配 = 行为漂移无告警）。
 - **同类影响**：任何无 Xcode 的 macOS 应用构建。
 
 ## #6 休息模式 Esc 退出失效（对话框被遮罩遮挡 + forcedRest 残留死循环）
@@ -94,3 +96,69 @@
   - **双平台/多 job 的同类校验逻辑必须收敛为共享 action，禁止各 job 内联复制**——否则行为漂移（本次 Windows 漏校验即此反模式）。
   - macOS runner 选型须关注弃用时间线（参考 [actions/runner-images](https://github.com/actions/runner-images/issues/13518)），优先 `macos-15`+。
 - **同类影响**：所有 tag-driven 多平台 release workflow；所有"双 job 独立解析同一事实源"的反模式；GitHub Actions macOS runner 版本时效性。
+
+## #9 NSHostingController.rootView 复用致 SwiftUI `@State` 跨弹窗残留（跳过=复用上次记录）
+
+- **表因**：用户报告「工作日志跳过」后，下次小结窗仍显示上次输入的内容（视觉=复用上次记录、疑似跳过仍写库）。
+- **根因**：四个窗口控制器（WorkLog 提示/补录、Exercise 提示/补录）+ 报告/设置控制器在**稳定的 `NSHostingController`** 上反复赋值 `rootView = view`。SwiftUI 在 root 视图**身份不变**时**保留 `@State`**（`@State` 存于 SwiftUI 内部存储、按视图身份键控，身份不变即不重置）。于是「输入文字 → 跳过/关窗」后 `@State` 残留，下次弹窗文字仍在。代码层 skip 路径**确实不写库**——纯视觉残留，但用户感知为「数据被复用」。
+- **处理方式**：每次 `present`/`show` **重建 `NSHostingController`**（窗口复用、控制器替换：`window?.contentViewController = NSHostingController(rootView: view)`），强制 SwiftUI 视为新视图树、`@State` 归零。Settings 控制器额外重建 KVO（`preferredContentSize` 观测绑到新 hosting）；report 控制器同步处理。
+- **后续防范**：**任何 `NSHostingController`/`UIHostingController` 反复替换 rootView 的场景，必须重建 hosting 控制器或用 `.id(token)` 强制身份变更**，否则 `@State`/`@FocusState` 残留。复用窗口可以，但「视图身份」不可隐式复用。
+- **同类影响**：所有 AppKit+SwiftUI 混合的复用窗口（菜单栏 accessory app 尤甚）；任何「重开窗口显示旧草稿/旧输入」的疑似 bug 先查此根因，而非查持久化层。
+
+## #10 macOS 自带 bash 3.2 多字节解析：`$VAR` 后紧跟中文标点 → unbound variable
+
+- **表因**：`install.sh` 传非法版本时本应输出「版本号格式非法：vabc（应为 vX.Y.Z）」，实际报 `VER?: unbound variable` 直接退出（`set -u`），错误文案完全丢失。
+- **根因**：macOS `/usr/bin/bash` 为 3.2（非多字节感知）。双引号内 `$VER（` 的全角括号首字节被并入变量名解析，变量名变「脏」→ `set -u` 判为未绑定变量。shellcheck 按现代 bash 方言检查，对此**不报警**。
+- **处理方式**：变量一律花括号包裹（`${VER}（`）；并按模式 `\$[A-Za-z_][A-Za-z0-9_]*[^ -~"]` 全仓扫描两个脚本排查同类隐患。
+- **后续防范**：macOS 原生 bash 3.2 运行的脚本中，变量后紧邻非 ASCII 字符时必须写 `${VAR}`；脚本**错误路径必须实跑验证**（本次静态检查全绿，`bash install.sh vabc` 一跑即暴露）。
+- **同类影响**：所有在 macOS 自带 bash 下运行、提示文案含中文的 shell 脚本（CI 的 bash 5.x 无此问题，勿因 CI 通过而误判安全）。
+
+## #11 设置窗页签折叠进 `>>` 溢出菜单 + 窗口不可调节（硬编码宽度 × 内容驱动尺寸）
+
+- **表因**：设置窗顶部 7 页签未平铺，多出的页签被折叠进 `>>` 呼出按钮；且窗口宽高完全不可调节。
+- **根因**：
+  - (a) `SettingsView` 根视图硬编码 `.frame(width: 560)` 钉死内容宽度。第 7 个页签「Agentic AI」加入后，7 个图文页签固有宽度超出 560pt 可用宽度——macOS 26（Tahoe，页签条并入工具栏）将放不下的页签折叠为 `>>` 溢出菜单（该折叠行为无官方文档，仅社区实测定性；macOS 14 的 `NSTabView` 背板则是压缩截断文案，同为宽度不足的退化形态）。宽度与页签文案**解耦**是结构性根因。
+  - (b) 窗口 `styleMask` 无 `.resizable`；且 `sizingOptions = [.preferredContentSize]` + KVO 强制 `setFrame` 的「内容驱动尺寸」机制使任何内容变化都覆写窗口尺寸——与「用户自由调节」语义互斥。
+- **处理方式**：
+  - 页签规格（页签/标题/图标）收敛为唯一事实源 `SettingsTabMetrics`（文件级），`TabView` 的 `ForEach` 渲染与宽度测算同源；运行期以 `NSFont.systemFont(ofSize: 13)` 实测各页签文案宽度，加图标/间距/内边距/页签条内衬校准常量（`stripInsets` 112 为首要校准项，macOS 26.6 实测无需再调）推算最小内容宽度，经窗口 `contentMinSize` 硬性锁底。实测最小宽度 785pt 下 7 页签平铺无截断（后续页签文案缩短为双字「音效/日志/运动」，最小宽度经同源测算自动重算为 707pt、默认尺寸 825→747——机制自证的防复发收益，无需改任何测算代码）。
+  - 尺寸归用户：`.resizable` + 删除全部内容驱动机制（`preferredContentSize` KVO / `didMove` 锚点 / `layoutWindowToContent`，净删约 60 行）；承载层 `NSHostingController` → `NSHostingView`（contentView 赋值语义为「视图适配窗口」，而 contentViewController 会使窗口跟随内容 resize——Apple 文档明示 `NSWindow.contentViewController` 的窗口跟随行为，与用户持有尺寸冲突）。issue #9 的「每次 show 重建 hosting」语义经新建 `NSHostingView` 延续。
+  - （后续演进）页签条改**自绘**：`.resizable` 后发现原生 TabView 在 macOS 26 会把页签均匀铺满工具栏、间隙随窗口拉伸且无样式 API 可控（第二轮用户反馈「间距过大」）。自绘（左对齐、相邻标题净间隙 1.5 字宽、胶囊选中态、VoiceOver isSelected）使测量字体=渲染字体、自然宽度闭式确定；`contentMinSize` 改为 max(页签条自然宽度, 表单可读性 560)；`SettingsTabSpec` 随之移除 icon 字段（原生 26 本就不渲染）。
+  - 持久化：`setFrameAutosaveName` 原生落盘（键 `NSWindow Frame GiveMeABreakSettingsWindow`）；首开「默认尺寸 + 显式居中」（沿用 #7 协议），其后 `setFrameUsingName` 恢复 + 屏内收口（`constrainFrameRect` 不修水平位置，拔屏后须我方钳制）。
+- **验证**（沿用 #7 方法论：`CGWindowListCopyWindowInfo` + `screencapture -l`）：默认宽/最小宽（注入超小 frame 被 contentMinSize 收口）下均平铺无 `>>`；注入 900×650 精确还原；真实 .app bundle 跨启动位置精确还原、页签平铺；91 单测全绿。
+- **后续防范**：**页签/导航项文案与承载窗口宽度必须同源测算**（经 `SettingsTabMetrics` 类 SSOT），禁止硬编码窗口宽度；给 `NSHostingView` 显式设 `sizingOptions = []` 以切断 SwiftUI 内容尺寸对窗口的隐式反压。注意 macOS 26 工具栏式页签条仅显示文字不显示 SF 图标（系统样式行为，非缺陷）。
+- **同类影响**：所有「顶部 TabView 页签数量会增长」的 macOS 设置窗；`NSHostingController` 作为 contentViewController 且用户可缩放窗口的组合（内容理想尺寸变化会弹回用户手动调节）。
+
+## #12 Coding Proxy 子进程托管三处缺陷（autosave 被居中覆盖 / 显式路径绕过校验 / 同步重启冻结 UI）
+
+- **表因**：v10「Coding Proxy 托管」代码评审发现三处缺陷 + 一处日志滞留竞态：(a) 控制台窗口每次启动都回到主屏居中，用户摆放位置不被记忆（尺寸却记住了）；(b) 启动命令写绝对路径（如 `/opt/homebrew/bin/uv`）且该文件被移动/卸载时，设置页无警示、控制台显示「配置有效」，直到启动才抛英文 NSError；(c) 控制台「重启」按钮及运行中改目录/命令的 apply 会冻结 UI 最长 2s；(d) 进程静默前的末几行日志可能滞留不显示。
+- **根因**：
+  - (a) `setFrameAutosaveName` 设置成功且存在历史 frame 时会**同步恢复**该 frame，其后无条件 `setFrameOrigin` 居中把恢复结果覆盖掉。`setFrameOrigin` 只改 origin，故尺寸「幸存」而位置丢失——这种「部分生效」的表象极易掩盖根因。
+  - (b) `resolveExecutablePath` 对含 `/` 的可执行段原样返回、不做 `isExecutableFile` 判定，使 `.executableNotFound` 分支对显式路径**不可达**，把错误发现时机从「配置校验期（中文提示）」推迟到「进程启动期（英文 NSError）」。
+  - (c) `restart()` 复用了为 App 退出设计的 `stopForQuit()`（同步轮询 ≤2s）。退出期阻塞主线程可接受，会话期则是沙滩球——**同一停止语义在两种生命周期下的可接受代价不同，不可无差别复用**。
+  - (d) 合流刷新的 `logFlushPending` 标志复位与 snapshot 拉取之间存在窄窗口：某行 append 晚于 flush 拉取、又早于标志复位，则既不在本次快照中也无后续刷新计划。满容量时 `count` 恒等于 capacity，无法充当「是否有新行」的判据。
+- **处理方式**：
+  - (a) 照搬 `SettingsWindowController` 范式：`if !w.setFrameUsingName(name) { 居中 }`——二者互斥而非叠加。
+  - (b) `resolveExecutablePath` 对显式路径就地判定可执行性，不命中返回 nil，令校验器统一以 `.executableNotFound` 中文明示（校验 / 设置页 Tooltip / 启动失败三处文案同源）。
+  - (c) `restart()` 改异步两拍：`stop()` 发 SIGTERM（5s 宽限 SIGKILL）→ 旧进程终态回调 `handleProcessTerminated` 中消费 `pendingRestart` 标志拉新。「旧进程死透再拉新」的次序保证不变，主线程零阻塞；`stop()` 内清零该标志以防「关开关后被重启标志复活」（故 `restart()` 中置位须在 `stop()` 之后）。`stopForQuit()` 退化为退出期专用的唯一阻塞点。
+  - (d) `CodingProxyLogBuffer` 增单调计数 `totalAppended`（不受容量裁剪与 clear 影响）；合流回调在标志复位后比对该计数，有增长则补排一次刷新。
+- **验证**（真机 E2E，假命令流避免与真实实例端口冲突）：注入假 `emitter.sh`（持续输出中文 + stderr、SIGTERM 后延时 1s 退出）实测——控制台正确恢复到 autosave 保存的 frame `-1269 901 680 452`（外接显示器负坐标，旧代码会强制居中）；点「重启」期间 AX 探测耗时 194–289ms（与基线同量级，无 1s 级阻塞），日志证实 SIGTERM→旧进程优雅退出（code 0）→新进程拉起的完整两拍；`burst.sh`（突发 200 行后永久静默）验证末行哨兵完整可见无滞留；菜单退出后无孤儿进程。126 单测全绿（+3）。
+- **后续防范**：**窗口 frame 持久化与显式居中互斥，勿叠加**；**校验器的「不可达分支」是信号**——若某错误枚举对某类输入永远不可能返回，说明校验被短路，错误将推迟到更差的时机以更差的形式暴露；**同步阻塞的辅助方法勿跨生命周期复用**，退出期与会话期的代价容忍度不同；环形缓冲的 `count` 因容量收口不具单调性，判定「是否有新增」须用独立的单调计数。
+- **同类影响**：所有用 `setFrameAutosaveName` + 手动定位的窗口控制器；所有「解析→校验→执行」三段式中校验器依赖解析器返回值的链路；后续若新增其他子进程托管（同一 `Foundation.Process` 范式）。
+
+## #13 遮罩降级到 `.floating` 层级导致菜单栏/Dock 盖不住（用调试便利换掉核心作用）
+
+- **表因**：接入遮罩特效后，手动遮罩不再遮住菜单栏与 Dock；此前正常。用户同时质疑鼠标/键盘输入是否仍被阻断。
+- **根因**：为解决「`CGShieldingWindowLevel` 窗口无法被 `screencapture` 捕获」（同 #6 记录的取证限制）以便自我验证特效画面，我在 `ScreenMaskController.makePanel` 加了 `GIVEMEABREAK_DEBUG` 时降级到 `.floating` 的旁路。`.floating` 仅为 **3**，而屏蔽层级约 **21 亿**——降级后遮罩沉到菜单栏/Dock 之下。根因不是写错常量，而是**为调试便利在生产代码里改了功能语义**：遮罩的核心作用就是「压过一切」，任何削弱层级的旁路都直接摧毁该作用。输入阻断机制（`ignoresMouseEvents = false` + `collectionBehavior` + Esc 本地监听）实际未受影响，但层级下沉后用户无法区分二者，合理地一并质疑。
+- **处理方式**：删除该旁路，层级恒为 `CGShieldingWindowLevel`，并在原处留注释说明「曾踩此坑、勿再加调试降级」。
+- **后续防范**：
+  - **取证手段不得改动生产语义**。窗口层级、事件吞吐、`collectionBehavior` 这类「功能即语义」的属性禁止设调试旁路；需要取证时用 `CGWindowListCopyWindowInfo` 核验层级/尺寸（#7、#11 已建立此方法论）+ 请用户肉眼确认，而非降级窗口去迁就截图工具。
+  - 自我验证的便利性与功能正确性冲突时，一律牺牲前者。
+- **同类影响**：`LiveOverlayController`（休息遮罩）与任何 `CGShieldingWindowLevel` 面板；也适用于「为便于调试而临时放宽权限校验/关闭守卫」的一切同构改动。
+
+## #14 Coding Proxy 控制台窗口每次打开缩到最小尺寸（NSHostingController 尺寸反压 + autosave 记录污染）
+
+- **表因**：控制台每次打开都缩到 680×420（`contentMinSize`），日志区仅两三行高；用户调大后关闭再开又缩回，跨启动也记不住。
+- **根因**：`show()` 在 `if window == nil` 块外无条件执行 `window?.contentViewController = NSHostingController(rootView:)`——赋值 contentViewController 时 AppKit 把窗口内容尺寸收到 VC 的 `preferredContentSize`（NSHostingController 报 SwiftUI fitting size；日志区是弹性 ScrollView，fitting 高度极小）→ 窗口被压到 `contentMinSize` 兜底，且已注册的 autosave 随即把缩水 frame 持久化、覆盖用户尺寸。与 #7(b)/#11「内容驱动尺寸」同族：控制台抄了 Settings 的 autosave 却没抄 NSHostingView 承载。**#12(a) 的验证为何没拦住**：当时只核对了「恢复 frame == 保存值」的一致性，未察觉保存值本身已被本缺陷污染（实机记录 `-1269 901 680 452`，宽 680 即缩水值）——「恢复一致性」验证给污染值放了行。
+- **处理方式**：照 #11/Settings 范式迁移：承载层 `NSHostingView` + `sizingOptions = []`（视图适配窗口，切断尺寸反压）；复用分支只换 `contentView` 不动 frame；恢复帧后 `clampToVisibleScreen` 屏内收口（min 补足 + 离屏压回，#7 语义）；每次 show 新建 hosting 视图保 `@State` 干净初始化（#9）与日志「关即退订、开即重拉快照」订阅语义。**一次性换 autosave 键**（`CodingProxyConsoleWindow` → `-v2`）：缺陷版本每次 show 必写缩水值、存量记录无幸存好值，保留旧键会让升级用户首开仍见 680×420；换键首开回默认 840×540 居中，残留旧键 defaults 条目无害。
+- **后续防范**：`.resizable` 窗口禁用 NSHostingController 作 contentViewController（`preferredContentSize` 跟随机制与「尺寸归用户所有」互斥，承载一律 NSHostingView + `sizingOptions = []`）；autosave 键被缺陷尺寸污染后应换键作废而非保留；**验证「frame 恢复」须同时断言「被恢复值本身合法」（不小于期望尺寸），仅比对「恢复 == 保存」会给污染值放行**。
+- **同类影响**：`WorkLogReportWindowController`（min 600×460）与 `CombinedReportWindowController`（min 620×480）同为 resizable + 每次 show 重赋 contentViewController 范式，存在同款「每次打开压回 contentMinSize」缺陷（无 autosave、每次重新居中，不涉及持久化污染）；固定尺寸弹窗不受影响。待后续按同范式迁移。

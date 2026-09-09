@@ -62,22 +62,29 @@ evaluate(now) 按顺序短路求值，首个匹配决定目标态：
 
 `workInterval=3000s`（50min）。t=0 WORKING 累加至 30min → t=30 会议开始 IN_MEETING，累加器续推 → t=50 穿越阈值但谓词 3 压过谓词 4，**不触发休息** → t=60 会议结束，`workAccum=3600≥3000` 且 meeting=nil → **RESTING**，reset，休息 60→70 → t=70 WORKING。✓ 已由单元测试 `U1` 断言。
 
-## 3. 三大集成契约
+## 3. 集成契约
 
 | 契约 | 实现 | 关键 API | 权限 |
 |---|---|---|---|
 | **遮罩** | `LiveOverlayController` | 每 `NSScreen` 一个 borderless `NSPanel`，`level=CGShieldingWindowLevel()`<sup>[[3]](#ref3)</sup>（⚠️ 该 C 函数 Apple 已弃用，现代等价 `.screenSaver` / `CGWindowLevelForKey(.shieldingWindowLevelKey)`，同屏蔽层级；`LiveOverlayController.swift:73` 待平滑替换为 `.screenSaver`），`collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications]`；Esc 经本地事件监听→`NSAlert` 二次确认 | 无（遮罩本身不需 TCC） |
 | **音乐** | `LiveMusicController` | `NSWorkspace` 拉起 QQ 音乐 + CGEvent 合成 `NX_KEYTYPE_PLAY`(=16) 媒体键（`subtype=8` NX_SUBTYPE_AUX_CONTROL_BUTTONS）<sup>[[4]](#ref4)</sup>，OS 路由到 Now Playing 应用 | **Accessibility（必需）** |
 | **日历** | `LiveCalendarProvider` | 单一 `EKEventStore`<sup>[[5]](#ref5)</sup>，`requestFullAccessToEvents()`，过滤 `sourceType==.calDAV`<sup>[[6]](#ref6)</sup> + busy，`EKEventStoreChanged` 推送 + 限流回退 | **完全日历访问** |
+| **防止空闲睡眠**（v9） | `IdleSleepGuard` | `IOPMAssertionCreateWithName`<sup>[[16]](#ref16)</sup> 持有 `kIOPMAssertionTypePreventUserIdleDisplaySleep`（`.displayAndSystem` 再叠加 `…PreventUserIdleSystemSleep`），按断言维度 diff 增删（模式切换时 display 断言全程不落）；进程退出由内核回收，无 caffeinate 子进程的孤儿风险 | 无（非沙盒 + Hardened Runtime 下无需 entitlement / TCC） |
 
 ## 4. 数据模型
 
 ```swift
 struct EngineState { phase; workAccumulatedSeconds; lastTickAt; restStartedAt; modelVersion }  // 单一事实源，Codable 持久化
-struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; schemaVersion }
+struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; …; agent: AgentSettings; power: PowerSettings; schemaVersion }
+struct AgentSettings { claudeExecutablePath: String?; claudeSettingsEditorBundleId: String? }  // v8 · Agentic AI 正交子结构
+struct PowerSettings { preventIdleSleepEnabled: Bool; mode: IdleSleepGuardMode }  // v9 · 电源正交子结构（displayOnly | displayAndSystem）
 struct MeetingTimeline { busyIntervals: [DateRange]; generatedAt }  // 合并后的不相交忙碌区间
 func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（背靠背会议视为连续）
 ```
+
+> **Agentic AI 配置（v8，groundwork）**：`AgentSettings` 为「Agentic AI」功能域预留的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移。仅承载纯 Foundation 的 `String?` 字段——引擎不消费（携带即忽略，同 `restMusicPath`）；编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`，与本模型正交解耦。当前仅持久化 + 设置 UI，未接入实际 Claude Code 调用。
+>
+> **电源配置（v9）**：`PowerSettings` 为「防止空闲睡眠/熄屏」功能域的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移（旧 v8 缺 `power` 补默认；`mode` 先解 `String` 再按 rawValue 回退——未知枚举值只回退该字段，不会令整份配置回退默认）。引擎不消费（携带即忽略，同 `agent`）；IOKit 断言的持有/释放位于集成层 `IdleSleepGuard`（§3），与休息 / 工作 / 遮罩调度完全正交。**UI 双入口的通道划分**：总开关 `preventIdleSleepEnabled` 由菜单栏「防止睡眠」勾选项与设置「电源」页共用同一即时通道（`AppRoot.setPreventIdleSleep`，`engine.config` 为权威值，设置窗「应用」时以 live 值覆盖草稿快照，避免旧草稿回滚菜单侧改动——同「开机自启」的非 draft 语义）；防护范围 `mode` 仍走 draft，随「应用」提交。
 
 崩溃恢复：启动加载持久化 `EngineState`，`fastForward(sanityLimit:)` 依间隔决策——短中断（≤300s）按工作态推进计入累加；长中断仅对账基点不回灌（`U11` 断言）。
 
@@ -89,12 +96,12 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 - **工作示例** U1：30+30 会议→60 工作→10 休息（纯函数 + 引擎接线双重断言）。
 - **边缘 case**：U2 会议恰在阈值点不触发瞬间休息；U3 背靠背会议跨接缝；U4 会议跨窗口边界→offDuty 优先；U7 休息被会议打断→abort-and-reset；U9 同态幂等（showOverlay 仅一次）。
 - **健壮性**：U10 advance 限幅；U5 AFK 冻结累加器；U6 睡眠不回灌；U11 fast-forward 短推进/长冻结。
-- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移。
+- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移（含 v7→v8 `agent`/AgentSettings 与 v8→v9 `power`/PowerSettings 缺字段补默认、子字段容错、未知 `mode` rawValue 回退不拖垮整份配置、往返一致）。
 
 ## 6. 已验证 / 待实机核实
 
-✅ 已无头验证：编译链接、47 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）。
-⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点。
+✅ 已无头验证：编译链接、91 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过。
+⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建；**「防止睡眠」两种防护范围下 `pmset -g assertions` 是否分别可见 1 条 / 2 条对应断言，关闭与退出应用后断言是否消失**。
 
 ## 7. 工作日志（休息前记录 + 周期报告）
 
@@ -147,6 +154,100 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 `renderWorkLogReport` 按 `startedAt` 在指定时区分桶，产出今日/本周/月报/全部 Markdown：恰好一个 H1 + blockquote 元数据（周期/时区/条数/总专注时长）+ Top 3（按时长降序）+ 按日或按周拆解 + 待续·下一步（聚合 `nextAction`）。日期格式化全用 `Calendar` 组件手动拼接（零 locale 依赖，**确定性幂等**：同 entries + 同 now/cal/tz → 字节一致，便于 git diff）。v1 不做模糊去重/关键词 tag 推断（避免隐藏用户原始数据 + 误合并）。
 
+## 8. 主动屏幕遮罩（手动遮罩）
+
+### 8.1 设计目标与正交性
+
+在到点强制休息之外，新增一个**用户主动触发**的屏幕遮罩能力（菜单「屏幕遮罩」）：复用休息遮罩完全相同的视觉/输入阻断机制（`CGShieldingWindowLevel` 多屏 borderless `NSPanel`），但与调度引擎（FSM）**正交解耦**——`ScreenMaskController` 不读写 `EngineState`、不触发 `forcedRest`/`onPreBreak`/`onPostBreak` 等任一副作用路径，因此不会复现 [issue #6](../.agents/issue.md) 中「一次性意图标志被下个 tick 拉回」的耦合缺陷。触发方式：
+
+1. 菜单栏「屏幕遮罩」菜单项（`StatusItemController`，始终可用，零权限依赖）；
+2. 占用 macOS 默认锁屏快捷键 Control+Command+Q（`LockShortcutMonitor` 用 `CGEventTap` 在 HID 层拦截并消费，系统不再执行真正锁屏），需用户授权「输入监控」，未授权时静默降级为仅菜单可用（不阻塞、可观测日志，同 [issue #3](../.agents/issue.md) 降级范式）。
+
+退出仅支持双击 Esc（0.4s 内，复用 `LiveOverlayController` 已验证的时间窗/事件消费逻辑），不设二次确认——手动遮罩无「强制时长」需要保护，不同于休息软强制。
+
+`ScreenMaskController` 复用 `LiveOverlayController.swift` 内定义的 `OverlayPanel`（`NSPanel` 子类），但独立实现面板构造/热插拔/淡入淡出——刻意**不**抽取共享基类：`LiveOverlayController.swift` 是 [issue #4](../.agents/issue.md)、[issue #6](../.agents/issue.md) 两次事故现场且零自动化测试覆盖，本项目既有窗口控制器（`SettingsWindowController`/`WorkLogPromptWindowController` 等 7 处）也均独立重复各自的 `NSApp.activate`/`makeKeyAndOrderFront` 样板代码、从未共享基类，本次遵循同一惯例。
+
+### 8.2 与调度引擎的关系：遮罩冻结计时，强制休息优先
+
+`ScreenMaskController`（手动）与 `LiveOverlayController`（休息）各自独立持有一组 `OverlayPanel`，均置于同一 `CGShieldingWindowLevel`，二者不得同时显示。编排层（`AppRoot`）的协调语义（v0.1.5 起）：
+
+- **遮罩冻结引擎**：进入遮罩即挂起心跳（复用工作日志小结窗的既有「心跳冻结」机制）——工作累加器停止推进，计划性休息及其小结窗**不可能在遮罩中触发**（用户诉求：遮罩是「请勿打扰」，不被到点休息的表单打断）。遮罩结束（双击 Esc）先经 `LiveGiveMeABreakEngine.handleScreenMaskEnded()` rebase 对账基点（语义同 `handleWake`，遮罩时长不回灌工作累加器），再恢复心跳。
+- **不变量**：`遮罩显示 ⇒ 心跳挂起`。全部 resume 路径（小结窗收尾 `afterPrompt` / 唤醒 `didWake` / 遮罩收尾）均带守卫：小结窗展示中、遮罩显示中分别不在此恢复，由各自的收尾方恢复，`suspend`/`resume` 严格配对（`HeartbeatTimer` 二者幂等，双挂起安全）。
+- **强制休息优先于遮罩**：「立即休息」（菜单/⌃⌥⌘R）为显式用户动作，`forceRestNow()` 先撤遮罩（触发上述收尾链路）再强制休息——不会叠加两组遮罩面板。
+- 进入手动遮罩前置 guard：`engine.state.phase == .resting`（含小结窗延迟期，该阶段 phase 已是 .resting）时忽略触发，已被休息遮罩覆盖或小结窗流程进行中时不叠加。
+- 手动遮罩罩住已打开的设置窗等窗口（不做特殊处理），与既有「立即休息」菜单项行为对称。
+
+### 8.3 CGEventTap 快捷键拦截
+
+`LockShortcutMonitor` 在 HID 事件流入 WindowServer 之前插入一个 `.headInsertEventTap`（`tap: .cghidEventTap`）<sup>[[14]](#ref14)</sup>，监听 `keyDown`，比对 `keyCode==12`（Q）且修饰键恰为 Control+Command（`CGEventFlags` 与关心的修饰键位掩码求交集后比较，忽略 `.maskNonCoalesced`/`.maskNumericPad` 等硬件杂位），命中则消费（回调返回 `nil`，系统不再派发）并转投 `onTriggered`；未命中原样放行。`options` 必须为 `.defaultTap`（而非 `.listenOnly`）——后者只能观察无法拦截。回调保持轻量（仅比较 + 主线程异步转发），否则系统会以 `.tapDisabledByTimeout` 强制禁用 tap，需监听该事件类型并调用 `CGEvent.tapEnable(tap:enable:true)` 恢复（应用唤醒时另经 `recheckHealth()` 兜底核实）。权限模型独立于既有 `AXIsProcessTrusted`（后者仅用于*发送*媒体键 CGEvent）——*监听*系统级按键需要「输入监控」(Input Monitoring) 权限，经 `CGPreflightListenEventAccess()` / `CGRequestListenEventAccess()` <sup>[[15]](#ref15)</sup> 查询/申请，未授权时 `CGEvent.tapCreate` 返回 `nil`，按既有降级范式静默回退（仅菜单可用 + NSLog 诊断）。
+
+⚠️ **已知 macOS 行为边界**（非本实现缺陷，均已交叉验证）：(a) **Secure Input Mode 全局单例**——系统上任意 App 持有 Secure Input（密码框、Terminal 安全键盘输入等）时，全机所有 `CGEventTap` 被静默禁用，此时按 Control+Command+Q 会真正锁屏，且本 App 对此不可探测；(b) **输入监控权限变更非热生效**——与 Accessibility 不同，用户在系统设置授权后须重启 App 才生效；(c) 固定拦截 macOS 默认组合 Control+Command+Q，用户自定义过的锁屏快捷键不在拦截范围内。
+
+⚠️ **CLT SDK 注记**：`CGEventFlags` 无 `NSEvent.ModifierFlags.deviceIndependentFlagsMask` 对应物，需显式声明关心的修饰键位掩码后再求交集比较（实现时已验证于本项目 Command Line Tools 工具链下编译通过；`CGEvent.tapCreate`/`CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 均无 [issue #2](../.agents/issue.md) 那类符号缺失问题）。
+
+### 8.3.1 遮罩期间键盘白名单拦截（`MaskInputGuard`，v0.1.10）
+
+系统级组合键（⌘Tab / ⌘\` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§8.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
+
+**谓词（判错即灾难，单表达式纯函数）**：`(keyCode == 53 || keyCode == 36) && flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty`。三个要点：
+
+1. **必须 flags-aware**：⌘⌥Esc 就是 keyCode 53 带修饰键——只看 keyCode 会放行，且强退面板的默认按钮恰好吃裸 Return（双重穿透，最坏会误杀无关应用）。
+2. **Shift / CapsLock / Fn 刻意不计入屏蔽集**：Caps Lock 常亮用户每次按键都携带 `.alphaShift`，计入即永久失去唯一键盘出口——比功能穿透更严重的灾难。
+3. Return 属「本软件相关功能」：休息确认框「继续休息」绑 `.defaultAction`；遮罩无对话框时裸 Return 是响应链空操作，放行无害。
+
+**生命周期（零泄漏闭环）**：两个控制器的 show/dismiss 全部入口汇聚于方法体（手动遮罩：AppRoot.enterScreenMask / 内部双击 Esc / forceRestNow；休息遮罩：engine tick ×2 / requestEarlyRestExit），故 `begin()` 挂 show 末句、`end()` 挂 dismiss 首句即对称覆盖；`rebuildPanels` 不经 show/dismiss（遮罩从未离屏，拦截保持）。单实例注入两控制器——互斥由 resting 守卫保证，幂等 bool 足矣；若互斥被破坏则 fail-open（首个 end() 停拦截），符合软强制哲学。崩溃/SIGKILL 由内核回收 tap（进程级资源），非泄漏路径。
+
+**双 tap 共存**：headInsert 使本 tap 排在锁屏劫持 tap 之前——遮罩期间 ⌃⌘Q 被先吞（enterScreenMask 本就幂等 + resting 守卫，无害）；Esc/Return 两 tap 均放行、无重复消费；`end()` 后锁屏劫持恢复正常。
+
+**看门狗（与被守护代码无关的兵底守卫）**：白名单下连 ⌘⌥Esc、⌃⌘Q、Apple 菜单键盘路径均不可用，重启不构成兜底（只剩电源键硬关机，丢未保存工作）。故 `begin()` 启动 30min 独立 `DispatchSourceTimer`（心跳在手动遮罩期间被挂起，不能承载；同 WorkLogPrompt 先例），到点**只读 WindowServer 真相**（`CGWindowListCopyWindowInfo` 查本进程 ≥ 屏蔽层级的屏上窗口，不读控制器状态）：遮罩仍在（含合法长遮罩、跨睡眠）→ 续期；不在（僵尸态：进程活、tap 活、遮罩没了）→ 强制 `end()`。环境变量 `GIVEMEABREAK_DISABLE_INPUT_GUARD`（存在即禁用）为应急短路。
+
+**降级与边界**：tap 创建失败（输入监控/辅助功能未授权）→ 一次日志后 no-op，维持面板级阻断（fail-open）；Secure Input 生效时与 §8.3 同一系统级边界（全机 tap 静默失效）；媒体键/亮度走 NX_SYSDEFINED 不受影响（休息听歌依赖之）；极端时序下遮罩升起瞬间 ⌘Tab 切换器已开、松 ⌘ 提交切换——任意点击落到全屏遮罩即自愈（重新激活、恢复 key 状态）。
+
+### 8.4 快捷键体系（三层，各司其职）
+
+| 层 | 组合键 | 机制 | 权限 | 生效范围 |
+|---|---|---|---|---|
+| 全局即时动作 | ⌃⌥⌘K 屏幕遮罩 / ⌃⌥⌘R 立即休息 | `RegisterEventHotKey`（Carbon HIToolbox，`GlobalHotkeyCenter`） | 无 | 全局，事件被系统消费、不透传前台应用 |
+| 系统锁屏劫持 | ⌃⌘Q | `CGEventTap`（§8.3） | 输入监控 | 全局，权限门控 |
+| 菜单快捷键 | 裸字母（R/K/L/,/Q） | `NSMenuItem.keyEquivalent` | 无 | 仅菜单展开时（AppKit 原生行为） |
+
+选择 ⌃⌥⌘ 修饰组合的原因：与常见应用内快捷键（⌘R/⌘K/⌘L 等）冲突面最小。v0.1.4 曾把裸字母展示为组合键、被用户按全局快捷键预期使用而无任何反应（「所有快捷键未生效」缺陷根因之一）——修复为即时动作挂真实全局热键 + 菜单如实展示 ⌃⌥⌘R/⌃⌥⌘K；窗口类菜单项保留菜单展开时快捷键（其原生生效域），不做全局注册（全局化窗口弹出/退出属于越权抢键，退出热键化更是灾难性脚枪）。
+
+⚠️ **CLT SDK 注记（[issue #2](../.agents/issue.md) 同类）**：本 SDK 的 HIToolbox 头文件已不含 `RegisterEventHotKey` 声明，仅 `HIToolbox.tbd` 导出符号；Swift `import Carbon.HIToolbox` 仍可编译链接。已在独立无授权进程中探针验证 `InstallEventHandler`/`RegisterEventHotKey` 返回 `noErr`（零权限可用）。Carbon 文档已被 Apple 归档：[Documentation Archive](https://developer.apple.com/library/archive/navigation/index.html?filter=carbon)。
+
+### 8.5 遮罩特效引擎（v0.1.10 · 高清动效屏保）
+
+遮罩不再是静态深色渐变，而是 5 组**程序化高清动效**，手动遮罩与休息遮罩共用同一背景（`MaskEffectBackground` 为单一事实源，两处视觉恒一致）。
+
+**特效阵容**（源流为 [reactbits.dev](https://reactbits.dev) 的 MIT 组件，移植时按「清爽舒雅 · 波光流转」重构）：
+
+| 配置值 | 名称 | 形态 | 源流 |
+|---|---|---|---|
+| `orb` | 涟漪光球（默认） | 半透明光球呼吸，球面流纹如水面波光流转 | Orb（球面流纹重构） |
+| `fibers` | 冷雾纤丝 | 雾蓝纤丝低频摆动，层层脊线漂出银白微光 | GhostFibers |
+| `letterRain` | 字雨微光 | 字符点阵极淡闪烁，亮带自上而下巡回 | LetterGlitch（着色器化） |
+| `caustics` | 水波光斑 | 池底焦散网纹，光斑明暗流转 | 原创（迭代折叠焦散） |
+| `silk` | 丝绸流光 | 缎面褶皱流淌高光，泛薄荷与冰紫 | 原创（fbm 二次域扭曲） |
+
+**渲染架构**（`Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/`）：
+
+- **MTKView 而非 SwiftUI `Shader`**：`isPaused` 提供真暂停（「减弱动态效果」下保留末帧静帧，零开销）；`preferredFramesPerSecond` 可按特效降帧；`drawableSize` 可显式钳制。每帧主线程成本仅「写 4 个 uniform + 1 次 draw」，双击 Esc 退出延迟零回归。
+- **着色器运行时编译**：CLT 不含 `xcrun metal`（需完整 Xcode），且 `swift build` 不编译 `.metal`、Makefile 装配的 `.app` 不含 SPM 资源 bundle。故以 Swift 字符串常量存源码，`device.makeLibrary(source:)` 首次遮罩升起时编译（实测 Apple M4 约 95ms，被 0.4s 淡入完全掩盖），与「零打包资产」哲学一致（同 `AmbientSoundPlayer` 合成粉噪音）。
+- **分辨率无关**：全部为全屏三角形 + 片元着色器逐像素合成，噪声亦程序生成（零纹理）。构图以短边归一化 → 4K/8K 构图一致。
+- **清晰度三要素**：① 取满 `backingScaleFactor`（此前钳到 2 是主要损失点）；② SSAA 超采样（1.4–1.5×，字形类特效刻意为 1——直绘更锐）；③ `detail()` 高频细节层为高光/脊线补颗粒纹理，成本远低于给所有 fbm 加阶数。
+- **性能护栏**：后备缓冲总像素上限 1000 万，超出等比降采样（宁降分辨率不掉帧）；字雨微光限 30fps。
+- **降级链**：`MTLCreateSystemDefaultDevice()` 为 nil 或编译失败 → NSLog + 回退深色渐变，**绝不出现黑屏/空遮罩**（遮罩是强制性 UI，渲染失败不能削弱其遮蔽作用）。
+- **多屏相位**：进程级单一时间纪元（`CACurrentMediaTime()` 静态基准），各屏独立 MTKView 同相位；屏幕热插拔重建视图后时间轴连续不跳变。
+
+**文案**：普通文本（30pt 细体圆角，白色 85% 不透明），保持静止以保证可读性。
+
+曾实现过粒子聚字层（reactbits ParticleText 移植：CoreText 栅格化 → 网格采样 → 光点自目标位就近散开后聚拢，运动为时间的纯函数），但**已移除**——遮罩文案的第一要务是「读得清」，而 30pt 小字号下粒子必须细到亚像素才不糊笔画，可读性与观感均不及普通文本。移植期间沉淀的两条经验仍记录于此，以备后来者：
+
+- **小字号粒子化的三条硬约束**（偏离任一条字形即不可辨）：① 采样步长须锚定**屏幕像素**而非字号（按字号缩放会使每字只剩十余个点）；② 光点半径须**略小于**采样步长（大于则糊成实心字，远小于则笔画断开）；③ 散布与漂移幅度须以**字号**为基准且远小于笔画宽（按 DPR 缩放会把字抖散）。
+- **坐标系注记**：以 `premultipliedLast` 建的 `CGBitmapContext` 下，`CTLineDraw` 的输出在缓冲中**已自上而下正立**（行号 0 即画面顶部），与 SwiftUI `Canvas` 的 Y 向下同向。故既不做 CTM 翻转，采样时也不翻转行号——任一处多翻一次都会使文案上下镜像（曾两次踩中，最终以离线逐行打印位图 alpha 定案）。
+
+**验证取证**：`CGShieldingWindowLevel` 的窗口无法被 `screencapture` 捕获（见 [issue.md](../.agents/issue.md)）。⚠️ **切勿以「DEBUG 时降低窗口层级」换取截图便利**——`.floating` 仅为 3，而屏蔽层级约 21 亿，降级后菜单栏与 Dock 均盖不住，等于用调试便利换掉了遮罩的核心作用（本次已踩中，见 [issue.md](../.agents/issue.md) 同类记录）。取证应用 `CGWindowListCopyWindowInfo` 核验层级 + 用户肉眼确认。
+
 ## References
 
 <a id="ref1"></a>[1] Apple Inc., "NSWindow.Level.screenSaver — Window Levels," *AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct/screensaver
@@ -162,3 +263,6 @@ tick() 检测 eff.showOverlay（.working → .resting）
 <a id="ref11"></a>[11] B. Fogg, "Fogg Behavior Model — Prompts (Facilitator / Signal / Spark)," *Stanford Behavior Design Lab*. [Online]. Available: https://www.behaviormodel.org/prompts
 <a id="ref12"></a>[12] "Required Fields in Forms: Best Design Practices," *UX Tigers*, 2024. [Online]. Available: https://www.uxtigers.com/post/required-fields
 <a id="ref13"></a>[13] I. Nahum-Shani et al., "Just-in-Time Adaptive Interventions (JITAIs) in Mobile Health: Key Components and Design Principles for Ongoing Health Behavior Support," *Annals of Behavioral Medicine*, 2016. [Online]. Available: https://pmc.ncbi.nlm.nih.gov/articles/PMC5364076/
+<a id="ref14"></a>[14] Apple Inc., "CGEvent.tapCreate(tap:place:options:eventsOfInterest:callback:userInfo:) — Quartz Event Services," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgevent/tapcreate(tap:place:options:eventsofinterest:callback:userinfo:)
+<a id="ref15"></a>[15] Apple Inc., "CGPreflightListenEventAccess() / CGRequestListenEventAccess() — Input Monitoring Privacy Access," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgpreflightlisteneventaccess() ; https://developer.apple.com/documentation/coregraphics/cgrequestlisteneventaccess()
+<a id="ref16"></a>[16] Apple Inc., "IOPMAssertionCreateWithName — Power Management Assertions," *IOKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/iokit/1557134-iopmassertioncreatewithname

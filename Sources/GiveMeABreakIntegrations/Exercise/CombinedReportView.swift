@@ -11,6 +11,11 @@ import GiveMeABreakEngine
 struct CombinedReportView: View {
     private let workStore: WorkLogStore
     private let exerciseStore: ExerciseStore
+    /// 运动录入 Picker 数据源（v7 起来自 `DayPlanConfig.exerciseTypes`）。
+    private let exerciseTypes: [String]
+    /// 保存/更新回调经 AppRoot 落库（同步走「自定义类型自动记住 + config 持久化」）。
+    private let onSaveExercise: (ExerciseEntry) -> Void
+    private let onUpdateExercise: (ExerciseEntry) -> Void
     private let onClose: () -> Void
 
     @State private var scope: CombinedReportScope
@@ -23,10 +28,16 @@ struct CombinedReportView: View {
 
     init(workStore: WorkLogStore,
          exerciseStore: ExerciseStore,
+         exerciseTypes: [String],
          initialScope: CombinedReportScope = .week,
+         onSaveExercise: @escaping (ExerciseEntry) -> Void,
+         onUpdateExercise: @escaping (ExerciseEntry) -> Void,
          onClose: @escaping () -> Void) {
         self.workStore = workStore
         self.exerciseStore = exerciseStore
+        self.exerciseTypes = exerciseTypes
+        self.onSaveExercise = onSaveExercise
+        self.onUpdateExercise = onUpdateExercise
         self.onClose = onClose
         _scope = State(initialValue: initialScope)
     }
@@ -282,8 +293,9 @@ struct CombinedReportView: View {
             let lastEnd = exerciseStore.loadEntries().last?.endedAt
             ExerciseEntryFormView(
                 mode: .create(defaultStart: lastEnd ?? Date().addingTimeInterval(-10 * 60), defaultEnd: Date()),
+                types: exerciseTypes,
                 onSubmit: { entry in
-                    exerciseStore.append(entry)
+                    onSaveExercise(entry)
                     activeSheet = nil
                     regenerate()
                 },
@@ -292,8 +304,9 @@ struct CombinedReportView: View {
         case .edit(let entry):
             ExerciseEntryFormView(
                 mode: .edit(entry),
+                types: exerciseTypes,
                 onSubmit: { updated in
-                    exerciseStore.update(updated)
+                    onUpdateExercise(updated)
                     activeSheet = nil
                     regenerate()
                 },

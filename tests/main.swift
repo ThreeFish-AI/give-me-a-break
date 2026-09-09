@@ -15,6 +15,8 @@ print("")
 runWorkLogCases()
 print("")
 runExerciseCases()
+print("")
+runCodingProxyCases()
 
 print("\n──────────────────────────────")
 print("结果：\(testPassed) 通过，\(testFailed) 失败")
