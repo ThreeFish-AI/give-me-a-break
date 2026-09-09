@@ -18,10 +18,14 @@
 
 - **强制排版作息**：工作窗口内每累计 N 分钟（默认 50）→ 强制休息 M 分钟（默认 10）。
 - **全屏遮罩**：休息时遮罩所有显示器（`CGShieldingWindowLevel`，压过菜单栏/Dock/全屏），按 Esc 需**二次确认**才可提前结束（软强制，留逃生阀）。
+- **高清动效屏保**：遮罩背景内置 5 组程序化动效——**涟漪光球 · 冷雾纤丝 · 字雨微光 · 水波光斑 · 丝绸流光**（Metal 片元着色器逐像素合成，零位图资产 → 4K/8K 同样清晰；原生 DPR + 超采样抗锯齿 + 高频细节层）。设置「通用」页切换，手动遮罩与休息遮罩共用；系统开启「减弱动态效果」时自动静帧，Metal 不可用时自动回退深色渐变。
+- **屏幕遮罩（手动）**：全局快捷键 **⌃⌥⌘K**、菜单「屏幕遮罩」或系统锁屏快捷键 Control+Command+Q（拦截后不真正锁屏，改为进入本 App 遮罩；需「输入监控」授权）随时手动进入同款全屏遮罩，电脑后台照常运行。遮罩期间在 HID 层**白名单拦截键盘**：除裸 Esc（双击退出）与裸 Return（休息确认框默认按钮）外全部吞掉——含 ⌘Tab / ⌘\` / ⌃←→ / Mission Control / ⌘空格 / ⌘⇧345 / ⌘⌥Esc 等系统组合键（需「输入监控」授权，未授权时降级为面板级阻断，仅系统组合键放行）；媒体键/亮度不受影响。退出路径：双击 Esc、看门狗（30min 核实遮罩仍在屏则续期，不在则自动解除拦截）、`GIVEMEABREAK_DISABLE_INPUT_GUARD` 应急短路、ssh/他机 kill、电源键硬关机。遮罩期间**工作计时冻结**（计划性休息及其小结窗不会打断遮罩，遮罩时长也不计入工作累加）；「立即休息」（⌃⌥⌘R）仍可主动接管（遮罩自动让位）。
 - **休息音效**：进入休息播放**自定义音频**（在设置选择本地 mp3/m4a/aac/wav/flac 等文件，循环播放，取代内置粉噪音；文件不打包不分发，仅以本地路径引用，缺失/不可用自动回退粉噪音）或内置**粉噪音**（AVAudioEngine 实时合成，零音频文件、可靠）；可选叠加联动 QQ 音乐（经系统 Now Playing 路由的 CGEvent 媒体键）。结束休息自动停止。均可在设置中配置。
 - **Google 日历门控**：会议计为工作时间，但休息推迟到会议结束。例：工作 30min 后接 30min 会议 → 连续工作 60min，会议结束才开始 10min 休息。
 - **工作日志（认知闭合仪式）**：自然休息前弹一个轻量输入框，花 30 秒写下「刚刚完成了什么 + 可选下一步」，让大脑真正放下再休息（循证：Leroy 注意力残留 / Stubblebine 插值日记）。记录按时间段落盘，菜单「工作日志…」一键生成今日/本周/月报 Markdown，支持复制与导出。永不阻塞休息：回车提交 / Esc 跳过 / 关窗放行 / 到点自动放行（等待时长可在设置调整，默认 3 分钟）；亦可设「永久等待」让窗口停留至手动操作，或在设置关闭整个环节；「立即休息」不弹。
 - **运动记录 + 综合报告**：与工作日志对称——**休息自然结束时**弹轻量输入框，记录这段休息里做的微运动（如胯下击掌 / 提膝击掌 / 深蹲 / 俯卧撑），每条含「运动时段 + 若干（类型 × 数量）」；提前结束（Esc）与被会议、下班打断均不弹。运动记录与工作日志一并汇入菜单「综合报告…」，按**周 / 月 / 季 / 年**合成原生层级报告（工作 Top N + 周期分布、运动按类型聚合 + 明细），支持复制与导出 Markdown。
+- **防止空闲睡眠**：菜单「防止睡眠」勾选项或设置「电源」页一键开启（两处**即时生效**，同「开机自启」语义）——经 IOKit 原生电源断言（与 `caffeinate -d` / `-d -i` 同机制，非子进程）阻止电脑因空闲而熄屏/睡眠，**无需任何权限**；防护范围（仅显示器 / 显示器 + 系统）在设置「电源」页配置、随「应用」提交，状态持久化、重启后自动恢复，`pmset -g assertions` 可观测。与休息 / 工作 / 遮罩模式完全独立，不影响主动睡眠（合盖、Apple 菜单睡眠、低电量）。
+- **Coding Proxy 托管**：把本地命令行工具（如 `uv run coding-proxy start`）交给本应用托管——在设置「Agentic AI」页配置**工作目录 + 启动命令**并开启后，随本应用自动启动并保持运行，退出本应用时一并停止（SIGTERM → SIGKILL 兜底，不留孤儿进程）；环境 PATH 自动补充 Homebrew 与用户 bin 目录（Finder 启动的 App 无 shell PATH 也能找到 `uv`）。菜单「Coding Proxy…」打开控制台：彩色等宽日志流（stdout / 橙色 stderr / 蓝色生命周期）、状态与 PID、会话级启动/停止/重启。配置改动随「应用」提交，运行中修改目录或命令自动重启；进程意外退出不自动重启（防重启风暴）。
 - **健壮性**：AFK/睡眠暂停累加（不回灌）、崩溃恢复（fast-forward）、多屏热插拔、状态持久化。
 
 ## 架构总览
@@ -59,9 +63,18 @@ flowchart LR
 
 ## 下载与安装（Release 资产）
 
-本版本为 **MVP 正式发布（GA）**：功能完备，但 macOS / Windows 双端产物**均未做代码签名 / 公证**（代码签名公证与 Windows 真机验收将在后续版本补齐），首次启动需按下方说明手动放行。从 [Releases](https://github.com/ThreeFish-AI/give-me-a-break/releases) 下载对应平台 zip。
+从 [Releases](https://github.com/ThreeFish-AI/give-me-a-break/releases) 下载对应平台 zip。macOS 产物为**稳定自签名**（10 年期 codeSigning 证书，未公证）：**TCC 权限（辅助功能 / 输入监控 / 日历）授权一次、跨版本升级持久**；Gatekeeper 对「未知开发者」应用仍会拦截**首次**打开（彻底消除需 Apple 公证，$99/年，演进链路已预留，见[签名与 TCC 授权](#签名与-tcc-授权一次授权跨版本持久)）。
 
-**macOS**（`give-me-a-break-*-macos.zip`）：ad-hoc 签名、未公证，首次打开会被 Gatekeeper 拦截。解压后将 `GiveMeABreak.app` 拖入 `/Applications`，在终端执行一次去隔离即可正常启动（macOS 15 起已无右键「打开」旁路）：
+**macOS 一键安装（推荐，安装/升级通用）**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ThreeFish-AI/give-me-a-break/feature/1.x.x/install.sh -o install.sh
+bash install.sh              # 最新正式版；指定版本：bash install.sh v0.1.8
+```
+
+脚本自动完成：下载 Release zip → 去隔离 → 替换 `/Applications/GiveMeABreak.app` → 启动。
+
+**macOS 手动安装**：解压后将 `GiveMeABreak.app` 拖入 `/Applications`，执行一次去隔离再启动（macOS 15 起已无右键「打开」旁路）：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app
@@ -78,12 +91,12 @@ xattr -dr com.apple.quarantine /Applications/GiveMeABreak.app
 ## 构建与运行
 
 ```bash
-# 装配 GiveMeABreak.app（ad-hoc 签名 + Hardened Runtime）并运行
+# 装配 GiveMeABreak.app（默认 ad-hoc 签名；配置 Makefile.local 后为稳定自签名）并运行
 make run
 
 # 或分步
 make build      # swift build -c release
-make app        # 装配 .app + codesign + 清 quarantine
+make app        # 装配 .app + codesign + 清 quarantine（签名身份见「签名与 TCC 授权」）
 open GiveMeABreak.app
 
 # 单元测试（自建运行器，CLT 无 XCTest）
@@ -101,13 +114,51 @@ GIVEMEABREAK_DEBUG=1 .build/release/GiveMeABreak
 
 Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动化）。运行后请在「系统设置 → 隐私与安全性」依次授予：
 
-| 权限                         | 用途                            | 触发时机         |
-| ---------------------------- | ------------------------------- | ---------------- |
-| **辅助功能 (Accessibility)** | CGEvent 合成媒体键控制 QQ 音乐  | 首次启动弹引导窗 |
-| **完全日历访问**             | EventKit 读取 Google 日历会议   | 首次启动请求     |
-| **自动化 (Automation)**      | 仅当未来启用 AppleScript 回退时 | 按需             |
+| 权限                             | 用途                                                     | 触发时机                                             |
+| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------ |
+| **辅助功能 (Accessibility)**     | CGEvent 合成媒体键控制 QQ 音乐                             | 首次启动弹引导窗                                        |
+| **完全日历访问**                 | EventKit 读取 Google 日历会议                              | 首次启动请求                                            |
+| **输入监控 (Input Monitoring)**  | `CGEventTap` 拦截系统锁屏快捷键（Control+Command+Q），触发「屏幕遮罩」而非真正锁屏 | 首次启动尝试接管快捷键时；未授权时自动降级，仅菜单「屏幕遮罩」可用（**授权后需重启 App 才生效**，非热更新） |
+| **自动化 (Automation)**          | 仅当未来启用 AppleScript 回退时                            | 按需                                                     |
 
 > Agent 不得绕过任何权限授予——均由用户在系统设置完成（同构于 [浏览器验证协议](./.agents/browser-validation.md) 的登录态红线）。
+
+## 签名与 TCC 授权（一次授权，跨版本持久）
+
+TCC 权限是否在升级后保留，取决于**代码签名身份是否稳定**：ad-hoc 签名（`codesign -s -`）的 Designated Requirement 绑定 cdhash，每次构建都变，TCC 视为不同应用 → 授权失效；稳定证书签名的 DR 绑定证书 CN → 跨构建不变 → 授权持久（见 [issue #5](./.agents/issue.md)）。
+
+**本机一次性配置**（开发者，此后 `make app` 稳定签名、TCC 不再反复弹）：
+
+```bash
+bash scripts/create-signing-cert.sh   # 创建 10 年期自签名 codeSigning 证书（含一步 sudo 信任）
+                                       # 并自动写入仓库根 Makefile.local（gitignored）
+```
+
+**CI 一次性配置**（让 Release 产物同享稳定签名，下载用户 TCC 同样一次授权）：
+
+| GitHub 设置项                     | 类型     | 值                                                        |
+| --------------------------------- | -------- | ---------------------------------------------------------- |
+| `MACOS_SELFSIGN_P12`              | Secret   | `base64 -i .temp/signing/selfsign.p12 \| pbcopy` 的结果     |
+| `MACOS_SELFSIGN_P12_PWD`          | Secret   | 创建证书时输入的 p12 密码                                   |
+| `KEYCHAIN_PASSWORD`               | Secret   | 任意强密码（CI 临时 keychain 用）                           |
+| `SELFSIGN_IDENTITY`               | Variable | `GiveMeABreak Release`                                      |
+
+配置后 [release.yml](./.github/workflows/release.yml) 自动以同一证书重签 Release 产物（**已配置**，2026-09-08 起生效；未配置/导入失败时发布被**硬门禁阻断**——ad-hoc 产物禁止流出，见 release.yml「Gate — block ad-hoc release artifacts」步，曾因 secrets 漏配致 v0.1.10 以 ad-hoc 发布、TCC 授权升级失效复发。Developer ID + 公证链路已逐字预留，购置后仅配置即启用）。
+
+> **迁移提示**：从 ad-hoc 版本升级到稳定签名版本时，TCC 权限需**最后一次**重新授权，此后跨版本持久；旧 ad-hoc 的孤儿授权记录可在系统设置手动移除，或经 `tccutil reset` 按权限整体重置。
+
+## 快捷键
+
+| 快捷键 | 动作 | 生效范围 | 前置条件 |
+| --- | --- | --- | --- |
+| **⌃⌥⌘K** | 屏幕遮罩 | 全局（任意应用前台） | 无（零权限） |
+| **⌃⌥⌘R** | 立即休息 | 全局（任意应用前台） | 无（零权限） |
+| **⌃⌘Q** | 进入屏幕遮罩（接管系统锁屏快捷键） | 全局 | 「输入监控」权限 + 授权后重启 App |
+| 菜单项裸字母（R/K/L/,/Q） | 对应菜单项 | 仅状态栏菜单展开时 | 无 |
+
+- ⌃⌥⌘K/⌃⌥⌘R 经系统 `RegisterEventHotKey`（Carbon HIToolbox）注册，事件被系统消费、**不会透传给前台应用**，也无需任何权限。
+- ⌃⌘Q 劫持依赖 `CGEventTap`：未授权「输入监控」时该组合键保持系统原生锁屏（预期降级，⌃⌥⌘K 不受影响）；授权后需重启 App 才生效。Release 产物与本机构建（配置 `Makefile.local` 后）均为**稳定自签名，TCC 授权跨版本持久**；从旧 ad-hoc 构建升级而来时需重新授权一次（见[签名与 TCC 授权](#签名与-tcc-授权一次授权跨版本持久)）。
+- 菜单项裸字母快捷键为 macOS 状态栏菜单的原生行为：仅在菜单展开时可选中所选项，**并非全局热键**。
 
 ## QQ 音乐与 Google 日历准备
 
@@ -121,7 +172,7 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 10,
   "workWindows": [
     { "start": { "hours": 9 }, "end": { "hours": 12 } },
     { "start": { "hours": 13, "minutes": 40 }, "end": { "hours": 18 } }
@@ -133,25 +184,38 @@ Give me a break 是**非沙盒**应用（沙盒会阻断媒体键与日历自动
   "controlQQMusic": true,
   "workLogEnabled": true,
   "restMusicPath": null,
-  "workLogPromptTimeoutSeconds": 180
+  "workLogPromptTimeoutSeconds": 180,
+  "exerciseLogEnabled": true,
+  "exercisePromptTimeoutSeconds": 180,
+  "exerciseTypes": ["胯下击掌", "提膝击掌", "深蹲", "俯卧撑"],
+  "agent": { "claudeExecutablePath": null, "claudeSettingsEditorBundleId": null },
+  "power": { "preventIdleSleepEnabled": false, "mode": "displayOnly" },
+  "screenMask": { "effect": "orb" }
 }
 ```
 
+> **Agentic AI（v8 新增，功能预留）**：`agent` 子块为后续 Agentic AI 功能预留的配置——`claudeExecutablePath` 覆盖 Claude Code 可执行文件路径（`null`/空即自动从系统 `PATH` 探测，推荐）；`claudeSettingsEditorBundleId` 记住「Claude 设置」快捷打开所用编辑器的 bundle id（`null` 即系统默认关联应用）。二者仅持久化 + 设置界面可视化编辑，**当前尚未接入任何 Claude Code 调用**。
+>
+> **遮罩特效（v10 新增）**：`screenMask` 子块为遮罩视觉配置——`effect` 背景特效（`orb` 涟漪光球 / `fibers` 冷雾纤丝 / `letterRain` 字雨微光 / `caustics` 水波光斑 / `silk` 丝绸流光，默认 `orb`，未知值回退默认）。引擎不消费本子块（与调度逻辑完全正交），仅集成层 `Overlay/MaskEffects` 消费；着色器于首次遮罩升起时运行时编译（约 100ms，被 0.4s 淡入掩盖）。
+>
+> **电源（v9 新增）**：`power` 子块为「防止空闲睡眠」的配置——`preventIdleSleepEnabled` 总开关（默认 `false`，重启后自动恢复）；`mode` 防护范围（`displayOnly` = 仅显示器断言，等同 `caffeinate -d`；`displayAndSystem` = 显示器 + 系统双断言，等同 `caffeinate -d -i`）。引擎不消费本子块（与休息 / 工作 / 遮罩调度完全正交），仅集成层 `IdleSleepGuard` 消费。
+
 工作日志单独持久化为 `work-log.json`（同目录），schema 见 [shared/work-log.schema.json](./shared/work-log.schema.json)；报告生成（今日/本周/月报 Markdown）见菜单「工作日志…」。运动记录单独持久化为 `exercise-log.json`（同目录）；与工作日志合成的综合报告（周/月/季/年 Markdown）见菜单「综合报告…」。
 
-可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单提供「立即休息 / 设置 / 工作日志 / 补录工作日志 / 综合报告 / 补录运动记录 / 退出」；「开机自启」已迁入设置窗口的「一般」分组。
+可在**设置窗口**图形化编辑（即时保存 + 引擎热更新，无需手动改 JSON）。设置窗口按功能域分页：**通用 · 电源 · 作息 · 休息音效 · 工作日志 · 运动记录 · Agentic AI**;其中「通用」页除「开机自启」外还可切换**遮罩特效**（随「应用」提交，下次遮罩升起生效）；「Agentic AI」页为后续 Agentic AI 功能预留——配置 Claude Code 可执行文件路径覆盖，并可在选定编辑器（自动探测已安装的 VS Code / Cursor 等）中一键打开 `~/.claude/settings.json`；「电源」页配置「防止空闲睡眠」（总开关即时生效，防护范围随「应用」提交）。菜单栏显示「英文状态 + 倒计时」（如 `Work 23′` / `Break 8′`），下拉菜单按动作分组：**立即休息 · 屏幕遮罩** ┃ **工作日志 · 综合报告**（查看）┃ **补录工作 · 补录运动**（录入）┃ **设置 · 防止睡眠 · 开机自启** ┃ **退出**（文案统一 2~4 字）；「开机自启」已迁入设置窗口的「一般」分组；「防止睡眠」总开关与「开机自启」同为即时生效的非草稿项，其防护范围配置在「电源」页。
 
 ## 验证
 
-- **单元测试**：`make test`（77 用例，<1s）覆盖 FSM 谓词优先级、工作示例（30+30→60→10）、AFK 冻结、睡眠不回灌、fast-forward、区间合并、工作日志记录/报告/补录、运动记录/综合报告（周/月/季/年）、onPostBreak 触发不变量、配置迁移（v3→v6）等。详见 [设计文档](./docs/give-me-a-break-design.md#测试矩阵)。
+- **单元测试**：`make test`（91 用例，<1s）覆盖 FSM 谓词优先级、工作示例（30+30→60→10）、AFK 冻结、睡眠不回灌、fast-forward、区间合并、工作日志记录/报告/补录、运动记录/综合报告（周/月/季/年）、运动类型注册表与补录默认时段纯函数、onPostBreak 触发不变量、配置迁移（v3→v9，含 v7→v8 Agentic AI 与 v8→v9 电源设置容错迁移）等。详见 [设计文档](./docs/give-me-a-break-design.md#测试矩阵)。
 - **端到端**（真机，三权限 + QQ 音乐 + Google 账户）：`GIVEMEABREAK_DEBUG=1` 观察遮罩/音乐周期；正常时段等待 50min 触发；日历建会议验证推迟。
 
 ## 已知限制（透明披露）
 
-- **强制休息无法阻止 force-quit**：Cmd-Opt-Esc / `kill` 始终可终止——这是 macOS 设计，非恶意软件。软强制提供摩擦而非硬锁。
+- **强制休息与遮罩期间 Cmd-Opt-Esc 被 HID 层拦截**（白名单外一律吞）；`kill`（含 ssh / 他机）始终可终止——这是 macOS 设计，非恶意软件。软强制提供摩擦而非硬锁：键盘侧的唯一即时出口是双击 Esc，另有 30 分钟看门狗自动核实（防僵尸拦截吞键）。
 - **QQ 音乐联动依赖外部条件**：媒体键控 QQ 音乐需 (a) 已安装 `/Applications/QQMusic.app`、(b) 已授辅助功能权限、(c) QQ 音乐注册为 Now Playing，任一不满足即静默失败（toggle 语义还可能在播放中误暂停）。**故默认叠加内置粉噪音**作为可靠休息音效——无论 QQ 音乐是否可用都有声。失败原因见 Console.app 日志（`[GiveMeABreak][music]`）。详见 [issue #3](./.agents/issue.md)。
 - **日历过滤近似**：「仅 Google」靠 `.calDAV` 源过滤；若有其他 CalDAV 账户（Yahoo/Fastmail）会被纳入。
 - **macOS 26 `canBecomeKey`**：遮罩面板设为可成为 key 以收 Esc；beta 期有崩溃报告，需目标版本实机回归（已预置 [issue](./.agents/issue.md)）。
+- **「屏幕遮罩」非真正锁屏，且仅拦截默认快捷键**：与强制休息同为「软强制」——遮罩期间 Cmd-Opt-Esc 已被键盘白名单拦截（须「输入监控」授权；授权前该组合键仍可绕过）。系统锁屏快捷键拦截固定为 macOS 默认的 Control+Command+Q；若你在「系统设置」自定义过锁屏快捷键，拦截不会跟随生效（仍可用菜单「屏幕遮罩」手动触发）。**如需触发真正的系统锁屏，请改用 Apple 菜单 →「锁定屏幕」**（或系统设置里你自定义的锁屏快捷键）。此外，任意 App 持有 Secure Input（如密码框、Terminal「安全键盘输入」）时，全机所有 `CGEventTap` 会被系统静默禁用，此刻按 Control+Command+Q 仍会触发真正锁屏——这是 macOS 设计，非本 App 缺陷。
 
 ## 项目结构
 
@@ -192,9 +256,5 @@ dotnet publish windows/GiveMeABreakShell/GiveMeABreakShell.csproj -c Release -r 
 ---
 
 <div align="center">
-
-## License
-
-MIT © [ThreeFish-AI](https://github.com/ThreeFish-AI)
-
+  <sub>Built with 🧠, ❤️, and an absurd amount of coffee by <a href="https://github.com/ThreeFish-AI">ThreeFish-AI</a> · Released under the <a href="./LICENSE">MIT License</a>.</sub>
 </div>

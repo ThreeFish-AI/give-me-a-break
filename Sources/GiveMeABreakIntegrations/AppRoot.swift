@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import GiveMeABreakEngine
 
 private let bundleId = "com.aurelius.givemeabreak"
@@ -17,6 +18,20 @@ final public class AppRoot {
     private var configStore: ConfigStore?
     private var settingsController: SettingsWindowController?
     private var sleepObservers: [NSObjectProtocol] = []
+
+    // 防止空闲睡眠/熄屏（IOKit 电源断言，与引擎 FSM 完全正交）
+    private var idleSleepGuard: IdleSleepGuard?
+
+    // Coding Proxy 子进程托管（Foundation.Process，与引擎 FSM 完全正交）
+    private var codingProxyController: CodingProxyProcessController?
+    private var codingProxyConsoleController: CodingProxyConsoleWindowController?
+
+    // 主动屏幕遮罩（遮罩期间挂起心跳冻结引擎，不触碰调度决策状态）+ 系统锁屏快捷键接管 + 全局快捷键
+    private var screenMaskController: ScreenMaskController?
+    private var lockShortcutMonitor: LockShortcutMonitor?
+    /// 遮罩期间的键盘白名单拦截器（单实例，注入两处遮罩控制器）。
+    private var inputGuard: MaskInputGuard?
+    private var globalHotkeyCenter: GlobalHotkeyCenter?
 
     // 工作日志（休息前记录 + 周期报告 + 补录漏掉的时段）
     private var workLogStore: WorkLogStore?
@@ -41,6 +56,28 @@ final public class AppRoot {
 
     public func start() {
         AccessibilityChecker.bootstrap()  // 引导 Accessibility 授权（媒体键控制必需）
+
+        // 键盘白名单拦截器：单实例注入两处遮罩（互斥共享）；遮罩升/落对称 begin/end。
+        let inputGuard = MaskInputGuard()
+        self.inputGuard = inputGuard
+        screenMaskController = ScreenMaskController(inputGuard: inputGuard)
+        screenMaskController?.onDismiss = { [weak self] in self?.handleScreenMaskDismissed() }
+        let lockShortcut = LockShortcutMonitor()
+        lockShortcut.onTriggered = { [weak self] in self?.enterScreenMask() }
+        lockShortcut.start()  // 引导「输入监控」授权；未授权时自动降级，仅菜单「屏幕遮罩」可用
+        lockShortcutMonitor = lockShortcut
+
+        // 全局快捷键（零权限，任意应用前台生效）：⌃⌥⌘R 立即休息 / ⌃⌥⌘K 屏幕遮罩。
+        // 菜单项裸字母快捷键仅在菜单展开时生效（AppKit 原生行为），全局诉求由本层承载。
+        let hotkeys = GlobalHotkeyCenter()
+        let hyperModifiers = UInt32(controlKey | optionKey | cmdKey)
+        hotkeys.register(keyCode: UInt32(kVK_ANSI_R), modifiers: hyperModifiers) { [weak self] in
+            self?.forceRestNow()
+        }
+        hotkeys.register(keyCode: UInt32(kVK_ANSI_K), modifiers: hyperModifiers) { [weak self] in
+            self?.enterScreenMask()
+        }
+        globalHotkeyCenter = hotkeys
 
         let dir = ConfigStore.defaultDirectory(bundleId: bundleId)
         let store: ConfigStore?
@@ -78,17 +115,37 @@ final public class AppRoot {
         exerciseStore = exercise
         exercisePromptController = ExercisePromptWindowController()
         exerciseBackfillController = ExerciseBackfillWindowController(onSave: { [weak self] entry in
-            self?.exerciseStore?.append(entry)
+            guard let self else { return }
+            self.exerciseStore?.append(entry)              // 落库 exercise-log.json
+            self.learnCustomExerciseTypes(from: entry.sets) // 自定义类型自动记住 → config.exerciseTypes
         })
         if let exercise, let workLog {
-            combinedReportController = CombinedReportWindowController(workStore: workLog, exerciseStore: exercise)
+            combinedReportController = CombinedReportWindowController(
+                workStore: workLog,
+                exerciseStore: exercise,
+                exerciseTypesProvider: { [weak self] in
+                    self?.engine?.config.exerciseTypes ?? defaultExerciseTypes
+                },
+                onSaveExercise: { [weak self] entry in
+                    guard let self else { return }
+                    self.exerciseStore?.append(entry)
+                    self.learnCustomExerciseTypes(from: entry.sets)
+                },
+                onUpdateExercise: { [weak self] entry in
+                    guard let self else { return }
+                    self.exerciseStore?.update(entry)
+                    self.learnCustomExerciseTypes(from: entry.sets)
+                }
+            )
         }
 
         let config = debugConfigOrLoaded(store: store)
         let sensors = SystemSensors()
         self.sensors = sensors
 
-        let overlay = LiveOverlayController()
+        let overlay = LiveOverlayController(inputGuard: inputGuard)
+        // 休息遮罩与手动遮罩共用视觉配置（单一事实源）；每次升起时读当前 config。
+        overlay.settingsProvider = { [weak self] in self?.engine?.config.screenMask ?? ScreenMaskSettings() }
         overlay.onRequestEarlyExit = { [weak self] in self?.engine?.requestEarlyRestExit() }
         self.overlayController = overlay
 
@@ -112,18 +169,32 @@ final public class AppRoot {
         self.engine = engine
         lastSavedPhase = engine.state.phase
 
+        // 防止空闲睡眠：启动即恢复持久化状态（默认关则零行为；与引擎 FSM 完全正交）
+        let powerGuard = IdleSleepGuard()
+        powerGuard.apply(config.power)
+        idleSleepGuard = powerGuard
+
+        // Coding Proxy 子进程托管：启动即按持久化配置恢复（默认关则零行为；与引擎 FSM 完全正交）
+        let codingProxy = CodingProxyProcessController()
+        codingProxy.apply(config.agent.codingProxy)
+        codingProxyController = codingProxy
+        codingProxyConsoleController = CodingProxyConsoleWindowController(controller: codingProxy)
+
         statusItem = StatusItemController(
-            onForceRest: { [weak self] in
-                self?.engine?.forceRestNow()
-                self?.engine?.tick()  // 立即生效，不等下一秒心跳
-            },
+            onForceRest: { [weak self] in self?.forceRestNow() },
+            onEnterScreenMask: { [weak self] in self?.enterScreenMask() },
             loginEnabled: LoginService.isEnabled,
             onSetLaunchAtLogin: { LoginService.setEnabled($0) },
+            preventIdleSleepEnabled: { [weak self] in
+                self?.engine?.config.power.preventIdleSleepEnabled ?? false
+            },
+            onSetPreventIdleSleep: { [weak self] enabled in self?.setPreventIdleSleep(enabled) },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenWorkLog: { [weak self] in self?.openWorkLog() },
             onOpenBackfillWorkLog: { [weak self] in self?.openBackfillWorkLog() },
             onOpenCombinedReport: { [weak self] in self?.openCombinedReport() },
-            onOpenBackfillExercise: { [weak self] in self?.openBackfillExercise() }
+            onOpenBackfillExercise: { [weak self] in self?.openBackfillExercise() },
+            onOpenCodingProxyConsole: { [weak self] in self?.openCodingProxyConsole() }
         )
 
         let heartbeat = HeartbeatTimer(queue: .main)  // 主队列：副作用（overlay/music）均 UI 安全
@@ -131,7 +202,7 @@ final public class AppRoot {
             guard let self else { return }
             self.engine?.tick()
             if let phase = self.engine?.state.phase {
-                self.statusItem?.setStatus(text: self.statusText(for: phase, engine: self.engine))
+                self.statusItem?.setPhase(phase, statusText: self.statusText(for: phase, engine: self.engine))
             }
         }
         self.heartbeat = heartbeat
@@ -139,14 +210,24 @@ final public class AppRoot {
         settingsController = SettingsWindowController(
             onApply: { [weak self] newConfig in
                 guard let self else { return }
+                // 「防止睡眠」总开关走即时通道（菜单栏与设置窗共用，engine.config 为单一事实源），
+                // 故以 live 值覆盖草稿快照——否则设置窗开启期间菜单侧的改动会被旧草稿静默回滚。
+                var applied = newConfig
+                if let live = self.engine?.config.power.preventIdleSleepEnabled {
+                    applied.power.preventIdleSleepEnabled = live
+                }
                 if let store = self.configStore {
-                    do { try store.saveConfig(newConfig) }
+                    do { try store.saveConfig(applied) }
                     catch { NSLog("[GiveMeABreak] 配置保存失败：\(error.localizedDescription)") }
                 }
-                self.engine?.updateConfig(newConfig)
-                NSLog("[GiveMeABreak] 配置已应用：\(newConfig.workWindows.count) 个工作窗口 / 工作 \(Int(newConfig.workIntervalSeconds/60))min / 休息 \(Int(newConfig.restDurationSeconds/60))min / 白噪音\(newConfig.ambientSoundEnabled ? "开" : "关") / QQ音乐\(newConfig.controlQQMusic ? "开" : "关")")
+                self.engine?.updateConfig(applied)
+                self.idleSleepGuard?.apply(applied.power)   // 防护范围（mode）随「应用」生效
+                // Coding Proxy：随「应用」提交（含开关/目录/命令；运行中改目录或命令自动重启）
+                self.codingProxyController?.apply(applied.agent.codingProxy)
+                NSLog("[GiveMeABreak] 配置已应用：\(applied.workWindows.count) 个工作窗口 / 工作 \(Int(applied.workIntervalSeconds/60))min / 休息 \(Int(applied.restDurationSeconds/60))min / 白噪音\(applied.ambientSoundEnabled ? "开" : "关") / QQ音乐\(applied.controlQQMusic ? "开" : "关") / 防止睡眠\(applied.power.preventIdleSleepEnabled ? "开" : "关")")
             },
-            onToggleLogin: { LoginService.setEnabled($0) }
+            onToggleLogin: { LoginService.setEnabled($0) },
+            onTogglePreventIdleSleep: { [weak self] in self?.setPreventIdleSleep($0) }
         )
 
         registerSleepObservers()
@@ -164,12 +245,20 @@ final public class AppRoot {
         if ProcessInfo.processInfo.environment["GIVEMEABREAK_SHOW_COMBINED"] != nil {
             openCombinedReport()
         }
+        // 调试：启动即打开 Coding Proxy 控制台（便于验证日志流与启停按钮）
+        if ProcessInfo.processInfo.environment["GIVEMEABREAK_SHOW_CODINGPROXY"] != nil {
+            openCodingProxyConsole()
+        }
     }
 
     /// 应用退出前落盘最终状态。
     public func shutdown() {
         if let state = engine?.state { configStore?.saveState(state) }
         heartbeat?.stop()
+        inputGuard?.end()  // 遮罩中退出的路径：随锁屏劫持一并停（进程回收为兜底）
+        lockShortcutMonitor?.stop()
+        idleSleepGuard?.release()
+        codingProxyController?.stopForQuit()   // 同步有界停止子进程（SIGTERM → ≤2s → SIGKILL），不留孤儿
         for observer in sleepObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
@@ -181,6 +270,37 @@ final public class AppRoot {
     func openSettings() {
         guard let config = engine?.config else { return }
         settingsController?.show(currentConfig: config, loginEnabled: LoginService.isEnabled)
+    }
+
+    // MARK: - 主动屏幕遮罩（菜单「屏幕遮罩」+ 系统锁屏快捷键接管的共同入口）
+
+    /// 进入手动屏幕遮罩。遮罩期间**冻结引擎**（挂起心跳）：工作计时暂停、计划性休息及其小结窗
+    /// 不会在遮罩中触发。已在强制休息中（.resting，含工作日志小结窗延迟期）时忽略，避免叠加两组遮罩面板。
+    func enterScreenMask() {
+        guard engine?.state.phase != .resting else {
+            NSLog("[GiveMeABreak][screenMask] 强制休息进行中，忽略手动遮罩触发")
+            return
+        }
+        guard let mask = screenMaskController, !mask.isShown else { return }  // 已显示：幂等忽略
+        mask.show(settings: engine?.config.screenMask ?? ScreenMaskSettings())
+        heartbeat?.suspend()  // 遮罩 ⇒ 引擎冻结（与 handleWake 的 resume 严格配对，见 didWake 守卫）
+        NSLog("[GiveMeABreak][screenMask] 遮罩期间工作计时已冻结")
+    }
+
+    /// 遮罩结束（双击 Esc / 被「立即休息」让位）：遮罩时长不计入工作累加器（rebase 对账基点，
+    /// 语义同 handleWake）+ 恢复心跳。与 enterScreenMask 的 suspend 严格配对。
+    private func handleScreenMaskDismissed() {
+        engine?.handleScreenMaskEnded()
+        heartbeat?.resume()
+        NSLog("[GiveMeABreak][screenMask] 遮罩结束：恢复工作计时")
+    }
+
+    /// 立即休息（菜单「立即休息」/ 全局快捷键 ⌃⌥⌘R 共用入口）：立即生效，不等下一秒心跳。
+    /// 显式用户动作优先于遮罩：先撤遮罩（onDismiss 回调 rebase + 恢复心跳），再进入强制休息。
+    func forceRestNow() {
+        screenMaskController?.dismiss()
+        engine?.forceRestNow()
+        engine?.tick()
     }
 
     // MARK: - 工作日志
@@ -197,6 +317,11 @@ final public class AppRoot {
         workLogBackfillController?.show(defaultStart: defaultStart)
     }
 
+    /// 打开「Coding Proxy 控制台」窗口（菜单入口）：日志流查看 + 会话级启动/停止/重启。
+    func openCodingProxyConsole() {
+        codingProxyConsoleController?.show()
+    }
+
     // MARK: - 运动记录
 
     /// 打开「综合报告」窗口（菜单入口）：工作日志 + 运动记录按 周/月/季/年 合成。
@@ -204,11 +329,14 @@ final public class AppRoot {
         combinedReportController?.show()
     }
 
-    /// 打开「补录运动记录」窗口（菜单入口）：默认起始取上一条记录的 endedAt，无则回退 10 分钟前。
+    /// 打开「补录运动记录」窗口（菜单入口）：默认时段为 `[now − restDuration, now]`（「补刚才那段休息做的运动」），
+    /// 而非沿用上一条记录的 endedAt（那是「紧接续写」语义，属报告内「加一条」按钮）。
     func openBackfillExercise() {
-        let lastEnd = exerciseStore?.loadEntries().last?.endedAt
-        let defaultStart = lastEnd ?? Date().addingTimeInterval(-10 * 60)
-        exerciseBackfillController?.show(defaultStart: defaultStart)
+        let rest = engine?.config.restDurationSeconds ?? 600
+        let range = exerciseBackfillDefaultRange(now: Date(), restDurationSeconds: rest)
+        exerciseBackfillController?.show(defaultStart: range.start,
+                                         defaultEnd: range.end,
+                                         exerciseTypes: exerciseTypes)
     }
 
     /// 引擎在休息自然结束、回到工作时回调。决定弹运动录入窗还是静默放行——不阻塞、不冻结心跳。
@@ -227,12 +355,15 @@ final public class AppRoot {
         prompt.present(
             restStartedAt: ctx.restStartedAt,
             restEndedAt: ctx.restEndedAt,
+            exerciseTypes: exerciseTypes,
+            timeoutSeconds: engine?.config.exercisePromptTimeoutSeconds ?? 180,
             onSubmit: { [weak self] sets, note in
                 store.append(ExerciseEntry(
                     startedAt: ctx.restStartedAt,
                     endedAt: ctx.restEndedAt,
                     sets: sets,
                     note: note))
+                self?.learnCustomExerciseTypes(from: sets)   // 自定义类型自动记住
                 self?.consecutiveExerciseSkips = 0
             },
             onSkip: { [weak self] in
@@ -289,6 +420,51 @@ final public class AppRoot {
         heartbeat?.resume()
     }
 
+    // MARK: - 运动类型注册表（config.exerciseTypes 的运行期读取 + 自定义项自动记住）
+
+    /// 当前生效的运动类型注册表（Picker 数据源）；引擎无配置时回退出厂默认。
+    private var exerciseTypes: [String] { engine?.config.exerciseTypes ?? defaultExerciseTypes }
+
+    /// 保存一条运动记录后，把其中的自定义类型（不在注册表内的）追加进 `config.exerciseTypes` 并持久化。
+    /// 纯计算交由 `appendedExerciseTypes`（可单测）；此处只负责「写 config + 热更新引擎」副作用。
+    /// 无新增类型时该纯函数返回 nil，本方法即跳过写盘（避免无谓 I/O）。
+    private func learnCustomExerciseTypes(from sets: [ExerciseSet]) {
+        guard let engine = engine, let store = configStore else { return }
+        var config = engine.config
+        guard let updated = appendedExerciseTypes(current: config.exerciseTypes, sets: sets) else { return }
+        config.exerciseTypes = updated
+        do {
+            try store.saveConfig(config)
+        } catch {
+            NSLog("[GiveMeABreak] 运动类型注册表持久化失败：\(error.localizedDescription)")
+        }
+        engine.updateConfig(config)
+        NSLog("[GiveMeABreak] 运动类型注册表已更新：\(updated.count) 项")
+    }
+
+    // MARK: - 防止空闲睡眠（菜单快捷开关）
+
+    /// 「防止睡眠」总开关的唯一即时通道（菜单栏勾选项 + 设置「电源」页开关共用）：写 config 并持久化
+    /// （防护范围 mode 仍随设置窗「应用」提交）。
+    /// 镜像 `learnCustomExerciseTypes` 的「copy config → mutate → save → updateConfig」路径；
+    /// store 不可用时降级为仅本会话生效（配置本就无处落盘），仍即时应用电源断言。
+    private func setPreventIdleSleep(_ enabled: Bool) {
+        guard let engine else { return }
+        guard enabled != engine.config.power.preventIdleSleepEnabled else { return }  // 幂等
+        var config = engine.config
+        config.power.preventIdleSleepEnabled = enabled
+        if let store = configStore {
+            do {
+                try store.saveConfig(config)
+            } catch {
+                NSLog("[GiveMeABreak][power] 配置持久化失败：\(error.localizedDescription)")
+            }
+        }
+        engine.updateConfig(config)
+        idleSleepGuard?.apply(config.power)
+        NSLog("[GiveMeABreak][power] 防止空闲睡眠：\(enabled ? "开" : "关")")
+    }
+
     // MARK: - 调试配置
 
     /// GIVEMEABREAK_DEBUG=1 时使用极速配置（8s 工作 / 15s 休息 / 全天窗口 / 禁用 AFK）便于手动验证遮罩与音乐。
@@ -316,22 +492,22 @@ final public class AppRoot {
         lastSaveAt = now
     }
 
-    // MARK: - 菜单栏倒计时文案
+    // MARK: - 菜单栏状态文案（Tooltip / 菜单状态行共用）
 
     private func statusText(for phase: EnginePhase, engine: LiveGiveMeABreakEngine?) -> String {
-        guard let engine else { return "🍅" }
+        guard let engine else { return "引擎未就绪" }
         switch phase {
         case .working:
             let remain = max(0, engine.config.workIntervalSeconds - engine.state.workAccumulatedSeconds)
-            return "Work \(Int(ceil(remain / 60)))′"
+            return "工作中 · 距下次休息 \(Int(ceil(remain / 60))) 分钟"
         case .resting:
-            guard let start = engine.state.restStartedAt else { return "Break" }
+            guard let start = engine.state.restStartedAt else { return "休息中" }
             let deadline = start.addingTimeInterval(engine.config.restDurationSeconds)
             let remain = max(0, deadline.timeIntervalSince(Date()))
-            return "Break \(Int(ceil(remain / 60)))′"
-        case .inMeeting: return "Meeting"
-        case .idle: return "Paused"
-        case .offDuty: return "Off"
+            return "休息中 · 剩余 \(Int(ceil(remain / 60))) 分钟"
+        case .inMeeting: return "会议中 · 暂停计时"
+        case .idle: return "已暂停"
+        case .offDuty: return "非工作时段"
         }
     }
 
@@ -348,13 +524,18 @@ final public class AppRoot {
         let did = nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             self.sensors?.isAsleep = false
-            // 小结窗仍开启（含永久等待）时不抢恢复心跳：否则唤醒后引擎抢先 tick 会把这次延迟休息
-            // 静默判定为「已结束」。心跳由提示窗收尾的 afterPrompt 负责恢复，suspend/resume 严格配对。
-            if self.workLogPromptController?.isPresenting != true {
+            // 小结窗仍开启（含永久等待）→ 由提示窗收尾的 afterPrompt 负责恢复；屏幕遮罩仍显示
+            // → 由遮罩收尾的 handleScreenMaskDismissed 负责恢复。二者之外才在此恢复心跳，
+            // suspend/resume 严格配对，避免唤醒后引擎抢先 tick 把延迟休息/遮罩冻结静默打破。
+            let promptPresenting = self.workLogPromptController?.isPresenting == true
+            let maskShown = self.screenMaskController?.isShown == true
+            if !promptPresenting, !maskShown {
                 self.heartbeat?.resume()
             }
             self.engine?.handleWake()
-            NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(self.workLogPromptController?.isPresenting == true ? "（小结窗开启，心跳保持挂起）" : " + 恢复心跳")")
+            self.lockShortcutMonitor?.recheckHealth()  // 唤醒时顺带核实锁屏快捷键 tap 是否仍处于启用状态
+            self.inputGuard?.recheckHealth()            // 遮罩跨睡眠存活 → 其键盘拦截 tap 同样核实
+            NSLog("[GiveMeABreak] 系统唤醒：重置对账基点\(promptPresenting ? "（小结窗开启，心跳保持挂起）" : maskShown ? "（屏幕遮罩中，心跳保持挂起）" : " + 恢复心跳")")
         }
         sleepObservers = [will, did]
     }

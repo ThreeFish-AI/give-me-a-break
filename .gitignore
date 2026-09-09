@@ -14,6 +14,7 @@ config.local.yaml
 /assets/
 .mcp.json
 .idea/
+Makefile.local
 
 # Swift / SPM / Xcode
 .build/
