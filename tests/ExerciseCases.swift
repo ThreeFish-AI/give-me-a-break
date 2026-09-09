@@ -251,6 +251,44 @@ func runExerciseCases() {
             }
         }
     }
+
+    // MARK: 纯函数（exerciseBackfillDefaultRange / appendedExerciseTypes）
+
+    test("exerciseBackfillDefaultRange：以 now 为终点、restDuration 为跨度回溯") {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 10 分钟休息
+        let r10 = exerciseBackfillDefaultRange(now: now, restDurationSeconds: 600)
+        expect(approx(r10.end.timeIntervalSince1970, 1_000_000, 0.001), "end 应为 now")
+        expect(approx(r10.start.timeIntervalSince1970, 1_000_000 - 600, 0.001), "start 应为 now − 600s")
+        expect(r10.start < r10.end, "start 必须早于 end")
+
+        // 0 / 负休息时长裁剪为 0（start == end，不产生负跨度）
+        let r0 = exerciseBackfillDefaultRange(now: now, restDurationSeconds: 0)
+        expectEqual(r0.start, r0.end, "0 时长 → start == end")
+        let rNeg = exerciseBackfillDefaultRange(now: now, restDurationSeconds: -300)
+        expectEqual(rNeg.start, rNeg.end, "负时长裁剪为 0 → start == end")
+    }
+
+    test("appendedExerciseTypes：仅追加新类型，去重、保序、去空白") {
+        let current = ["深蹲", "俯卧撑"]
+        let sets = [
+            ExerciseSet(type: "深蹲", reps: 20),       // 已存在 → 跳过
+            ExerciseSet(type: "平板支撑", reps: 30),    // 新 → 追加
+            ExerciseSet(type: "  开合跳  ", reps: 15),  // 新 + 需去空白 → 追加「开合跳」
+            ExerciseSet(type: "平板支撑", reps: 12),    // 重复新 → 去重
+            ExerciseSet(type: "", reps: 5),            // 空白 → 跳过
+            ExerciseSet(type: "   ", reps: 5)          // 纯空白 → 跳过
+        ]
+        let updated = appendedExerciseTypes(current: current, sets: sets)
+        expectEqual(updated, ["深蹲", "俯卧撑", "平板支撑", "开合跳"], "应按出现顺序追加去空白后的新类型，去重")
+    }
+
+    test("appendedExerciseTypes：无新类型返回 nil（调用方据此跳过写盘）") {
+        let current = ["深蹲", "俯卧撑"]
+        let sets = [ExerciseSet(type: "深蹲", reps: 20), ExerciseSet(type: "俯卧撑", reps: 10)]
+        expect(appendedExerciseTypes(current: current, sets: sets) == nil, "全为已存在类型 → nil")
+        expect(appendedExerciseTypes(current: current, sets: []) == nil, "空 sets → nil")
+    }
 }
 
 /// golden / 模型测试共用 fixture：工作 + 运动跨周/月/季/年，覆盖各序列化分支。

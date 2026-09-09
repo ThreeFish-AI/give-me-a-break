@@ -10,21 +10,26 @@ import GiveMeABreakEngine
 struct ExercisePromptView: View {
     private let restStartedAt: Date
     private let restEndedAt: Date
+    /// Picker 数据源（配置注册表，v7 起来自 `DayPlanConfig.exerciseTypes`）。
+    private let types: [String]
     private let onSubmit: ([ExerciseSet], String?) -> Void
     private let onSkip: () -> Void
 
-    @State private var drafts: [ExerciseSetDraft] = [ExerciseSetDraft()]
+    @State private var drafts: [ExerciseSetDraft]
     @State private var note: String = ""
     @State private var noteExpanded: Bool = false
 
     init(restStartedAt: Date,
          restEndedAt: Date,
+         types: [String],
          onSubmit: @escaping ([ExerciseSet], String?) -> Void,
          onSkip: @escaping () -> Void) {
         self.restStartedAt = restStartedAt
         self.restEndedAt = restEndedAt
+        self.types = types
         self.onSubmit = onSubmit
         self.onSkip = onSkip
+        _drafts = State(initialValue: [ExerciseSetDraft(selection: types.first ?? defaultExerciseTypes.first ?? "")])
     }
 
     private var windowText: String {
@@ -51,7 +56,7 @@ struct ExercisePromptView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
 
-            ExerciseSetsEditor(drafts: $drafts)
+            ExerciseSetsEditor(types: types, drafts: $drafts)
 
             // 可选「备注」，默认折叠
             if noteExpanded {

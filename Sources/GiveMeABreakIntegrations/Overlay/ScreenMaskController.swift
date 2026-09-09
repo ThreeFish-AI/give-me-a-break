@@ -2,55 +2,48 @@ import AppKit
 import SwiftUI
 import GiveMeABreakEngine
 
-/// 全屏遮罩控制器：为每个 NSScreen 创建一个 borderless NSPanel，置于 CGShieldingWindowLevel
-/// （压过菜单栏/Dock/全屏/系统屏保），collectionBehavior 覆盖全 Space。软强制：Esc → 遮罩内嵌确认视图。
-///
-/// 关键设计：确认 UI（继续休息 / 直接退出）直接渲染在遮罩面板内部（与遮罩同层级），
-/// 而非 NSAlert 模态窗——后者默认 level=NSModalPanelWindowLevel 远低于遮罩，
-/// 对话框会渲染在遮罩之下不可见，导致 Esc 退出永远失效。
-final class LiveOverlayController: OverlayController {
-    var onRequestEarlyExit: (() -> Void)?
+/// 手动屏幕遮罩控制器：与 LiveOverlayController 结构对称（多屏 CGShieldingWindowLevel 面板 +
+/// 双击 Esc），但与调度引擎（FSM）零耦合——不读写 EngineState、不触发任何休息相关副作用。
+/// 故退出逻辑无需像 LiveOverlayController 那样经回调桥接到引擎，dismiss() 由本类直接调用。
+/// 复用 LiveOverlayController.swift 内定义的 OverlayPanel（NSPanel 子类，internal 可跨文件访问）。
+final class ScreenMaskController {
+    /// 遮罩真正收起的回调（仅状态切换时触发一次；幂等 no-op 不触发）。AppRoot 据此恢复心跳计时。
+    var onDismiss: (() -> Void)?
 
-    /// 键盘白名单拦截器（与手动遮罩共享同一实例；两者互斥，见 ScreenMaskController 同名注释）。
+    /// 键盘白名单拦截器（遮罩期间吞掉除裸 Esc/Return 外的全部按键，含 ⌘Tab 等系统组合键）。
+    /// 由 AppRoot 注入、与休息遮罩共享同一实例：两者互斥（resting 守卫 + forceRestNow 先撤遮罩），
+    /// 幂等 bool 足矣；若未来互斥被破坏，首个 end() 即停拦截——fail-open，符合软强制哲学。
     private let inputGuard: MaskInputGuard
 
     init(inputGuard: MaskInputGuard) {
         self.inputGuard = inputGuard
     }
-    /// 遮罩视觉配置的提供者（由 AppRoot 注入，读取当前 config）。
-    /// 经闭包注入而非扩展 `OverlayController` 协议：协议签名须保持无 AppKit/视觉概念，
-    /// 且引擎与既有测试桩不应因视觉特性而改动（边界管理）。
-    var settingsProvider: (() -> ScreenMaskSettings)?
 
     private var panels: [OverlayPanel] = []
+    /// 本次升起所用的视觉配置（升起时快照：遮罩罩住一切期间无设置变更路径）。
+    private var settings = ScreenMaskSettings()
     private var escMonitor: Any?
     private var screenObserver: NSObjectProtocol?
-    private var currentDeadline: Date?
-    private var lastEscAt: Date?  // 双击 Esc 直退检测：上次 Esc 时刻
-    private var viewModel: OverlayViewModel?  // 确认态共享源（取代原 alertShowing）
+    private var lastEscAt: Date?  // 双击 Esc 检测：上次 Esc 时刻（0.4s 窗口，同休息遮罩）
 
     var isShown: Bool { !panels.isEmpty }
 
-    func show(restDeadline: Date) {
+    func show(settings: ScreenMaskSettings = ScreenMaskSettings()) {
         guard panels.isEmpty else { return }  // 幂等
-        currentDeadline = restDeadline
-        // 入口创建新 vm（dismiss 时置 nil，故此处恒为干净实例，无需判空复用）
-        viewModel = OverlayViewModel(deadline: restDeadline) { [weak self] in
-            self?.confirmEarlyExit()
-        }
+        self.settings = settings
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
         installEscMonitor()
         observeScreens()
         NSApp.activate(ignoringOtherApps: true)
-        inputGuard.begin()  // 末句启用：与 ScreenMaskController.show 对称
-        NSLog("[GiveMeABreak][overlay] show：\(panels.count) 屏，deadline=\(restDeadline)")
+        inputGuard.begin()  // 末句启用：面板建成且已激活后才吞键（毫秒级窗口内遮罩已在覆盖）
+        NSLog("[GiveMeABreak][screenMask] show：\(panels.count) 屏")
     }
 
     func dismiss() {
         guard !panels.isEmpty else { return }  // 幂等
-        inputGuard.end()  // 首句停用：与 ScreenMaskController.dismiss 对称
+        inputGuard.end()  // 首句停用：淡出前键盘即刻恢复；卡死的 fade 完成回调也无法滞留 tap
         removeEscMonitor()
         removeScreenObserver()
         for panel in panels {
@@ -62,11 +55,9 @@ final class LiveOverlayController: OverlayController {
             }
         }
         panels.removeAll()
-        currentDeadline = nil
         lastEscAt = nil  // 干净初始态，防下次 show 残留双击计时
-        viewModel?.isConfirming = false
-        viewModel = nil  // 干净初始态，防下次 show 残留确认态
-        NSLog("[GiveMeABreak][overlay] dismiss")
+        onDismiss?()
+        NSLog("[GiveMeABreak][screenMask] dismiss")
     }
 
     // MARK: - Panel 构造
@@ -83,17 +74,19 @@ final class LiveOverlayController: OverlayController {
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = false
+        // 层级不设任何调试旁路：曾为截图取证加过 DEBUG 降级到 .floating，
+        // 但那会让菜单栏/Dock 盖不住（.floating 仅 3，而屏蔽层级约 21 亿），
+        // 等于用「调试便利」换掉了遮罩的核心作用。取证改用 CGWindowListCopyWindowInfo
+        // 核验层级 + 用户肉眼确认（见 .agents/issue.md）。
         panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications]
 
-        // resting 期间 viewModel 必非 nil（show 创建、dismiss 才置 nil）；多屏共享同一实例
-        let settings = settingsProvider?() ?? ScreenMaskSettings()
-        let hosting = NSHostingView(rootView: OverlayContentView(viewModel: viewModel!, settings: settings))
+        let hosting = NSHostingView(rootView: ScreenMaskContentView(settings: settings))
         panel.contentView = hosting
         panel.setFrame(screen.frame, display: true)  // 显式 setFrame（macOS 15 已知零 frame 回退）
         panel.alphaValue = 0
         if panels.isEmpty {
-            panel.makeKeyAndOrderFront(nil)  // 主屏：成为 key，使 SwiftUI Button 可接收点击 / 回车
+            panel.makeKeyAndOrderFront(nil)  // 主屏：成为 key，使本地 Esc 监听可靠接收
         } else {
             panel.orderFrontRegardless()
         }
@@ -104,20 +97,17 @@ final class LiveOverlayController: OverlayController {
         return panel
     }
 
-    // MARK: - Esc 软强制（本地事件监听 → 遮罩内嵌确认双语义）
+    // MARK: - 双击 Esc 退出（无单击确认态：手动遮罩无「提前退出有代价」语义，双击只为防误触）
 
     private func installEscMonitor() {
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.keyCode == 53 else { return event }  // 53 = Esc
             let now = Date()
             if let last = self.lastEscAt, now.timeIntervalSince(last) < 0.4 {
-                // 双击 Esc → 直接退出休息（复用「直接退出」按钮同款安全退出路径）
                 self.lastEscAt = nil  // 消费，防三连击的第三次被当作新一轮首击
-                self.confirmEarlyExit()
+                self.dismiss()
             } else {
-                // 单击 Esc = 进入/取消确认（保留既有语义）
                 self.lastEscAt = now
-                self.viewModel?.isConfirming.toggle()
             }
             return nil  // 消费该事件
         }
@@ -126,12 +116,6 @@ final class LiveOverlayController: OverlayController {
     private func removeEscMonitor() {
         if let escMonitor { NSEvent.removeMonitor(escMonitor) }
         escMonitor = nil
-    }
-
-    /// 用户在确认视图中点击「直接退出」。
-    private func confirmEarlyExit() {
-        viewModel?.isConfirming = false
-        onRequestEarlyExit?()
     }
 
     // MARK: - 屏幕热插拔
@@ -153,17 +137,11 @@ final class LiveOverlayController: OverlayController {
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
-        NSLog("[GiveMeABreak][overlay] 屏幕变化，重建 \(panels.count) 屏")
+        NSLog("[GiveMeABreak][screenMask] 屏幕变化，重建 \(panels.count) 屏")
     }
 
     private func removeScreenObserver() {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
     }
-}
-
-/// borderless 面板子类：可成为 key 以接收键盘（Esc 经本地监听捕获，双保险）。
-final class OverlayPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
 }

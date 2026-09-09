@@ -47,10 +47,181 @@ public struct WorkWindow: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+// MARK: - Coding Proxy 设置（本地工具子进程托管）
+
+/// 「Coding Proxy」功能域的正交配置子结构（v10 新增，嵌套于 `AgentSettings`，
+/// 保持「Agentic AI 页签 ↔ agent 域」1:1 映射）。
+/// 引擎不消费本结构（同 `power` 现状，携带即忽略）；命令解析/校验/apply 决策等纯逻辑位于
+/// `CodingProxySupport`，进程托管本体位于集成层 `CodingProxyProcessController`。
+/// 生命周期语义：开启 = 随本应用启动并保持运行；退出应用时一并停止（不留孤儿进程）。
+public struct CodingProxySettings: Codable, Equatable, Sendable {
+    /// 总开关（随应用自动启动并保持运行），默认关（升级用户零行为变化）。
+    public var autoStartEnabled: Bool
+    /// 子进程工作目录（绝对路径或 `~` 前缀），空串 = 未配置（开启也不会启动，控制台明示原因）。
+    public var workingDirectory: String
+    /// 启动命令（按空白切分、支持引号包夹参数），默认 `uv run coding-proxy start`。
+    public var launchCommand: String
+
+    public init(autoStartEnabled: Bool = false,
+                workingDirectory: String = "",
+                launchCommand: String = "uv run coding-proxy start") {
+        self.autoStartEnabled = autoStartEnabled
+        self.workingDirectory = workingDirectory
+        self.launchCommand = launchCommand
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 PowerSettings 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case autoStartEnabled, workingDirectory, launchCommand
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = CodingProxySettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        autoStartEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoStartEnabled) ?? d.autoStartEnabled
+        workingDirectory = try c.decodeIfPresent(String.self, forKey: .workingDirectory) ?? d.workingDirectory
+        launchCommand = try c.decodeIfPresent(String.self, forKey: .launchCommand) ?? d.launchCommand
+    }
+}
+
+// MARK: - Agentic AI 设置（Claude Code 相关配置)
+
+/// 「Agentic AI」功能域的正交配置子结构（为引入 Agentic AI 特性预留的 groundwork）。
+/// 零 AppKit 依赖——编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`；
+/// Coding Proxy 子进程托管位于集成层 `CodingProxyProcessController`。
+/// 引擎不消费本结构（同 `restMusicPath` 现状，携带即忽略）。
+/// 与外围扁平字段正交解耦：Agentic AI 相关配置集中于此，独立生长、互不污染。
+public struct AgentSettings: Codable, Equatable, Sendable {
+    /// Claude Code 可执行文件的自定义绝对路径覆盖。
+    /// `nil`/空 = 不覆盖，运行时自动从系统 `PATH` 探测（推荐）。App 非沙盒，故直接以路径引用。
+    /// 当前仅持久化、未接入实际调用（groundwork）。
+    public var claudeExecutablePath: String?
+    /// 打开 `~/.claude/settings.json` 所用编辑器的 bundle id（如 `com.microsoft.VSCode`）。
+    /// `nil` = 使用系统默认关联应用打开；所选编辑器未安装时集成层回退系统默认。
+    public var claudeSettingsEditorBundleId: String?
+    /// Coding Proxy 子进程托管配置（v10 新增）。详见 `CodingProxySettings`。
+    public var codingProxy: CodingProxySettings
+
+    public init(claudeExecutablePath: String? = nil,
+                claudeSettingsEditorBundleId: String? = nil,
+                codingProxy: CodingProxySettings = CodingProxySettings()) {
+        self.claudeExecutablePath = claudeExecutablePath
+        self.claudeSettingsEditorBundleId = claudeSettingsEditorBundleId
+        self.codingProxy = codingProxy
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case claudeExecutablePath, claudeSettingsEditorBundleId, codingProxy
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = AgentSettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        claudeExecutablePath = try c.decodeIfPresent(String.self, forKey: .claudeExecutablePath)
+        claudeSettingsEditorBundleId = try c.decodeIfPresent(String.self, forKey: .claudeSettingsEditorBundleId)
+        // 旧配置（v9 及以前）无此字段 → 补默认（关 + 空目录 + 默认命令）；CodingProxySettings 自身亦容错解码。
+        codingProxy = try c.decodeIfPresent(CodingProxySettings.self, forKey: .codingProxy) ?? d.codingProxy
+    }
+}
+
+// MARK: - 电源设置（防止空闲睡眠/熄屏）
+
+/// 防止空闲睡眠的防护模式。
+/// - `.displayOnly`: 仅持有显示器断言（等同 `caffeinate -d`）。显示器保持常亮，
+///   期间系统亦不会因空闲而睡眠（display 断言隐含阻止系统空闲睡眠）。
+/// - `.displayAndSystem`: 在显示器断言之上**显式**再持有系统断言（等同 `caffeinate -d -i`，
+///   `pmset -g assertions` 可见两条断言）。
+/// 序列化为 camelCase 字符串（对齐 `EnginePhase` 先例）。
+public enum IdleSleepGuardMode: String, Codable, Equatable, Hashable, Sendable {
+    case displayOnly
+    case displayAndSystem
+}
+
+/// 「电源」功能域的正交配置子结构（防止空闲睡眠/熄屏）。
+/// 引擎不消费本结构（同 `agent` 现状，携带即忽略）；IOKit 电源断言调用位于集成层 `IdleSleepGuard`。
+/// 仅阻止「空闲」睡眠/熄屏；不阻止合盖、Apple 菜单主动睡眠、低电量等主动睡眠。
+public struct PowerSettings: Codable, Equatable, Sendable {
+    /// 总开关，默认关（升级用户零行为变化）。开启后 App 持有 IOKit 电源断言。
+    public var preventIdleSleepEnabled: Bool
+    /// 防护模式，默认仅显示器。
+    public var mode: IdleSleepGuardMode
+
+    public init(preventIdleSleepEnabled: Bool = false,
+                mode: IdleSleepGuardMode = .displayOnly) {
+        self.preventIdleSleepEnabled = preventIdleSleepEnabled
+        self.mode = mode
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case preventIdleSleepEnabled, mode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = PowerSettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        preventIdleSleepEnabled = try c.decodeIfPresent(Bool.self, forKey: .preventIdleSleepEnabled) ?? d.preventIdleSleepEnabled
+        // 须先解 String 再回退 rawValue：直接解枚举遇未知字符串会 throw，
+        // 进而导致整份 DayPlanConfig 解码失败回退全默认（用户配置全丢）。
+        let rawMode = try c.decodeIfPresent(String.self, forKey: .mode)
+        mode = rawMode.flatMap(IdleSleepGuardMode.init(rawValue:)) ?? d.mode
+    }
+}
+
+// MARK: - 遮罩特效
+
+/// 遮罩背景特效。全部为程序化渲染（逐像素着色 / 粒子计算，零位图资产），
+/// 故分辨率无关——4K/8K 下同样清晰。作用于**手动屏幕遮罩与休息遮罩两处**。
+/// rawValue 即 config.json 中的稳定标识（勿改；新增只追加），序列化为 camelCase 字符串
+/// （对齐 `EnginePhase` / `IdleSleepGuardMode` 先例）。
+public enum MaskEffect: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
+    /// 涟漪光球：半透明光球缓缓呼吸，球面流纹如水面波光徐徐流转。
+    case orb
+    /// 冷雾纤丝：雾蓝纤丝在低频呼吸中缓缓摆动，层层脊线漂出银白微光。
+    case fibers
+    /// 字雨微光：全屏字符点阵极淡闪烁，亮带自上而下巡回。
+    case letterRain
+    /// 水波光斑：阳光穿过水面在池底投下的焦散网纹，光斑明暗流转。
+    case caustics
+    /// 丝绸流光：缎面在无风中缓缓起伏，高光带沿褶皱流淌，泛薄荷与冰紫。
+    case silk
+}
+
+/// 「屏幕遮罩」功能域的正交配置子结构（遮罩视觉表现）。
+/// 引擎不消费本结构（同 `agent` / `power` 现状，携带即忽略）；
+/// Metal 渲染与文案粒子层均位于集成层 `Overlay/MaskEffects`。
+public struct ScreenMaskSettings: Codable, Equatable, Sendable {
+    /// 背景特效，默认涟漪光球。
+    public var effect: MaskEffect
+
+    public init(effect: MaskEffect = .orb) {
+        self.effect = effect
+    }
+
+    // MARK: - Codable（容错解码：缺字段补默认，与 DayPlanConfig 范式一致，预留字段生长空间）
+
+    private enum CodingKeys: String, CodingKey {
+        case effect
+    }
+
+    public init(from decoder: Decoder) throws {
+        let d = ScreenMaskSettings()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // 须先解 String 再回退 rawValue：直接解枚举遇未知字符串会 throw，
+        // 进而导致整份 DayPlanConfig 解码失败回退全默认（用户配置全丢）。
+        let rawEffect = try c.decodeIfPresent(String.self, forKey: .effect)
+        effect = rawEffect.flatMap(MaskEffect.init(rawValue:)) ?? d.effect
+    }
+}
+
 // MARK: - 一日计划配置
 
 public struct DayPlanConfig: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 10
 
     public var schemaVersion: Int
     public var workWindows: [WorkWindow]
@@ -75,10 +246,27 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     /// 退出休息（自然结束）后，弹轻量输入框记录这段休息里做的微运动（运动记录），默认开。
     /// 仅对休息倒计时自然走完生效；提前结束（Esc）与被会议/下班打断均不弹。详见 ExerciseStore / CombinedReport。
     public var exerciseLogEnabled: Bool
+    /// 运动录入提示窗的自动放行等待时长（秒），默认 180（3 分钟）。到点未操作即等同跳过，防窗口悬空。
+    /// 哨兵值 `0` 表示「永久等待」——不调度定时器，须用户手动操作。仅作用于 `exerciseLogEnabled` 开启时的运动提示窗。
+    /// v7 新增（与 `workLogPromptTimeoutSeconds` 对称，默认值亦一致）。
+    public var exercisePromptTimeoutSeconds: TimeInterval
+    /// 用户可挑选的运动类型注册表（运动录入 Picker 数据源），默认取 `defaultExerciseTypes`。
+    /// 可在设置「运动记录」页增删；录入时输入的自定义类型保存后自动追加（去重、保序）。v7 新增。
+    public var exerciseTypes: [String]
     /// 休息模式自定义音频文件的本地绝对路径（AVAudioPlayer 支持格式：mp3/m4a/aac/wav/flac/aiff 等）。
     /// 设置后休息时循环播放该文件，**取代内置粉噪音**；为 nil/空则回退粉噪音（受 `ambientSoundEnabled` 控制）。
     /// 文件由用户本地提供，**不打包、不分发**；App 非沙盒，故直接以路径引用（文件移动/删除会导致回退）。
     public var restMusicPath: String?
+    /// Agentic AI 功能域配置（Claude Code 可执行路径覆盖 / `~/.claude/settings.json` 打开编辑器 /
+    /// Coding Proxy 子进程托管）。v8 新增、v10 内嵌 codingProxy；正交子结构，引擎忽略，
+    /// 仅供集成层消费。详见 `AgentSettings` / `CodingProxySettings`。
+    public var agent: AgentSettings
+    /// 电源功能域配置（防止空闲睡眠/熄屏）。
+    /// v9 新增；正交子结构，引擎忽略，仅供集成层消费（`IdleSleepGuard`）。详见 `PowerSettings`。
+    public var power: PowerSettings
+    /// 屏幕遮罩视觉配置（背景特效）。
+    /// v10 新增；正交子结构，引擎忽略，仅供集成层消费（`Overlay/MaskEffects`）。详见 `ScreenMaskSettings`。
+    public var screenMask: ScreenMaskSettings
 
     public init(
         schemaVersion: Int = DayPlanConfig.currentSchemaVersion,
@@ -94,7 +282,12 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         workLogEnabled: Bool = true,
         workLogPromptTimeoutSeconds: TimeInterval = 180,
         exerciseLogEnabled: Bool = true,
-        restMusicPath: String? = nil
+        exercisePromptTimeoutSeconds: TimeInterval = 180,
+        exerciseTypes: [String] = defaultExerciseTypes,
+        restMusicPath: String? = nil,
+        agent: AgentSettings = AgentSettings(),
+        power: PowerSettings = PowerSettings(),
+        screenMask: ScreenMaskSettings = ScreenMaskSettings()
     ) {
         self.schemaVersion = schemaVersion
         self.workWindows = workWindows
@@ -106,7 +299,12 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         self.workLogEnabled = workLogEnabled
         self.workLogPromptTimeoutSeconds = workLogPromptTimeoutSeconds
         self.exerciseLogEnabled = exerciseLogEnabled
+        self.exercisePromptTimeoutSeconds = exercisePromptTimeoutSeconds
+        self.exerciseTypes = exerciseTypes
         self.restMusicPath = restMusicPath
+        self.agent = agent
+        self.power = power
+        self.screenMask = screenMask
     }
 
     public static var defaultConfig: DayPlanConfig { DayPlanConfig() }
@@ -116,7 +314,8 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, workWindows, workIntervalSeconds, restDurationSeconds
         case afkThresholdSeconds, ambientSoundEnabled, controlQQMusic, workLogEnabled
-        case workLogPromptTimeoutSeconds, exerciseLogEnabled, restMusicPath
+        case workLogPromptTimeoutSeconds, exerciseLogEnabled, exercisePromptTimeoutSeconds
+        case exerciseTypes, restMusicPath, agent, power, screenMask
     }
 
     public init(from decoder: Decoder) throws {
@@ -133,7 +332,17 @@ public struct DayPlanConfig: Codable, Equatable, Sendable {
         // 显式存在的 0（永久等待）非 nil 故会被保留，不会被误补默认 180（迁移测试钉死此行为）。
         workLogPromptTimeoutSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .workLogPromptTimeoutSeconds) ?? d.workLogPromptTimeoutSeconds
         exerciseLogEnabled = try c.decodeIfPresent(Bool.self, forKey: .exerciseLogEnabled) ?? true
+        // 同 workLogPromptTimeoutSeconds：显式 0（永久等待）需保留。
+        exercisePromptTimeoutSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .exercisePromptTimeoutSeconds) ?? d.exercisePromptTimeoutSeconds
+        // 旧配置（v6 及以前）无此字段 → 回退出厂默认列表；空数组显式保留（用户主动清空也尊重）。
+        exerciseTypes = try c.decodeIfPresent([String].self, forKey: .exerciseTypes) ?? d.exerciseTypes
         restMusicPath = try c.decodeIfPresent(String.self, forKey: .restMusicPath)
+        // 旧配置（v7 及以前）无此字段 → 补默认（全 nil）；AgentSettings 自身亦容错解码。v8 新增。
+        agent = try c.decodeIfPresent(AgentSettings.self, forKey: .agent) ?? d.agent
+        // 旧配置（v8 及以前）无此字段 → 补默认（关 + 仅显示器）；PowerSettings 自身亦容错解码。v9 新增。
+        power = try c.decodeIfPresent(PowerSettings.self, forKey: .power) ?? d.power
+        // 旧配置（v9 及以前）无此字段 → 补默认（涟漪光球）；自身亦容错解码。v10 新增。
+        screenMask = try c.decodeIfPresent(ScreenMaskSettings.self, forKey: .screenMask) ?? d.screenMask
     }
 }
 
