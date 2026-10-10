@@ -160,6 +160,16 @@ func runSystemWallpaperCases() {
         expectEqual(url?.path, defaultVideo.path, "应忽略非 .mov 文件")
     }
 
+    // MARK: isBuiltinDefault
+
+    test("isBuiltinDefault：内置默认航拍 → true；用户 / 旧版目录航拍、仅前缀相同的他处文件 → false") {
+        expect(SystemWallpaper.isBuiltinDefault(defaultVideo), "位于 .default 目录的 .mov 应判为内置默认")
+        expect(!SystemWallpaper.isBuiltinDefault(newVideo), "用户目录下的航拍不是内置默认")
+        expect(!SystemWallpaper.isBuiltinDefault(legacyVideo), "idleassetsd 目录下的航拍不是内置默认")
+        expect(!SystemWallpaper.isBuiltinDefault(URL(fileURLWithPath: "/System/Library/Wallpapers/Other.mov")),
+               "仅 /System/Library/Wallpapers/ 前缀相同、目录不同，不应判为内置默认")
+    }
+
     // MARK: resolve 优先级
 
     let aerialChoice = SystemWallpaper.Choice(provider: aerials, assetID: assetID)
@@ -189,10 +199,10 @@ func runSystemWallpaperCases() {
         expectEqual(r, .still, "无内置航拍应显示静帧")
     }
 
-    test("resolve：Index.plist 缺失/损坏 + 内置航拍存在 → 播放默认航拍") {
+    test("resolve：Index.plist 缺失/损坏（choice nil）→ 静帧，不臆断为默认航拍（即使内置航拍存在）") {
         let r = SystemWallpaper.resolve(choice: nil, aerialVideoDirectories: videoDirs,
                                         defaultAerialVideo: defaultVideo, fileExists: exists([defaultVideo]))
-        expectEqual(videoPath(r), defaultVideo.path, "未知选择按系统默认处理")
+        expectEqual(r, .still, "读不到选择应沿用系统当前壁纸图，而非默认航拍")
     }
 
     test("resolve：非航拍 provider → 静帧（即使内置航拍存在）") {
