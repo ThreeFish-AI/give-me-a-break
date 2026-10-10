@@ -22,7 +22,7 @@ private extension TimeOfDay {
 
 // MARK: - 页签规格与尺寸契约（SSOT：渲染与宽度测算同源）
 
-/// 设置页签（七页签分类：通用 / 电源 / 作息 / 休息音效 / 工作日志 / 运动记录 / Agentic AI）。
+/// 设置页签（七页签：通用 / 电源 / 作息 / 音效 / 日志 / 运动 / Agentic AI，短名见 SettingsTabMetrics）。
 private enum SettingsTab: Hashable { case general, power, schedule, sound, workLog, exercise, agenticAI }
 
 /// 页签规格：页签条渲染与宽度测算共用同一份标题，防「文案改了、测算没跟上」漂移。

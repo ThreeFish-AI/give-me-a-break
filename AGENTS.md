@@ -37,22 +37,24 @@
   1. **Git Discipline**: 默认严禁调用 git commit；当用户显式要求提交时，一律使用 Claude Code 的自定义 Slash Command: `/commit-no-push` 进行操作（若非 Claude Code 运行环境，则读取 /commit-no-push 命令中的规则执行）。严禁执行 Rebase；
   2. **Temp Management**: 临时产物（执行计划等）一律收敛至 `.temp/` 并及时清理；
   3. **Link Validity**: 确保所有引用的 URL 可访问且具备明确的上下文价值；
-  4. **Testing**: 统一在 tests/ 下维护测试用例，区分单元测试（unit）和集成测试（integration），所有测试的本地运行总时间控制在 3 min 以内。**macOS Swift 适配**：Command Line Tools 不含 XCTest/Swift Testing，故 Swift 项目采用 `tests/` 下自建的极简断言运行器（`expect`/`test` + 退出码，经 `make test` → `swift run` 驱动），语义对齐 XCTest；详见 [Give me a break README](./README.md)；
-  5. **Pre-commit Hooks**: 首次克隆仓库使用 `uv run pre-commit install` 激活本地 Git hooks，使 Ruff lint（含 auto-fix）、Ruff format 及通用代码卫生检查在每次 commit 前自动运行。若 hooks 自动修复了问题，提交会被中断，执行 `git add -p` 审阅修复内容后重新提交即可；
+  4. **Testing**: macOS 侧统一在 `tests/` 下维护测试用例（自建极简断言运行器，`make test` 驱动，本地运行总时间控制在 3 min 以内）；Windows 侧为 `windows/` 下的 xUnit 测试工程（CI 运行）。**macOS Swift 适配**：Command Line Tools 不含 XCTest/Swift Testing，故 Swift 项目采用 `tests/` 下自建的极简断言运行器（`expect`/`test` + 退出码，经 `make test` → `swift run` 驱动），语义对齐 XCTest；详见 [Give me a break README](./README.md)；
+  5. **Pre-commit Hooks**: 本仓暂无 pre-commit 工具链；如后续引入，按用户级规约激活；
   6. **Issue**: 在 [issue.md](.agents/issue.md) 中维护你处理过的 Issue 摘要（问题描述、表因根因、处理方式、后续防范、同类问题影响与处理注意事项等），便于同类问题的跨上下文处理；注意识别相同 Issue，不要同 Issue 多处维护；
 - **Package Management Standardization (包管理规范)**:
   1. **Python**: 严禁使用 pip/poetry，**必须**统一使用 `uv` 进行包管理与脚本执行（如 `uv run`）；
   2. **JavaScript/TypeScript**: 严禁使用 npm/yarn，**必须**统一使用 `pnpm` 进行包管理与脚本执行；
   3. **Swift**: 统一使用 Swift Package Manager（`Package.swift`）；依赖经 Xcode `File > Add Package Dependency` 或 SPM 引入，**严禁**引入非必要第三方库；macOS 应用经 `Makefile` 装配 `.app` bundle（`swift build -c release` + `codesign`）；
 - **Database Management**: 谨慎操作，数据迁移、测试等操作严禁将现有数据删除，谨慎操作数据迁移的回滚，防止数据被清理。
-- **Browser Validation Protocol (浏览器验证准则)**：Agent 不得自行完成、绕过或模拟任何 OAuth / SSO 认证流程，所有登录态均来源于用户已认证的 Chrome 主 profile（真实用户登录态）。完整协议（连通性自检、凭证管理、E2E 集成、实机回归等）详见 [浏览器验证协议](./.agents/browser-validation.md)；
-  1. **安全红线**：禁止在 Sandbox 浏览器中跳转 Google 同意屏；禁止以模拟用户或第三方账号替代真实登录态；禁止要求用户在 chat 中粘贴密码、Cookie 或验证码；
+- **Browser Validation Protocol (浏览器验证准则)**：Agent 不得自行完成、绕过或模拟任何 OAuth / SSO / 设备码认证流程，凭证（密码 / Cookie / 验证码 / token）一律不进 chat；本仓同构映射为系统权限 / TCC 授予（辅助功能、输入监控等）一律由用户手动完成。完整协议见用户级规约；
 - **Knowledge Map (知识索引)**：项目所有文档索引统一维护在 [知识索引](./.agents/knowledge-map.md)，并在文档目录变更时即时同步跟新；
 - **Documentation Standards (文档规范)**：
-  1. **Visual Documentation (图文并茂)**: 对于复杂逻辑，优先 **Mermaid Visualization Norms (Mermaid 可视化规范)**，构建“图文并茂”的直观文档；
+  1. **Visual Documentation (图文并茂)**: 对于复杂逻辑，优先 **Archify 图表规范**，构建“图文并茂”的直观文档；
+     - **单一事实源 (SSOT)**：图源 candidate JSON 为唯一权威定义，入库于 `docs/diagrams/<slug>/`（`<slug>.json` 图源 + `<slug>.html` 交互版 + `<slug>.svg` 双主题嵌入版）；生成或修改图必须经 `archify finalize --quality showcase` 门禁通过；
+     - **嵌入方式**：文档以相对路径嵌入 SVG（README 用 `docs/diagrams/<slug>/<slug>.svg`，docs/ 内用 `diagrams/<slug>/<slug>.svg`），双主题自动适配深浅模式；
      - **色彩语义与兼容性**：为图表节点配置具备语义辨识度的色彩，并确保在深色模式（Dark Mode）下具有极高的对比度与清晰度；
-     - **逻辑模块化解构**：针对业务跨度较大的架构流程，强制采用 `subgraph` 容器进行层级解构与边界划分，以增强图表的自解说（Self-explaining）能力；
+     - **逻辑模块化解构**：针对业务跨度较大的架构流程，以 boundary 分层承载领域边界与层级解构，以增强图表的自解说（Self-explaining）能力；
+     - 禁止再新增 mermaid 代码块（存量已全量置换为 Archify 图）；
   2. **语言叙事**：用语精准，叙事完备，行文专业，聚焦核心，篇幅精炼，形象具体，体现真实作用与用户吸引性，字数恰当；
   3. **Direct Hyperlinking (直接跳转)**: 在文档中提及 Repo 内其他资源（文档/代码）时，**必须**构建可跳转的相对路径链接（如 `[Doc Name](./path.md)`），严禁使用“死文本”引用，以降低信息检索熵；
   4. **实操截图**：文档需要引入必要的浏览器实操截图时，需自行通过默认浏览器打开相关页面，通过实操现场截图并保留到文档路径进行文档引用；
-- **Reference Specifications (IEEE)**：为保障工程决策的可追溯性与学术严谨性，核心引用需遵循 [reference-specifications.md](.agents/reference-specifications.md)IEEE 标准引用格式；
+- **Reference Specifications (IEEE)**：核心引用遵循 IEEE 标准引用格式（规约见用户级配置）；

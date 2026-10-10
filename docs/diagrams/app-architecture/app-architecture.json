@@ -1,0 +1,607 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Give me a break 应用架构总览",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/app-architecture/app-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "b3e67885f8c283d07c6f9478083f7572c90eb6cd",
+      "link_mode": "local-only"
+    }
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 6,
+    "origin": [
+      40,
+      90
+    ],
+    "cellW": 150,
+    "cellH": 70,
+    "gapX": 46,
+    "gapY": 62
+  },
+  "components": [
+    {
+      "id": "app",
+      "type": "backend",
+      "label": "GiveMeABreakApp",
+      "sublabel": "@main 壳 · AppDelegate",
+      "row": 0,
+      "col": 0,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreak/GiveMeABreakApp.swift"
+        }
+      ]
+    },
+    {
+      "id": "heartbeat",
+      "type": "messagebus",
+      "label": "HeartbeatTimer",
+      "sublabel": "主线程 1Hz tick",
+      "row": 0,
+      "col": 2,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Heartbeat.swift"
+        }
+      ]
+    },
+    {
+      "id": "statusitem",
+      "type": "frontend",
+      "label": "StatusItemController",
+      "sublabel": "叶子图标 · 状态行 · 菜单",
+      "row": 0,
+      "col": 3,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/StatusItemController.swift",
+          "line": 53
+        },
+        {
+          "path": "Sources/GiveMeABreakIntegrations/StatusItemController.swift",
+          "line": 182,
+          "end_line": 216
+        }
+      ],
+      "tag": "每秒 setPhase（心跳驱动）"
+    },
+    {
+      "id": "calendar",
+      "type": "cloud",
+      "label": "LiveCalendarProvider",
+      "sublabel": "EventKit · calDAV+busy · 限流",
+      "row": 0,
+      "col": 4,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/LiveCalendarProvider.swift"
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "type": "frontend",
+      "label": "SettingsWindowController",
+      "sublabel": "7 页签 · 草稿-应用",
+      "row": 1,
+      "col": 0,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Settings/SettingsView.swift",
+          "line": 36,
+          "end_line": 67
+        }
+      ]
+    },
+    {
+      "id": "approot",
+      "type": "backend",
+      "label": "AppRoot",
+      "sublabel": "装配根 · 生命周期/心跳冻结编排",
+      "row": 1,
+      "col": 1,
+      "size": [
+        170,
+        70
+      ],
+      "tag": "单一装配点",
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/AppRoot.swift",
+          "line": 59,
+          "end_line": 254
+        }
+      ]
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "LiveGiveMeABreakEngine",
+      "sublabel": "advance · evaluate · transition",
+      "row": 1,
+      "col": 2,
+      "size": [
+        170,
+        74
+      ],
+      "tag": "单一事实源",
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/Engine.swift",
+          "line": 14,
+          "end_line": 69
+        },
+        {
+          "path": "Sources/GiveMeABreakEngine/LiveGiveMeABreakEngine.swift",
+          "line": 54,
+          "end_line": 115
+        }
+      ]
+    },
+    {
+      "id": "stores",
+      "type": "database",
+      "label": "持久化 Store ×3",
+      "sublabel": "config · engine-state · 日志",
+      "row": 1,
+      "col": 3,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/ConfigStore.swift"
+        },
+        {
+          "path": "Sources/GiveMeABreakEngine/WorkLogStore.swift"
+        },
+        {
+          "path": "Sources/GiveMeABreakEngine/ExerciseStore.swift"
+        }
+      ]
+    },
+    {
+      "id": "wlwin",
+      "type": "frontend",
+      "label": "WorkLog / Exercise 窗口族",
+      "sublabel": "提示 · 补录 · 报告 · 综合报告",
+      "row": 1,
+      "col": 4,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/WorkLog/WorkLogPromptWindowController.swift"
+        }
+      ]
+    },
+    {
+      "id": "hotkeys",
+      "type": "external",
+      "label": "GlobalHotkeyCenter",
+      "sublabel": "⌃⌥⌘R / ⌃⌥⌘K · 零权限",
+      "row": 2,
+      "col": 0,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/GlobalHotkeyCenter.swift"
+        }
+      ]
+    },
+    {
+      "id": "lock",
+      "type": "security",
+      "label": "LockShortcutMonitor",
+      "sublabel": "⌃⌘Q 劫持 · CGEventTap",
+      "row": 2,
+      "col": 1,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/LockShortcutMonitor.swift",
+          "line": 29,
+          "end_line": 34
+        }
+      ]
+    },
+    {
+      "id": "screenmask",
+      "type": "frontend",
+      "label": "ScreenMaskController",
+      "sublabel": "手动遮罩 · 冻结工作计时",
+      "row": 2,
+      "col": 2,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift"
+        }
+      ]
+    },
+    {
+      "id": "overlay",
+      "type": "frontend",
+      "label": "LiveOverlayController",
+      "sublabel": "休息遮罩 · 屏蔽层级多屏面板",
+      "row": 2,
+      "col": 3,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift",
+          "line": 91
+        }
+      ]
+    },
+    {
+      "id": "music",
+      "type": "external",
+      "label": "LiveMusicController",
+      "sublabel": "三轨：自定义音频 / 粉噪音 / QQ 音乐",
+      "row": 2,
+      "col": 4,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/LiveMusicController.swift",
+          "line": 5,
+          "end_line": 53
+        }
+      ]
+    },
+    {
+      "id": "codingproxy",
+      "type": "backend",
+      "label": "CodingProxy 托管",
+      "sublabel": "Foundation.Process + 控制台",
+      "row": 2,
+      "col": 5,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/CodingProxy/CodingProxyProcessController.swift"
+        }
+      ],
+      "tag": "approot apply(agent.codingProxy)"
+    },
+    {
+      "id": "power",
+      "type": "backend",
+      "label": "IdleSleepGuard",
+      "sublabel": "IOKit 电源断言 · 与调度正交",
+      "row": 3,
+      "col": 0,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift"
+        }
+      ],
+      "tag": "approot apply(config.power)"
+    },
+    {
+      "id": "sensors",
+      "type": "external",
+      "label": "SystemSensors",
+      "sublabel": "AFK 秒数 · isAsleep",
+      "row": 0,
+      "col": 1,
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/SystemSensors.swift"
+        }
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "MaskInputGuard",
+      "sublabel": "HID 白名单 · 30min 看门狗",
+      "row": 3,
+      "col": 2,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskInputGuard.swift",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "id": "backdrop",
+      "type": "frontend",
+      "label": "MaskBackdropPlayer",
+      "sublabel": "共享 AVPlayer · 跟随壁纸",
+      "row": 3,
+      "col": 3,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskBackground/MaskBackdropPlayer.swift"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "GiveMeABreakEngine · 纯核心（零平台依赖）",
+      "wraps": [
+        "engine",
+        "stores"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）",
+      "wraps": [
+        "approot",
+        "heartbeat",
+        "statusitem",
+        "calendar",
+        "settings",
+        "wlwin",
+        "hotkeys",
+        "lock",
+        "screenmask",
+        "overlay",
+        "music",
+        "codingproxy",
+        "power",
+        "guard",
+        "backdrop",
+        "sensors"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "GiveMeABreak · @main 壳",
+      "wraps": [
+        "app"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "app_assemble",
+      "from": "app",
+      "to": "approot",
+      "label": "装配启动",
+      "labelAt": [
+        270,
+        172
+      ]
+    },
+    {
+      "id": "settings_apply",
+      "from": "settings",
+      "to": "approot",
+      "label": "草稿应用",
+      "labelAt": [
+        248,
+        212
+      ]
+    },
+    {
+      "id": "approot_engine",
+      "from": "approot",
+      "to": "engine"
+    },
+    {
+      "id": "engine_callbacks",
+      "from": "engine",
+      "to": "approot",
+      "variant": "dashed"
+    },
+    {
+      "id": "tick",
+      "from": "heartbeat",
+      "to": "engine",
+      "label": "tick 1Hz",
+      "labelAt": [
+        555,
+        176
+      ]
+    },
+    {
+      "id": "sense",
+      "from": "sensors",
+      "to": "engine",
+      "label": "AFK / isAsleep",
+      "labelAt": [
+        410,
+        180
+      ]
+    },
+    {
+      "id": "meetings",
+      "from": "calendar",
+      "to": "engine",
+      "label": "忙碌区间",
+      "labelAt": [
+        712,
+        172
+      ]
+    },
+    {
+      "id": "persist",
+      "from": "engine",
+      "to": "stores",
+      "variant": "dashed"
+    },
+    {
+      "id": "show_overlay",
+      "from": "engine",
+      "to": "overlay",
+      "label": "show / dismiss",
+      "labelAt": [
+        596,
+        320
+      ]
+    },
+    {
+      "id": "play_music",
+      "from": "engine",
+      "to": "music",
+      "label": "start / pause"
+    },
+    {
+      "id": "early_exit",
+      "from": "overlay",
+      "to": "engine",
+      "label": "Esc 确认退出",
+      "variant": "dashed",
+      "labelAt": [
+        700,
+        326
+      ]
+    },
+    {
+      "id": "hotkey_actions",
+      "from": "hotkeys",
+      "to": "approot",
+      "label": "⌃⌥⌘R / ⌃⌥⌘K"
+    },
+    {
+      "id": "lock_hijack",
+      "from": "lock",
+      "to": "screenmask"
+    },
+    {
+      "id": "mask_orchestrate",
+      "from": "approot",
+      "to": "screenmask",
+      "label": "遮罩编排",
+      "labelAt": [
+        460,
+        330
+      ]
+    },
+    {
+      "id": "prompt_windows",
+      "from": "approot",
+      "to": "wlwin",
+      "label": "提示窗接线",
+      "labelAt": [
+        321,
+        186
+      ]
+    },
+    {
+      "id": "guard_rest",
+      "from": "overlay",
+      "to": "guard",
+      "label": "共享注入"
+    },
+    {
+      "id": "guard_manual",
+      "from": "screenmask",
+      "to": "guard",
+      "label": "共享注入"
+    },
+    {
+      "id": "backdrop_rest",
+      "from": "overlay",
+      "to": "backdrop",
+      "label": "背景"
+    },
+    {
+      "id": "backdrop_manual",
+      "from": "screenmask",
+      "to": "backdrop",
+      "label": "背景"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "正交分解（三目标）",
+      "items": [
+        "纯核心 Engine：evaluate 零时间依赖纯函数，注入虚拟时钟可单测",
+        "集成层只封装系统 API 与权限；@main 壳仅装配",
+        "引擎不消费 power / agent.codingProxy 子块（与调度正交）"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "遮罩域不变量",
+      "items": [
+        "MaskInputGuard 与 MaskBackdropPlayer 单实例注入两遮罩控制器，互斥由 resting 守卫保证",
+        "手动遮罩显示 ⇒ 心跳挂起（休息遮罩期间心跳照常，休息倒计时依赖 tick）；全部 resume 路径带守卫，suspend/resume 严格配对",
+        "「立即休息」先撤手动遮罩再强制休息，绝不叠加两组面板"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "生命周期编排（AppRoot）",
+      "items": [
+        "引擎回调：onPreBreak（15min 门控 + ≥3 跳过衰减 + 心跳冻结）与 onPostBreak（运动录入）由 AppRoot 接线到窗口族",
+        "睡眠挂起心跳、唤醒经守卫链（提示窗/遮罩在屏则保持挂起）后恢复并 recheckHealth",
+        "shutdown 顺序：saveState → 心跳 → 输入拦截 → 播放器 → 锁屏劫持 → 电源断言 → CodingProxy 同步停止",
+        "状态持久化按相位变化或 >5s 节流，非每 tick",
+        "IdleSleepGuard / CodingProxy 由 AppRoot 装配并 apply 各自 config 子块（tag 标注），与调度引擎正交"
+      ]
+    }
+  ]
+}

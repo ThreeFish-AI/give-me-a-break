@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "./config.schema.json",
   "title": "Give me a break DayPlanConfig",
-  "description": "Give me a break 跨平台一日计划配置权威定义。Swift Codable 与 C# System.Text.Json 双向兼容；容错解码（缺字段补默认）+ schema 迁移见 docs/windows-port-design.md §6。TimeOfDay 序列化为裸整数（自午夜秒），EnginePhase 序列化为 camelCase 字符串。",
+  "description": "Give me a break 跨平台一日计划配置权威定义（文档级 SSOT）。Swift Codable 完整实现 v10；C# System.Text.Json 实现 v2 子集，读到更高 schemaVersion 时回退内存默认值（两端不双向兼容，见 docs/windows-port-design.md §6）。容错解码（缺字段补默认）。TimeOfDay 序列化为裸整数（自午夜秒），EnginePhase 序列化为 camelCase 字符串。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -139,6 +139,13 @@
           ],
           "description": "Claude Code 可执行文件路径覆盖；为 null/空则走 PATH 探测。"
         },
+        "claudeSettingsEditorBundleId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "打开 ~/.claude/settings.json 所用编辑器的 bundle id（如 com.microsoft.VSCode）；为 null/空则用系统默认关联应用打开。"
+        },
         "codingProxy": {
           "type": "object",
           "description": "Coding Proxy 子进程托管配置（随 App 自动启动并保持运行）。v10 新增。",
@@ -186,7 +193,7 @@
     },
     "screenMask": {
       "type": "object",
-      "description": "已废弃（遮罩背景改为跟随系统壁纸，见 docs §8.5）：旧配置可能携带此键，应用忽略；新版本不再写出。",
+      "description": "已废弃（遮罩背景改为跟随系统壁纸，见 docs §8）：旧配置可能携带此键，应用忽略；新版本不再写出。",
       "additionalProperties": true
     }
   }
