@@ -4,45 +4,19 @@
 
 ## 1. 设计目标
 
-在用户自定义工作时段内执行「工作 / 强制休息」节律；休息时遮罩全部显示器并控制 QQ 音乐；Google 日历会议计为工作但推迟休息。核心是**单调 wall-clock 工作累加器 + 反应式 FSM**，对抗「会议/睡眠/AFK」等非确定性输入对静态日程的扰动。
+在用户自定义工作时段内执行「工作 / 强制休息」节律；休息时遮罩全部显示器并播放休息音效（自定义音频 / 内置粉噪音，可选联动 QQ 音乐）；Google 日历会议计为工作但推迟休息。核心是**单调 wall-clock 工作累加器 + 反应式 FSM**，对抗「会议/睡眠/AFK」等非确定性输入对静态日程的扰动。
 
 ## 2. 调度引擎
 
 ### 2.1 状态机（5 态）
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> OFF_DUTY: 冷启动/fast-forward
-    OFF_DUTY --> WORKING: 进入工作窗口
-    WORKING --> RESTING: workAccum≥interval && meeting==nil
-    WORKING --> IN_MEETING: 会议开始
-    WORKING --> IDLE: AFK/睡眠
-    WORKING --> OFF_DUTY: 离开工作窗口
-    IN_MEETING --> RESTING: 会议结束 && 阈值已满足
-    IN_MEETING --> WORKING: 会议结束 && 阈值未满足
-    IN_MEETING --> OFF_DUTY: 离开工作窗口
-    IDLE --> WORKING: 输入恢复(对账 lastTickAt)
-    RESTING --> WORKING: 自然结束/Esc 二次确认
-    RESTING --> IN_MEETING: 会议打断(abort-and-reset)
-    RESTING --> OFF_DUTY: 窗口结束(abort-and-reset)
-    classDef off fill:#3a4a5a,color:#fff,stroke:#7fa8c9
-    classDef work fill:#2d5a3a,color:#fff,stroke:#7fc98a
-    classDef meet fill:#5a4a2d,color:#fff,stroke:#c9b27f
-    classDef rest fill:#5a2d3a,color:#fff,stroke:#c97f9a
-    classDef idle fill:#4a4a4a,color:#fff,stroke:#b0b0b0
-    class OFF_DUTY off
-    class WORKING work
-    class IN_MEETING meet
-    class RESTING rest
-    class IDLE idle
-```
+五态 FSM 的主要转换边（12 条，边标签即守卫条件）。非 RESTING 相位一律按 §2.2 优先级求值，图中省略可由优先级直接推出的次要跃迁（如 IDLE→RESTING、OFF_DUTY→IDLE / IN_MEETING、IN_MEETING→IDLE）以及「立即休息」从任意相位直入 RESTING。RESTING 由 `transition` 特判、不走优先级：到时以清零的累加器重新求值；离开工作窗口或会议打断则 abort-and-reset；其余情况（含 AFK）一律保持休息——**AFK 不中断休息**。两条无标签边：RESTING→OFF_DUTY（虚线）为休息中离开工作窗口，与「会议打断」虚线边同属 abort-and-reset——清零累加器、丢弃本轮休息；IN_MEETING→OFF_DUTY 的守卫同 WORKING→OFF_DUTY「离开工作窗口」。
 
-色彩语义：蓝灰=下班、绿=工作、琥珀=会议、品红=休息、中性灰=空闲；前景 `#fff` + 深色填充，深/浅模式对比度均 > 7:1（WCAG AAA）。
+![调度引擎五态状态机](diagrams/engine-fsm/engine-fsm.svg)
 
 ### 2.2 谓词优先级（`evaluate` 纯函数）
 
-```
+```text
 evaluate(now) 按顺序短路求值，首个匹配决定目标态：
   (1) NOT inAnyWorkWindow(now)  → OFF_DUTY      [最高，压过会议]
   (2) isAFK(now) OR isAsleep    → IDLE
@@ -52,7 +26,7 @@ evaluate(now) 按顺序短路求值，首个匹配决定目标态：
 触发休息的不变量：workAccum >= workInterval AND activeMeeting == nil
 ```
 
-`evaluate` 是**零时间依赖纯函数**<sup>[[1]](#ref1)</sup>：所有时间经注入的 `Clock` 进入快照，可用 `VirtualClock` 单元测试。
+`evaluate` 是**零时间依赖纯函数**：所有时间经注入的 `Clock` 进入快照，可用 `VirtualClock` 单元测试。
 
 ### 2.3 累加器推进规则（防跨睡眠回灌）
 
@@ -66,47 +40,49 @@ evaluate(now) 按顺序短路求值，首个匹配决定目标态：
 
 | 契约 | 实现 | 关键 API | 权限 |
 |---|---|---|---|
-| **遮罩** | `LiveOverlayController` | 每 `NSScreen` 一个 borderless `NSPanel`，`level=CGShieldingWindowLevel()`<sup>[[3]](#ref3)</sup>（⚠️ 该 C 函数 Apple 已弃用，现代等价 `.screenSaver` / `CGWindowLevelForKey(.shieldingWindowLevelKey)`，同屏蔽层级；`LiveOverlayController.swift:73` 待平滑替换为 `.screenSaver`），`collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications]`；Esc 经本地事件监听→`NSAlert` 二次确认 | 无（遮罩本身不需 TCC） |
-| **音乐** | `LiveMusicController` | `NSWorkspace` 拉起 QQ 音乐 + CGEvent 合成 `NX_KEYTYPE_PLAY`(=16) 媒体键（`subtype=8` NX_SUBTYPE_AUX_CONTROL_BUTTONS）<sup>[[4]](#ref4)</sup>，OS 路由到 Now Playing 应用 | **Accessibility（必需）** |
+| **遮罩** | `LiveOverlayController` | 每 `NSScreen` 一个 borderless `NSPanel`，`level=CGShieldingWindowLevel()`<sup>[[3]](#ref3)</sup>（≈2147483628，未弃用；⚠️ 切勿替换为 `.screenSaver`——后者仅 1000<sup>[[1]](#ref1)</sup>，会被系统 UI 盖过，同 [issue #13](../.agents/issue.md) 降层级事故），`collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications]`；确认 UI（继续休息 / 直接退出）直接渲染在遮罩面板内部（与遮罩同层级，塞 `NSAlert` 会被遮罩遮挡不可见），Esc 单击切换确认视图、0.4s 内双击直退 | 无（遮罩本身不需 TCC） |
+| **音乐（三轨优先链）** | `LiveMusicController` | ① `restMusicPath` 自定义音频（`AVAudioPlayer` 无限循环，取代粉噪音；路径无效/解码失败回退②）；② 内置粉噪音（`AmbientSoundPlayer`，初始化时以 Paul Kellet 算法预合成 8s 缓冲，经 `AVAudioPlayerNode` 无缝循环；零音频文件、零外部依赖）；③ QQ 音乐可选叠加（`NSWorkspace` 拉起 + CGEvent 合成 `NX_KEYTYPE_PLAY`(=16) 媒体键，`subtype=8` NX_SUBTYPE_AUX_CONTROL_BUTTONS<sup>[[4]](#ref4)</sup>，OS 路由到 Now Playing 应用） | **Accessibility**（仅③需要；①②零权限） |
 | **日历** | `LiveCalendarProvider` | 单一 `EKEventStore`<sup>[[5]](#ref5)</sup>，`requestFullAccessToEvents()`，过滤 `sourceType==.calDAV`<sup>[[6]](#ref6)</sup> + busy，`EKEventStoreChanged` 推送 + 限流回退 | **完全日历访问** |
 | **防止空闲睡眠**（v9） | `IdleSleepGuard` | `IOPMAssertionCreateWithName`<sup>[[16]](#ref16)</sup> 持有 `kIOPMAssertionTypePreventUserIdleDisplaySleep`（`.displayAndSystem` 再叠加 `…PreventUserIdleSystemSleep`），按断言维度 diff 增删（模式切换时 display 断言全程不落）；进程退出由内核回收，无 caffeinate 子进程的孤儿风险 | 无（非沙盒 + Hardened Runtime 下无需 entitlement / TCC） |
+| **锁屏快捷键劫持 / 遮罩键盘拦截** | `LockShortcutMonitor` / `MaskInputGuard` | 两个 HID 层 `.headInsertEventTap`（§7.3）：前者全局消费 ⌃⌘Q 转投屏幕遮罩；后者仅在遮罩期间白名单拦截（除裸 Esc / Return 一律吞，§7.3.1） | **输入监控**（未授权时 tap 创建失败，静默降级 + 日志） |
+
+### 3.1 诊断 / 应急环境变量
+
+供手动验证与应急短路：开关类变量「存在即生效」（只判存在性，不解析值）；`*_SCOPE` 两变量解析取值（非法值回退默认 today / week）：
+
+| 变量 | 作用 |
+|---|---|
+| `GIVEMEABREAK_DEBUG` | 极速调试配置：8s 工作 / 15s 休息 / 全天工作窗口 / AFK 阈值 999999s，并旁路工作日志 15min 周期门控与运动记录开关（§5.3 / §6.1） |
+| `GIVEMEABREAK_DISABLE_INPUT_GUARD` | 应急短路遮罩键盘白名单拦截（§7.3.1） |
+| `GIVEMEABREAK_DISABLE_LOCK_HIJACK` | 禁用 ⌃⌘Q 锁屏快捷键劫持（§7.3） |
+| `GIVEMEABREAK_SHOW_SETTINGS` | 启动即打开设置窗 |
+| `GIVEMEABREAK_SHOW_WORKLOG` + `GIVEMEABREAK_WORKLOG_SCOPE=today\|week\|month\|all` | 启动即打开工作日志报告窗并指定初始周期（默认今日） |
+| `GIVEMEABREAK_SHOW_COMBINED` + `GIVEMEABREAK_COMBINED_SCOPE=week\|month\|quarter\|year` | 启动即打开综合报告窗并指定初始周期（默认本周） |
+| `GIVEMEABREAK_SHOW_CODINGPROXY` | 启动即打开 Coding Proxy 控制台（§9.3） |
+
+安装侧的 `GIVEMEABREAK_INSTALL_DIR`（install.sh 安装目录覆盖）见 [README](../README.md)，不属运行时开关。
 
 ## 4. 数据模型
 
 ```swift
 struct EngineState { phase; workAccumulatedSeconds; lastTickAt; restStartedAt; modelVersion }  // 单一事实源，Codable 持久化
 struct DayPlanConfig { workWindows; workIntervalSeconds; restDurationSeconds; afkThresholdSeconds; …; agent: AgentSettings; power: PowerSettings; schemaVersion }
-struct AgentSettings { claudeExecutablePath: String?; claudeSettingsEditorBundleId: String? }  // v8 · Agentic AI 正交子结构
+struct AgentSettings { claudeExecutablePath: String?; claudeSettingsEditorBundleId: String?; codingProxy: CodingProxySettings }  // v8 · Agentic AI 正交子结构（v10 内嵌 codingProxy）
+struct CodingProxySettings { autoStartEnabled: Bool; workingDirectory: String; launchCommand: String }  // v10 · Coding Proxy 托管（§9）
 struct PowerSettings { preventIdleSleepEnabled: Bool; mode: IdleSleepGuardMode }  // v9 · 电源正交子结构（displayOnly | displayAndSystem）
 struct MeetingTimeline { busyIntervals: [DateRange]; generatedAt }  // 合并后的不相交忙碌区间
 func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（背靠背会议视为连续）
 ```
 
-> **Agentic AI 配置（v8，groundwork）**：`AgentSettings` 为「Agentic AI」功能域预留的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移。仅承载纯 Foundation 的 `String?` 字段——引擎不消费（携带即忽略，同 `restMusicPath`）；编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`，与本模型正交解耦。当前仅持久化 + 设置 UI，未接入实际 Claude Code 调用。
+> **Agentic AI 配置（v8 起，v10 扩展）**：`AgentSettings` 为「Agentic AI」功能域的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移。两个 `claude*` 字段（可执行路径覆盖 / 设置编辑器 bundle id）当前仅持久化 + 设置 UI——groundwork，未接入实际 Claude Code 调用；编辑器探测/打开等 AppKit 逻辑位于集成层 `ClaudeSettingsLauncher`，与本模型正交解耦。`codingProxy`（v10 内嵌）已是落地功能：本地工具子进程托管，语义与实现见 §9。
 >
 > **电源配置（v9）**：`PowerSettings` 为「防止空闲睡眠/熄屏」功能域的正交子结构，随 `DayPlanConfig` 落于同一 `config.json`（单一事实源），经容错解码平滑迁移（旧 v8 缺 `power` 补默认；`mode` 先解 `String` 再按 rawValue 回退——未知枚举值只回退该字段，不会令整份配置回退默认）。引擎不消费（携带即忽略，同 `agent`）；IOKit 断言的持有/释放位于集成层 `IdleSleepGuard`（§3），与休息 / 工作 / 遮罩调度完全正交。**UI 双入口的通道划分**：总开关 `preventIdleSleepEnabled` 由菜单栏「防止睡眠」勾选项与设置「电源」页共用同一即时通道（`AppRoot.setPreventIdleSleep`，`engine.config` 为权威值，设置窗「应用」时以 live 值覆盖草稿快照，避免旧草稿回滚菜单侧改动——同「开机自启」的非 draft 语义）；防护范围 `mode` 仍走 draft，随「应用」提交。
 
 崩溃恢复：启动加载持久化 `EngineState`，`fastForward(sanityLimit:)` 依间隔决策——短中断（≤300s）按工作态推进计入累加；长中断仅对账基点不回灌（`U11` 断言）。
 
-## 5. 测试矩阵
+## 5. 工作日志（休息前记录 + 周期报告）
 
-`make test` → 自建运行器（CLT 无 XCTest/Swift Testing，见 [issue #1](../.agents/issue.md)）。
-
-- **谓词优先级** P1-P5：offDuty 压过一切；idle 压过会议/阈值；会议压过阈值；阈值触发休息；默认 working。
-- **工作示例** U1：30+30 会议→60 工作→10 休息（纯函数 + 引擎接线双重断言）。
-- **边缘 case**：U2 会议恰在阈值点不触发瞬间休息；U3 背靠背会议跨接缝；U4 会议跨窗口边界→offDuty 优先；U7 休息被会议打断→abort-and-reset；U9 同态幂等（showOverlay 仅一次）。
-- **健壮性**：U10 advance 限幅；U5 AFK 冻结累加器；U6 睡眠不回灌；U11 fast-forward 短推进/长冻结。
-- **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移（含 v7→v8 `agent`/AgentSettings 与 v8→v9 `power`/PowerSettings 缺字段补默认、子字段容错、未知 `mode` rawValue 回退不拖垮整份配置、往返一致）。
-- **遮罩背景解析**（`SystemWallpaperCases`，§8.5）：`Index.plist` 解析（Linked / Desktop / 默认 / 垃圾数据）、`assetID` UUID 白名单与恶意 ID、航拍目录新→旧回落、默认航拍探测、`resolve` 回退链。
-
-## 6. 已验证 / 待实机核实
-
-✅ 已无头验证：编译链接、91 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过。
-⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建；**「防止睡眠」两种防护范围下 `pmset -g assertions` 是否分别可见 1 条 / 2 条对应断言，关闭与退出应用后断言是否消失**；**遮罩背景跟随系统壁纸的在屏观感**（航拍淡入、静帧按屏、暗纱下文案可读、熄屏 / 唤醒续播；功耗与帧率已离屏实测，见 §8.5）。
-
-## 7. 工作日志（休息前记录 + 周期报告）
-
-### 7.1 设计依据（循证）
+### 5.1 设计依据（循证）
 
 休息前弹窗记录「完成了什么 + 可选下一步」，本质是 **转换边界的认知闭合仪式**，而非生产力打卡：
 
@@ -115,21 +91,21 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 - **Fogg 行为模型 [11]**：动机低且可变时，最大化 Ability（简化）是改变行为的关键——故字段可选、回车即提交、到点自动放行（等待时长可配，默认 3 分钟；亦可设永久等待）、轮换占位、软字符计数（不硬截断、不设最小长度——最小长度是已证实的完成杀手 [12]）。
 - **JITAI [13]**：提示在「已被接受的打断」（休息本身）时机出现，而非新增第二个打断；提供 *provide-nothing* 选项（连续跳过衰减 + 可关闭）以对抗习惯化与怨恨。
 
-### 7.2 架构（正交，纯 FSM 零改动）
+### 5.2 架构（正交，纯 FSM 零改动）
 
 | 关注点 | 位置 | 说明 |
 |---|---|---|
 | 模型 | `Engine/Models.swift` `WorkLogEntry` / `PreBreakContext` | 纯数据，`Codable` 容错解码 |
 | 存储 | `Engine/WorkLogStore.swift` | 镜像 `ConfigStore`：原子写 + 容错读，独立 `work-log.json` |
-| 报告（纯函数） | `Engine/WorkLogReport.swift` | `filterWorkLogEntries` / `renderWorkLogReport`，确定性幂等 |
+| 报告（纯函数） | `Engine/WorkLogReport.swift` | `filterWorkLogEntries` / `buildWorkLogReportModel` / `renderWorkLogReport`，确定性幂等 |
 | pre-break 拦截 | `Engine/LiveGiveMeABreakEngine.tick()` | 副作用分发处最小拦截；`completeDeferredRest(now:)` |
-| 提示窗 / 报告窗 | `Integrations/WorkLog/` | SwiftUI + NSHostingController（同 `SettingsWindowController` 范式） |
+| 提示窗 / 报告窗 / 补录窗 | `Integrations/WorkLog/` | SwiftUI + NSHostingController（每次 show 重建 hosting，见 [issue #9](../.agents/issue.md)） |
 
-**纯 FSM（`evaluate`/`transition`/`sideEffects`）零改动**——它是跨平台单一事实源（与 Windows C# 端共享 fixture，见 [windows-port-design.md](./windows-port-design.md)）。工作日志仅是接线层的副作用拦截 + 独立存储 + 独立报告。
+**纯 FSM（`evaluate`/`transition`/`sideEffects`）零改动**——它是跨平台单一事实源：Swift 端用例不读 fixture（期望值内联），C# 端以黄金 fixture 锁纯函数决策、以时序测试逐条镜像 Swift 用例，见 [windows-port-design.md](./windows-port-design.md)。工作日志仅是接线层的副作用拦截 + 独立存储 + 独立报告。
 
-### 7.3 tick() 副作用拦截 + 心跳冻结
+### 5.3 tick() 副作用拦截 + 心跳冻结
 
-```
+```text
 tick() 检测 eff.showOverlay（.working → .resting）
   ├─ willDefer = onPreBreak != nil && config.workLogEnabled && !forcedRest
   ├─ if willDefer: 调 onPreBreak(ctx)；本 tick 跳过 overlay.show / music（延迟）
@@ -149,15 +125,48 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 **向后兼容**：`onPreBreak == nil`（既有所有单测）→ `willDefer = false` → 行为与历史逐字节一致；既有测试零回归。
 
-### 7.4 数据模型与报告
+### 5.4 数据模型与报告
 
 `WorkLogEntry { id, startedAt(≈restStartedAt − workAccum), endedAt(=restStartedAt), summary, nextAction?, durationSeconds, modelVersion }`，持久化 `~/Library/Application Support/com.aurelius.givemeabreak/work-log.json`，schema 见 [shared/work-log.schema.json](../shared/work-log.schema.json)。
 
-`renderWorkLogReport` 按 `startedAt` 在指定时区分桶，产出今日/本周/月报/全部 Markdown：恰好一个 H1 + blockquote 元数据（周期/时区/条数/总专注时长）+ Top 3（按时长降序）+ 按日或按周拆解 + 待续·下一步（聚合 `nextAction`）。日期格式化全用 `Calendar` 组件手动拼接（零 locale 依赖，**确定性幂等**：同 entries + 同 now/cal/tz → 字节一致，便于 git diff）。v1 不做模糊去重/关键词 tag 推断（避免隐藏用户原始数据 + 误合并）。
+`buildWorkLogReportModel` 为聚合逻辑的单一事实源（纯函数、确定性幂等）：同一结构化模型由两个渲染器消费——`renderWorkLogReport` 序列化为导出 Markdown，`WorkLogReportView`（UI 层）原生渲染为层级化阅读器。报告按 `startedAt` 在指定时区分桶（today / week / month / all），周期专属明细口径：**today = 完成清单（逐条）/ week = 按日拆解 / month = 按周拆解 / all = 按月汇总表**；公共结构为恰好一个 H1 + blockquote 元数据（周期/时区/条数/总专注时长）+ Top 3（按时长降序、并列时间升序）+ 待续·下一步（聚合 `nextAction`）。日期格式化全用 `Calendar` 组件手动拼接（零 locale 依赖，**确定性幂等**：同 entries + 同 now/cal/tz → 字节一致，golden 快照守护，便于 git diff）。
 
-## 8. 主动屏幕遮罩（手动遮罩）
+报告窗在此基础上支持记录级管理：**逐条编辑 / 删除**（悬停按钮 + 右键菜单双入口，删除带二次确认）、**加一条**（`.sheet` 复用 `WorkLogEntryFormView`）、**清空全部**（NSAlert 二次确认，提示先导出备份）；复制 / 导出仍输出 `renderWorkLogReport` 的 Markdown，与模型同源。v1 不做模糊去重/关键词 tag 推断（避免隐藏用户原始数据 + 误合并）。
 
-### 8.1 设计目标与正交性
+## 6. 运动记录与综合报告
+
+与工作日志对称：工作日志在进入休息**前**记录刚完成的工作（§5），运动记录在退出休息**后**记录这段休息里做的微运动（如深蹲、俯卧撑），二者再按 周 / 月 / 季 / 年 合成为综合报告。
+
+### 6.1 触发时机与门控
+
+引擎在休息**自然结束**（`.resting → .working`）后回调 `onPostBreak(PostBreakContext)`——仅自然结束触发，提前结束（Esc）与被会议/下班打断均不回调（`EngineWiringCases` 以 4 例钉死该不变量）。`PostBreakContext { restStartedAt, restEndedAt }` 为纯数据（与 `PreBreakContext` 对称，零 UI 依赖），运动时段默认取 `[restStartedAt, restEndedAt]`。
+
+`AppRoot.handlePostBreak` 的门控链（任一命中即静默放行，不弹窗）：
+
+1. `exerciseLogEnabled` 关（且非 DEBUG）→ 不弹（`GIVEMEABREAK_DEBUG` 旁路开关，见 §3.1）；
+2. 连续跳过 ≥3 次 → 本次静默并清零计数（自愈，下次重新提示）——与工作日志同一「提示疲劳衰减」范式（§5.3）；
+3. 存储或提示控制器不可用 → 不弹（兜底，绝不卡住）。
+
+### 6.2 提示窗、补录与类型自动学习
+
+**与工作日志小结窗的关键差异：不冻结心跳**。运动提示在休息**已结束**后弹出，无倒计时可保护，故不挂起 `HeartbeatTimer`、不耦合引擎状态——形态接近补录窗，仅自动弹出并预填休息时段。窗口提供自动放行兜底：`exercisePromptTimeoutSeconds`（默认 180s，v7 起可配）到点未操作等同跳过；哨兵 `0` = 永久等待（不调度定时器，仅手动出口：提交 / 跳过 / 红色关闭按钮）。提交/跳过/超时/关窗多路合一，`isPresenting` 防重入、收尾幂等。
+
+**补录窗**（菜单「补录运动…」）默认时段为 `[now − restDuration, now]`——`exerciseBackfillDefaultRange` 纯函数（可单测），语义是「补**刚才那段休息**里做的运动」：以当前时刻为终点、单次休息时长为跨度回溯。刻意不同于工作日志补录的默认起点（上一条记录的 `endedAt`，「紧接续写」语义）；综合报告窗内的「加一条」按钮属后者入口。
+
+**自定义类型自动学习**：录入时输入的类型若不在注册表（`config.exerciseTypes`，默认「胯下击掌 / 提膝击掌 / 深蹲 / 俯卧撑」）内，保存后经 `appendedExerciseTypes` 纯函数（去重、保序、去空白；无新增返回 nil 即跳过写盘）追加进配置并热更新引擎，下次录入的 Picker 即可选。设置「运动」页亦可增删注册表。
+
+### 6.3 数据模型与综合报告
+
+`ExerciseEntry { id, startedAt, endedAt, sets: [ExerciseSet { type, reps }], note?, modelVersion }`（一次记录可含若干组；空组视为未记录，不入库），持久化 `~/Library/Application Support/com.aurelius.givemeabreak/exercise-log.json`——`ExerciseStore` 镜像 `WorkLogStore` 范式（原子写 + 容错读 + 按 id 改写 / 删除 / 整体替换），与配置、工作日志存储职责正交。
+
+综合报告（`CombinedReport`，纯函数）与 `WorkLogReport` 同范式：`buildCombinedReportModel` 为聚合单一事实源，`renderCombinedReport` 序列化导出 Markdown、`CombinedReportView` 原生渲染（日期键与时长格式化复用 `ReportDateKeys`，不改动既有工作日志窗）。`CombinedReportScope` 为 周 / 月 / 季 / 年，两类内容段：
+
+- **工作回顾段**（只读——详尽逐条编辑归「工作日志」窗，避免双编辑路径）：Top 3（按时长降序）+ 子周期分布（周→按日、月→按周、季/年→按月）。
+- **运动概览段**：按类型聚合表（记录条数 / 总数量，数量降序、并列类型名升序）+ 明细——week / month 为逐条（**支持编辑 / 删除 / 加一条**，对齐工作日志阅读器的悬停按钮 + 右键菜单 + 二次确认范式），quarter / year 为按月汇总表。
+
+## 7. 主动屏幕遮罩（手动遮罩）
+
+### 7.1 设计目标与正交性
 
 在到点强制休息之外，新增一个**用户主动触发**的屏幕遮罩能力（菜单「屏幕遮罩」）：复用休息遮罩完全相同的视觉/输入阻断机制（`CGShieldingWindowLevel` 多屏 borderless `NSPanel`），但与调度引擎（FSM）**正交解耦**——`ScreenMaskController` 不读写 `EngineState`、不触发 `forcedRest`/`onPreBreak`/`onPostBreak` 等任一副作用路径，因此不会复现 [issue #6](../.agents/issue.md) 中「一次性意图标志被下个 tick 拉回」的耦合缺陷。触发方式：
 
@@ -168,7 +177,7 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 `ScreenMaskController` 复用 `LiveOverlayController.swift` 内定义的 `OverlayPanel`（`NSPanel` 子类），但独立实现面板构造/热插拔/淡入淡出——刻意**不**抽取共享基类：`LiveOverlayController.swift` 是 [issue #4](../.agents/issue.md)、[issue #6](../.agents/issue.md) 两次事故现场且零自动化测试覆盖，本项目既有窗口控制器（`SettingsWindowController`/`WorkLogPromptWindowController` 等 7 处）也均独立重复各自的 `NSApp.activate`/`makeKeyAndOrderFront` 样板代码、从未共享基类，本次遵循同一惯例。
 
-### 8.2 与调度引擎的关系：遮罩冻结计时，强制休息优先
+### 7.2 与调度引擎的关系：遮罩冻结计时，强制休息优先
 
 `ScreenMaskController`（手动）与 `LiveOverlayController`（休息）各自独立持有一组 `OverlayPanel`，均置于同一 `CGShieldingWindowLevel`，二者不得同时显示。编排层（`AppRoot`）的协调语义（v0.1.5 起）：
 
@@ -178,7 +187,7 @@ tick() 检测 eff.showOverlay（.working → .resting）
 - 进入手动遮罩前置 guard：`engine.state.phase == .resting`（含小结窗延迟期，该阶段 phase 已是 .resting）时忽略触发，已被休息遮罩覆盖或小结窗流程进行中时不叠加。
 - 手动遮罩罩住已打开的设置窗等窗口（不做特殊处理），与既有「立即休息」菜单项行为对称。
 
-### 8.3 CGEventTap 快捷键拦截
+### 7.3 CGEventTap 快捷键拦截
 
 `LockShortcutMonitor` 在 HID 事件流入 WindowServer 之前插入一个 `.headInsertEventTap`（`tap: .cghidEventTap`）<sup>[[14]](#ref14)</sup>，监听 `keyDown`，比对 `keyCode==12`（Q）且修饰键恰为 Control+Command（`CGEventFlags` 与关心的修饰键位掩码求交集后比较，忽略 `.maskNonCoalesced`/`.maskNumericPad` 等硬件杂位），命中则消费（回调返回 `nil`，系统不再派发）并转投 `onTriggered`；未命中原样放行。`options` 必须为 `.defaultTap`（而非 `.listenOnly`）——后者只能观察无法拦截。回调保持轻量（仅比较 + 主线程异步转发），否则系统会以 `.tapDisabledByTimeout` 强制禁用 tap，需监听该事件类型并调用 `CGEvent.tapEnable(tap:enable:true)` 恢复（应用唤醒时另经 `recheckHealth()` 兜底核实）。权限模型独立于既有 `AXIsProcessTrusted`（后者仅用于*发送*媒体键 CGEvent）——*监听*系统级按键需要「输入监控」(Input Monitoring) 权限，经 `CGPreflightListenEventAccess()` / `CGRequestListenEventAccess()` <sup>[[15]](#ref15)</sup> 查询/申请，未授权时 `CGEvent.tapCreate` 返回 `nil`，按既有降级范式静默回退（仅菜单可用 + NSLog 诊断）。
 
@@ -186,9 +195,9 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ⚠️ **CLT SDK 注记**：`CGEventFlags` 无 `NSEvent.ModifierFlags.deviceIndependentFlagsMask` 对应物，需显式声明关心的修饰键位掩码后再求交集比较（实现时已验证于本项目 Command Line Tools 工具链下编译通过；`CGEvent.tapCreate`/`CGPreflightListenEventAccess`/`CGRequestListenEventAccess` 均无 [issue #2](../.agents/issue.md) 那类符号缺失问题）。
 
-### 8.3.1 遮罩期间键盘白名单拦截（`MaskInputGuard`，v0.1.10）
+### 7.3.1 遮罩期间键盘白名单拦截（`MaskInputGuard`）
 
-系统级组合键（⌘Tab / ⌘\` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§8.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
+系统级组合键（⌘Tab / ⌘\` / ⌃←→ / F3 / ⌘空格 / ⌘⇧345 / ⌘H / ⌘⌥Esc）由 WindowServer 在应用分发前处理，`addLocalMonitorForEvents` 永远看不到——遮罩面板虽为 key 窗口，这些键仍可穿透。`MaskInputGuard` 以第二个 HID tap（§7.3 同款参数：`.cghidEventTap + .headInsertEventTap + .defaultTap`、仅订阅 keyDown）在遮罩期间白名单拦截：**除裸 Esc（53）与裸 Return（36）外一律吞**。
 
 **谓词（判错即灾难，单表达式纯函数）**：`(keyCode == 53 || keyCode == 36) && flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty`。三个要点：
 
@@ -202,94 +211,31 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 **看门狗（与被守护代码无关的兵底守卫）**：白名单下连 ⌘⌥Esc、⌃⌘Q、Apple 菜单键盘路径均不可用，重启不构成兜底（只剩电源键硬关机，丢未保存工作）。故 `begin()` 启动 30min 独立 `DispatchSourceTimer`（心跳在手动遮罩期间被挂起，不能承载；同 WorkLogPrompt 先例），到点**只读 WindowServer 真相**（`CGWindowListCopyWindowInfo` 查本进程 ≥ 屏蔽层级的屏上窗口，不读控制器状态）：遮罩仍在（含合法长遮罩、跨睡眠）→ 续期；不在（僵尸态：进程活、tap 活、遮罩没了）→ 强制 `end()`。环境变量 `GIVEMEABREAK_DISABLE_INPUT_GUARD`（存在即禁用）为应急短路。
 
-**降级与边界**：tap 创建失败（输入监控/辅助功能未授权）→ 一次日志后 no-op，维持面板级阻断（fail-open）；Secure Input 生效时与 §8.3 同一系统级边界（全机 tap 静默失效）；媒体键/亮度走 NX_SYSDEFINED 不受影响（休息听歌依赖之）；极端时序下遮罩升起瞬间 ⌘Tab 切换器已开、松 ⌘ 提交切换——任意点击落到全屏遮罩即自愈（重新激活、恢复 key 状态）。
+**降级与边界**：tap 创建失败（输入监控/辅助功能未授权）→ 一次日志后 no-op，维持面板级阻断（fail-open）；Secure Input 生效时与 §7.3 同一系统级边界（全机 tap 静默失效）；媒体键/亮度走 NX_SYSDEFINED 不受影响（休息听歌依赖之）；极端时序下遮罩升起瞬间 ⌘Tab 切换器已开、松 ⌘ 提交切换——任意点击落到全屏遮罩即自愈（重新激活、恢复 key 状态）。
 
-### 8.4 快捷键体系（三层，各司其职）
+### 7.4 快捷键体系（三层，各司其职）
 
 | 层 | 组合键 | 机制 | 权限 | 生效范围 |
 |---|---|---|---|---|
 | 全局即时动作 | ⌃⌥⌘K 屏幕遮罩 / ⌃⌥⌘R 立即休息 | `RegisterEventHotKey`（Carbon HIToolbox，`GlobalHotkeyCenter`） | 无 | 全局，事件被系统消费、不透传前台应用 |
-| 系统锁屏劫持 | ⌃⌘Q | `CGEventTap`（§8.3） | 输入监控 | 全局，权限门控 |
-| 菜单快捷键 | 裸字母（R/K/L/,/Q） | `NSMenuItem.keyEquivalent` | 无 | 仅菜单展开时（AppKit 原生行为） |
+| 系统锁屏劫持 | ⌃⌘Q | `CGEventTap`（§7.3） | 输入监控 | 全局，权限门控 |
+| 菜单快捷键 | 裸字母 L/,/Q（R/K 以 ⌃⌥⌘ 前缀如实展示于菜单） | `NSMenuItem.keyEquivalent` | 无 | 仅菜单展开时（AppKit 原生行为） |
 
 选择 ⌃⌥⌘ 修饰组合的原因：与常见应用内快捷键（⌘R/⌘K/⌘L 等）冲突面最小。v0.1.4 曾把裸字母展示为组合键、被用户按全局快捷键预期使用而无任何反应（「所有快捷键未生效」缺陷根因之一）——修复为即时动作挂真实全局热键 + 菜单如实展示 ⌃⌥⌘R/⌃⌥⌘K；窗口类菜单项保留菜单展开时快捷键（其原生生效域），不做全局注册（全局化窗口弹出/退出属于越权抢键，退出热键化更是灾难性脚枪）。
 
 ⚠️ **CLT SDK 注记（[issue #2](../.agents/issue.md) 同类）**：本 SDK 的 HIToolbox 头文件已不含 `RegisterEventHotKey` 声明，仅 `HIToolbox.tbd` 导出符号；Swift `import Carbon.HIToolbox` 仍可编译链接。已在独立无授权进程中探针验证 `InstallEventHandler`/`RegisterEventHotKey` 返回 `noErr`（零权限可用）。Carbon 文档已被 Apple 归档：[Documentation Archive](https://developer.apple.com/library/archive/navigation/index.html?filter=carbon)。
 
-### 8.5 遮罩背景：跟随系统壁纸（取代 v0.1.10 Metal 特效）
+## 8. 遮罩背景：跟随系统壁纸
 
 手动遮罩与休息遮罩共用同一背景（`MaskBackground` 为单一事实源，两处视觉恒一致），与桌面所见一致：当前壁纸为系统航拍（Aerial）<sup>[[17]](#ref17)</sup> → 静音循环播放本机同一段 `.mov`；否则 → 按屏显示桌面静帧。v0.1.10 的 5 组 Metal 程序化特效（`Overlay/MaskEffects/*`、`MaskEffect`、`ScreenMaskSettings`、`DayPlanConfig.screenMask`）已整体移除。
 
-**决策依据（实测）**：M4 MacBook Pro · macOS 27.0.1 · 双屏（内建 2940×1912 + LG 4K），全部离屏测量；整机功耗取电池遥测 `AccumulatedSystemLoad` 约 60s 窗口均值，空闲噪声带 7.1–10.2 W；帧率 `a / b` 为实得 / 目标。
-
-| 背景 | 整机功耗 | GPU | 帧率 |
-|---|---|---|---|
-| 空闲（两次基线） | 7.1 / 10.2 W | 14–16% | — |
-| Metal 涟漪光球（原默认） | 22.5 W | 99.8% | 31.5 / 60 |
-| Metal 丝绸流光 | 16.4 W | 99.9% | 13 / 60 |
-| Metal 冷雾纤丝 | 17.5 W | 93.7% | 51 |
-| Metal 水波光斑 | 19.7 W | 81.8% | 60 |
-| Metal 字雨微光 | 7.4 W | 21% | 30 |
-| Metal 涟漪光球降档（无 SSAA + 30fps） | 18.4 W | 74.5% | 30 |
-| Metal 丝绸流光降档（无 SSAA + 30fps） | 15.0 W | 99.6% | 17 |
-| **系统航拍 Golden Gate（1 路解码）** | **7.3 W** | **15%** | **59.8** |
-| 系统航拍 2 路解码 / 已下载「金门海峡日落」 | 9.2 / 9.6 W | 12 / 19% | 59.6 / 59.9 |
-
-- **Metal 的成本是结构性的**：每帧对约 1000 万像素 × 2 屏（原生 2x × SSAA 1.4–1.5）逐像素求多阶 fbm 噪声，片元算力被吃满；降档（去 SSAA + 30fps）后涟漪光球仍 18.4 W / 74.5%、丝绸流光仍 99.6%，调参无解。字雨微光低耗源于无 SSAA + 限 30fps，仅为 5 组之一。
-- **航拍视频近乎零成本**：HEVC 由 Media Engine 硬件解码<sup>[[22]](#ref22)</sup>，GPU 只做合成——1 路解码 7.3 W 与空闲持平（`VTDecoder` CPU 约 4%）；2 路解码与更高码率的已下载航拍仍落在空闲噪声带内。
+**功耗决策（实测结论）**：Metal 特效离屏实测 GPU 82–100% 满载、整机 15–22.5 W，且成本是结构性的（逐像素多阶噪声、降档无解）；系统航拍视频由 Media Engine 硬件解码<sup>[[22]](#ref22)</sup>，1 路解码整机功耗与空闲持平，多屏共用一路解码、成本不随屏数增长。实测环境、逐组对照数据与结构性成本分析见 [issue #15](../.agents/issue.md)（[CHANGELOG v0.1.12](../CHANGELOG.md) 为摘要）。
 
 **为何不直接复用系统渲染器**：① 宿主 `WallpaperAerialsExtension.appex` 需私有 entitlement `com.apple.private.wallpaper.extension-host`，第三方拿不到授权它的 provisioning profile<sup>[[19]](#ref19)</sup>；② `ScreenSaverEngine` 任意按键 / 移动指针即退出<sup>[[18]](#ref18)</sup>，与遮罩期间由本 App 接管键盘冲突；③ `NSWorkspace.desktopImageURL(for:)` 对航拍只返回一张静帧 HEIC<sup>[[21]](#ref21)</sup>，系统也无列举壁纸文件的公开 API，`Index.plist` 属可随时变更的实现细节<sup>[[20]](#ref20)</sup>。故沿先例<sup>[[21]](#ref21)</sup>自行解析 `Index.plist` 定位视频、以 AVFoundation 播放，并把「私有布局可能变更」收敛为一条确定的降级路径（静帧）。
 
 **解析链**（`Sources/GiveMeABreakEngine/SystemWallpaper.swift`：纯函数，文件系统谓词注入，可单测）：
 
-```mermaid
-flowchart LR
-    subgraph IN["输入"]
-        IDX["Index.plist<br/>AllSpacesAndDisplays<br/>Linked / Desktop · Choices[0]"]
-        DEF["DefaultDesktop.heic<br/>解析符号链接"]
-        DIMG["desktopImageURL(for:)<br/>按屏"]
-        RM["减弱动态效果"]
-    end
-    subgraph RES["解析 SystemWallpaper（纯函数）"]
-        P{"Provider"}
-        A{"assetID 为严格 UUID<br/>且 videos/assetID.mov 已下载"}
-        D{"位于 Wallpapers/.default<br/>且同目录有 .mov"}
-        VID(["video(URL)"])
-        STL(["still"])
-    end
-    subgraph OUT["呈现 MaskBackground（自底向上）"]
-        G["① 深色渐变（恒在底层兜底）"]
-        AV["② AerialLayerView<br/>共享 AVPlayer · 静音循环"]
-        SW["② StillWallpaperView<br/>后台缩略解码"]
-        SC["③ 暗纱 + MaskCaption"]
-    end
-    IDX --> P
-    P -->|aerials| A
-    P -->|default| D
-    P -->|"其他（图片 / 纯色 / 动态）或 plist 缺失 / 损坏"| STL
-    DEF --> D
-    A -->|是| VID
-    A -->|"否（含未下载）"| STL
-    D -->|是| VID
-    D -->|否| STL
-    VID --> AV
-    STL --> SW
-    DIMG --> SW
-    AV -.->|加载失败| SW
-    RM -.->|停在首帧| AV
-    classDef input fill:#2d5a3a,color:#fff,stroke:#7fc98a
-    classDef core fill:#1f3a5a,color:#fff,stroke:#7fa8c9
-    classDef video fill:#5a4a2d,color:#fff,stroke:#c9b27f
-    classDef still fill:#3a4a5a,color:#fff,stroke:#7fa8c9
-    classDef base fill:#4a4a4a,color:#fff,stroke:#b0b0b0
-    class IDX,DEF,DIMG,RM input
-    class P,A,D core
-    class VID,AV video
-    class STL,SW still
-    class G,SC base
-```
-
-色彩语义：绿=输入、蓝=解析判定、琥珀=视频路径、蓝灰=静帧路径、中性灰=兜底与可读性层；前景 `#fff` + 深色填充（同 §2.1）。
+![遮罩壁纸解析链与呈现层回退](diagrams/mask-wallpaper-chain/mask-wallpaper-chain.svg)
 
 - **航拍视频目录**：macOS 26+ 为 `~/Library/Application Support/com.apple.wallpaper/aerials/videos/<assetID>.mov`，macOS 14/15 为 `/Library/Application Support/com.apple.idleassetsd/Customer/4KSDR240FPS/<assetID>.mov`，按新→旧探测；选中航拍但未下载 → 静帧（不回落默认航拍）。
 - **系统默认壁纸**：如 macOS 27 默认壁纸即航拍，同目录内置免下载的 `Golden Gate.mov`；不写死文件名，默认壁纸为静帧的系统版本（如 macOS 14）自然判否。
@@ -331,11 +277,64 @@ v0.1.10 Metal 特效（着色器运行时编译、SSAA、降级链）及更早�
 
 **验证取证**：`CGShieldingWindowLevel` 的窗口无法被 `screencapture` 捕获（见 [issue.md](../.agents/issue.md)）。⚠️ **切勿以「DEBUG 时降低窗口层级」换取截图便利**——`.floating` 仅为 3，而屏蔽层级约 21 亿，降级后菜单栏与 Dock 均盖不住，等于用调试便利换掉了遮罩的核心作用（v0.1.10 曾踩中，见 [issue #13](../.agents/issue.md)）。取证应用 `CGWindowListCopyWindowInfo` 核验层级 + 用户肉眼确认。功耗 / 帧率一律离屏测量（`MTLTexture` / `AVPlayerItemVideoOutput` / `CARenderer` 回读），不在用户工作时开在屏全屏窗口（见 [issue #15](../.agents/issue.md)）。
 
+## 9. Coding Proxy 托管
+
+本地命令行工具（默认 `uv run coding-proxy start`）随本应用托管运行：开启 = 随应用启动并保持运行；退出应用时一并停止（不留孤儿进程）。全仓首个 `Foundation.Process` 子进程用例，与引擎 FSM 完全正交——引擎不消费其配置，子进程崩溃/退出不影响调度。
+
+### 9.1 配置与生命周期
+
+`CodingProxySettings` 三字段——`autoStartEnabled`（默认关，升级用户零行为变化）/ `workingDirectory`（空 = 未配置，开启也不会启动，控制台明示原因）/ `launchCommand`（默认 `uv run coding-proxy start`，按空白切分、支持引号包夹参数）——嵌套于 `AgentSettings`（v10），保持「Agentic AI 设置页 ↔ `agent` 域」1:1 映射，容错解码平滑迁移（旧 v9 缺 `codingProxy` 补默认）。
+
+应用时机两处：App 启动时按持久化配置恢复（`AppRoot.start` → `apply`）；设置窗「应用」提交时（含开关 / 工作目录 / 启动命令，运行中改目录或命令自动重启）。控制台的启动 / 停止 / 重启按钮为**会话级**操作（不写 config）。开关与目录/命令同为草稿、随「应用」一并提交——与「防止睡眠」的即时通道语义刻意不同，避免「开关已生效、目录还是旧草稿」组合下的静默启动失败。
+
+### 9.2 apply 决策与进程生命周期
+
+`codingProxyTransition` 纯函数（Engine 层，决策表可单测）决定 `none / start / stop / restart`，核心不变式：
+
+- **配置未变绝不触碰进程**——用户在控制台手动停止的进程，不会被一次无关的「应用」复活（保留会话级手动状态）。
+- **新配置无效不动旧进程**——仅警示（设置页行内提示 + 控制台状态与日志），一次手滑不该打死正常进程。
+- 开关即期望态：未 enabled 且已运行 → stop；enabled 且目录/命令变化 → restart；仅翻转开关不打扰运行中的进程。
+
+进程生命周期路径：
+
+- **运行期停止 / 重启（异步两拍）**：stop = SIGTERM → 5s 宽限 SIGKILL 兜底；restart 先置 `pendingRestart` 异步停止，旧进程终态回调（`terminationHandler` 回主线程）确认死透后再拉新——保「旧进程死透再拉新」次序（避免端口争用）的同时不冻结 UI。意外退出**不自动重启**（防无退避重启风暴），仅记状态与日志，控制台可手动再启动。
+- **退出同步停止**：`stopForQuit()` = SIGTERM → ≤2s 轮询 → SIGKILL → `waitUntilExit` 回收，为全仓唯一的主线程阻塞点（仅发生在退出期，通常 <100ms）。epoch（generation 计数）作废同步停止后在途的 `terminationHandler` 回调，规避状态竞态。
+- **停止契约 = 直接子进程**：`uv run` 在 Unix 上 exec 子进程（PID 即目标），SIGTERM 直达；自定义命令自身再派生孙进程则不保证波及（控制台已明示此边界）。
+
+### 9.3 环境适配与控制台
+
+- **PATH 增强**：App 从 Finder 启动时无 shell PATH（`uv` 常装于 `~/.local/bin` 或 `/opt/homebrew/bin`），启动子进程前前置 `~/.local/bin`、`~/bin`、`/opt/homebrew/bin`、`/usr/local/bin` 并按目录去重（保首个）；另注入 `PYTHONUNBUFFERED=1` 防 Python 子进程块缓冲导致日志迟滞（对非 Python 命令无害）。
+- **控制台**（菜单「Coding Proxy…」；`GIVEMEABREAK_SHOW_CODINGPROXY` 可启动即打开，见 §3.1）：彩色等宽日志流（stdout 默认色 / stderr 橙 / 生命周期蓝灰 + 灰色时间戳）、运行状态与 PID、会话级启动 / 停止 / 重启 / 清空日志、自动滚底开关与「回到底部」。日志为会话级**环形缓冲**（2000 行容量 + 单行 4000 字符超长物理截断并标记——代理类工具常整行打印 minified JSON，超长单行会拖死 SwiftUI 渲染），窗口关闭再开不丢失，不落盘；stdout / stderr 双管道经 `readabilityHandler` 流式**行拼装**（chunk 不对齐行边界、UTF-8 多字节序列可能被劈开，拼装器缓冲半行与残缺尾字节直到补全）；UI 刷新 ≥250ms trailing 合流（高频输出不逐行刷 SwiftUI，以单调累计计数比对合流窗口边界，进程静默前的末几行不滞留）。
+
+纯逻辑（命令行解析含引号包夹与 `~` 展开 / PATH 增强 / 可执行解析 / 配置校验 / apply 决策 / 环形缓冲 / 行拼装器）全部下沉 Engine 层 `CodingProxySupport.swift`（单测见 §10）；进程托管本体位于集成层 `CodingProxy/` 三文件（`CodingProxyProcessController` + 控制台窗两文件）。
+
+## 10. 测试矩阵
+
+`make test` → 自建运行器（CLT 无 XCTest / Swift Testing，见 [issue #1](../.agents/issue.md)）。**151 例全绿（<1s）**，分文件：
+
+| 用例文件 | 例数 | 覆盖 |
+|---|---:|---|
+| `EvaluateCases` | 13 | 谓词优先级 P1–P5、休息触发不变量、advance 限幅 / 负 delta 夹紧、区间合并（重叠 / 间隙 / 背靠背端点相接 / 空列表）、`activeMeeting` 半开语义 |
+| `EngineTransitionCases` | 6 | U1 工作示例（30+30→60→10）、U2 会议恰在阈值点、U3 背靠背会议跨接缝、U4 会议跨窗口边界、U7 休息被会议打断 abort-and-reset、U9 同态幂等 |
+| `EngineWiringCases` | 17 | 引擎接线（U1 控制器调用序列 / U5 AFK 冻结 / U6 睡眠不回灌 / U11 fast-forward 短推进与长冻结）、Esc 提前结束、立即休息路径、`updateConfig` 热更新、onPreBreak 触发不变量（自然 / 强制 / 关闭 / nil 零回归）、onPostBreak 触发不变量（仅自然结束触发，4 例） |
+| `ConfigStoreCases` | 29 | config / state round-trip、缺失 / 损坏回退默认、schema 迁移（v1、v3→v4、v4→v5、v6→v7、v7→v8、v8→v9、v9→v10）、高于本版本回退默认、哨兵 0 不被误补默认、部分字段容错、v10 废弃键 `screenMask` 忽略且其余字段完好 |
+| `WorkLogCases` | 14 | 存储 round-trip / 补录 / 清空 / 按 id 改写与删除、容错解码、时长格式化、四周期分桶、报告结构与幂等、golden 快照（四周期字节一致） |
+| `ExerciseCases` | 16 | 存储全操作、容错解码、周 / 月 / 季 / 年分桶（含跨季 / 跨年边界）、按类型聚合、综合报告结构 / 幂等 / golden 快照、补录默认区间、类型自动学习纯函数 |
+| `CodingProxyCases` | 32 | 命令行解析（引号包夹 / Tab / `~` 展开 / Unicode）、PATH 增强与可执行解析、配置校验各分支、apply 决策表、环形缓冲（容量裁剪 / 单调计数 / 超长截断）、UTF-8 跨 chunk 行拼装 |
+| `SystemWallpaperCases` | 24 | `Index.plist` choice 解析（Linked / Desktop / 默认 / 垃圾数据 / 恶意 assetID）、UUID 白名单、航拍目录新→旧回落、默认航拍探测、`resolve` 回退链（第 8 章） |
+
+配置迁移用例覆盖 v1 与 v3→v4、v4→v5、v6→v7、v7→v8、v8→v9、v9→v10 各步（workLog 等待时长 → 自定义音频 → 运动类型与等待时长 → `agent` → `power` → `agent.codingProxy`，每步缺字段补默认且旧字段保留；v5→v6 的 `exerciseLogEnabled` 暂无专门迁移用例，仅由 round-trip 覆盖），另钉死：高于本版本回退默认、显式哨兵 0 保留、未知枚举只回退该字段不拖垮整份配置、往返一致。
+
+## 11. 已验证 / 待实机核实
+
+✅ 已无头验证：编译链接、全部单元测试（§10）、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过；macOS 26 `OverlayPanel` `canBecomeKey=true` 已实机验证无崩溃（[issue #4](../.agents/issue.md)）。
+⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建；**「防止睡眠」两种防护范围下 `pmset -g assertions` 是否分别可见 1 条 / 2 条对应断言，关闭与退出应用后断言是否消失**；**遮罩背景跟随系统壁纸的在屏观感**（航拍淡入、静帧按屏、暗纱下文案可读、熄屏 / 唤醒续播；功耗与帧率已离屏实测，见第 8 章）。
+
 ## References
 
 <a id="ref1"></a>[1] Apple Inc., "NSWindow.Level.screenSaver — Window Levels," *AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct/screensaver
 <a id="ref2"></a>[2] Apple Inc., "NSWorkspace willSleepNotification / didWakeNotification," *AppKit Reference*, 2024.
-<a id="ref3"></a>[3] Apple Inc., "CGShieldingWindowLevel()（已弃用；等价 `CGWindowLevelForKey(kCGShieldingWindowLevelKey)` = `NSWindow.Level.screenSaver`，同屏蔽层级）/ NSWindow collectionBehavior," *Core Graphics & AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgshieldingwindowlevel()
+<a id="ref3"></a>[3] Apple Inc., "CGShieldingWindowLevel() / NSWindow collectionBehavior," *Core Graphics & AppKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgshieldingwindowlevel()
 <a id="ref4"></a>[4] Apple Inc., "NX_KEYTYPE_PLAY and AUX_CONTROL_BUTTONS," *IOKit HID Event Types (ev_keymap.h)*, 2024.
 <a id="ref5"></a>[5] Apple Inc., "EKEventStore / requestFullAccessToEvents / EKEventStoreChanged," *EventKit Framework Reference*, 2024.
 <a id="ref6"></a>[6] Apple Inc., "EKSource sourceType (.calDAV)," *EventKit Reference*, 2024.

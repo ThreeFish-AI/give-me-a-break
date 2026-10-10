@@ -10,7 +10,7 @@
 
 - **表因**：`import XCTest` 报 `no such module 'XCTest'`；`import Testing`（Swift Testing）报宏插件 `TestingMacros` not found。
 - **根因**：Command Line Tools（非完整 Xcode）不含 XCTest 框架与 Swift Testing 宏插件，二者均随 Xcode 附带。
-- **处理方式**：自建极简测试运行器——`tests/` 下可执行目标 `GiveMeABreakTests`，提供 `test(name){}` / `expect(...)` / `expectEqual(...)` + 计数 + 退出码，`make test` → `swift run GiveMeABreakTests` 驱动。语义对齐 XCTest，30 用例 <1s。
+- **处理方式**：自建极简测试运行器——`tests/` 下可执行目标 `GiveMeABreakTests`，提供 `test(name){}` / `expect(...)` / `expectEqual(...)` + 计数 + 退出码，`make test` → `swift run GiveMeABreakTests` 驱动。语义对齐 XCTest，30 用例 <1s（当时；现行计数见[设计文档 §10](../docs/give-me-a-break-design.md#10-测试矩阵)）。
 - **后续防范**：若未来安装完整 Xcode，可平滑迁移回 XCTest（断言 API 一一对应）；AGENTS.md 已注明此适配。
 - **同类影响**：任何纯 CLT 环境的 Swift 项目均适用此方案，勿再尝试 `swift test` + XCTest。
 
@@ -49,10 +49,9 @@
 - **表因**：本机未装 Xcode，无法 `xcodebuild` 生成 `.xcodeproj`。
 - **根因**：方案原定 `.xcodeproj`，但环境约束不允许。
 - **处理方式**：改用 Swift Package Manager（`Package.swift` 三目标）+ `Makefile` 手工装配 `.app`（`Contents/MacOS` + `Info.plist` + `PkgInfo` + `codesign` ad-hoc + Hardened Runtime + entitlements + `xattr` 清 quarantine）。比 `.xcodeproj` 更简约，且 `codesign`/`notarytool` 随 CLT 可用。
-- **后续防范**（2026-09 更新）：稳定签名已落地——`scripts/create-signing-cert.sh` 一次性创建自签名 codeSigning 证书 + `Makefile` `SIGNING_IDENTITY`/`Makefile.local` + `release.yml` 自签名重签步，所有构建共享同一签名身份（DR 绑定证书叶哈希而非 cdhash），TCC 授权跨版本持久（v0.1.5 曾因 ad-hoc 身份漂移复发，见 #3/#7 关联记录）；从 ad-hoc 迁移需最后一次重新授权。Gatekeeper 对下载产物的**首次**拦截仍需 Developer ID + `notarytool` + `stapler` 公证（release.yml 已预留，购证后仅配置即启用），现阶段以根目录 `install.sh`（下载 + 去隔离 + 装配 + 启动一条命令）压低摩擦。
+- **后续防范**（2026-09 更新）：稳定签名已落地——`scripts/create-signing-cert.sh` 一次性创建自签名 codeSigning 证书 + `Makefile` `SIGNING_IDENTITY`/`Makefile.local` + `release.yml` 自签名重签步，所有构建共享同一签名身份（DR 绑定证书叶哈希而非 cdhash），TCC 授权跨版本持久（v0.1.5 曾因 ad-hoc 身份漂移复发，关联记录见 [CHANGELOG](../CHANGELOG.md) v0.1.5「修复所有快捷键全局按下无反应」条目）；从 ad-hoc 迁移需最后一次重新授权。Gatekeeper 对下载产物的**首次**拦截仍需 Developer ID + `notarytool` + `stapler` 公证（release.yml 已预留，购证后仅配置即启用），现阶段以根目录 `install.sh`（下载 + 去隔离 + 装配 + 启动一条命令）压低摩擦。
 - **复发记录**（2026-09-08，v0.1.10）：「Release 下载用户每次升级 TCC 重新弹授权」复发。**表因**：v0.1.8 落地稳定签名时只完成了本机半边，CI 侧 GitHub secrets（`MACOS_SELFSIGN_P12` 等）始终未配置，`release.yml` ③b 自签重签步被 `if: has_selfsign` **静默跳过**，全部 Release 产物（至 v0.1.10）实为 ad-hoc。**根因**：签名三态 marker（signing.txt）只用于 Release Note 文案分支、不阻断发布——「基础设施半配置」在流水线中零信号，静默降级。**处理**：补配 secrets/variable（p12 经 base64 管道直灌）→ 修通 ③b 在无头 runner 上的三处 CI 特有障碍（见下）→ 以 **v0.1.11 为首个稳定签名版本发布**（v0.1.10 及更早资产保持 ad-hoc 不重发，其 Release Note 已如实标注）。期间旧证书私钥在专用钥匙串被标记为不可导出（`security export`/`SecKeyCopyExternalRepresentation` 均拒，`CSSMERR_CSP_INVALID_KEYATTR_MASK`），因所有存量安装均为 ad-hoc（换证 TCC 代价恰为零），重建同名证书（SHA-1 `616A1FEC…`，10 年）并复刻专用钥匙串环境。**防范**：① `release.yml` 新增发布门禁——产物实签为 adhoc 即 fail（逃生门 variable `ALLOW_ADHOC_RELEASE=true`，默认拒绝，settings 可审计）；② 基础设施类修复必须「双端同批闭环」——本机 + CI 配置缺一不可，CI 条件步骤漏配时要有硬失败兜底而非静默跳过；③ 一键安装 URL 引用 `master/install.sh` 实为 404（master 停在 v0.1.1 时代），已改 tag/分支引用（`v%s` / `feature/1.x.x`）；④ **无头 runner 上的自签证书签名三陷阱**（均经诊断 workflow 双 job 双变体实锤，本地有 GUI 会话全部掩盖）：用户域 `security add-trusted-cert` 等待 GUI 授权确认永久挂起（须 `sudo … -d -k /Library/Keychains/System.keychain` 写系统域）；`codesign --keychain` 指定钥匙串对自签证书解析不到 identity（须 `security list-keychains -d user -s "$KC" <既有列表>` 置搜索列表头、codesign 不带 `--keychain`）；`codesign --timestamp` 向 timestamp.apple.com 请求挂起 45min 致 job 超时（自签证书下无功能价值，直接去掉）。
 - **同类影响**：任何无 Xcode 的 macOS 应用构建；以及一切「条件执行 + 静默降级」的 CI 步骤（secrets 门控步漏配 = 行为漂移无告警）。
-- **同类影响**：任何无 Xcode 的 macOS 应用构建。
 
 ## #6 休息模式 Esc 退出失效（对话框被遮罩遮挡 + forcedRest 残留死循环）
 
@@ -141,14 +140,14 @@
   - (b) `resolveExecutablePath` 对显式路径就地判定可执行性，不命中返回 nil，令校验器统一以 `.executableNotFound` 中文明示（校验 / 设置页 Tooltip / 启动失败三处文案同源）。
   - (c) `restart()` 改异步两拍：`stop()` 发 SIGTERM（5s 宽限 SIGKILL）→ 旧进程终态回调 `handleProcessTerminated` 中消费 `pendingRestart` 标志拉新。「旧进程死透再拉新」的次序保证不变，主线程零阻塞；`stop()` 内清零该标志以防「关开关后被重启标志复活」（故 `restart()` 中置位须在 `stop()` 之后）。`stopForQuit()` 退化为退出期专用的唯一阻塞点。
   - (d) `CodingProxyLogBuffer` 增单调计数 `totalAppended`（不受容量裁剪与 clear 影响）；合流回调在标志复位后比对该计数，有增长则补排一次刷新。
-- **验证**（真机 E2E，假命令流避免与真实实例端口冲突）：注入假 `emitter.sh`（持续输出中文 + stderr、SIGTERM 后延时 1s 退出）实测——控制台正确恢复到 autosave 保存的 frame `-1269 901 680 452`（外接显示器负坐标，旧代码会强制居中）；点「重启」期间 AX 探测耗时 194–289ms（与基线同量级，无 1s 级阻塞），日志证实 SIGTERM→旧进程优雅退出（code 0）→新进程拉起的完整两拍；`burst.sh`（突发 200 行后永久静默）验证末行哨兵完整可见无滞留；菜单退出后无孤儿进程。126 单测全绿（+3）。
+- **验证**（真机 E2E，假命令流避免与真实实例端口冲突）：注入假 `emitter.sh`（持续输出中文 + stderr、SIGTERM 后延时 1s 退出）实测——控制台正确恢复到 autosave 保存的 frame `-1269 901 680 452`（外接显示器负坐标，旧代码会强制居中）；点「重启」期间 AX 探测耗时 194–289ms（与基线同量级，无 1s 级阻塞），日志证实 SIGTERM→旧进程优雅退出（code 0）→新进程拉起的完整两拍；`burst.sh`（突发 200 行后永久静默）验证末行哨兵完整可见无滞留；菜单退出后无孤儿进程。126 单测全绿（+3；评审时点实测口径，CHANGELOG 相邻版本条目以 91→129 记账）。
 - **后续防范**：**窗口 frame 持久化与显式居中互斥，勿叠加**；**校验器的「不可达分支」是信号**——若某错误枚举对某类输入永远不可能返回，说明校验被短路，错误将推迟到更差的时机以更差的形式暴露；**同步阻塞的辅助方法勿跨生命周期复用**，退出期与会话期的代价容忍度不同；环形缓冲的 `count` 因容量收口不具单调性，判定「是否有新增」须用独立的单调计数。
 - **同类影响**：所有用 `setFrameAutosaveName` + 手动定位的窗口控制器；所有「解析→校验→执行」三段式中校验器依赖解析器返回值的链路；后续若新增其他子进程托管（同一 `Foundation.Process` 范式）。
 
 ## #13 遮罩降级到 `.floating` 层级导致菜单栏/Dock 盖不住（用调试便利换掉核心作用）
 
 - **表因**：接入遮罩特效后，手动遮罩不再遮住菜单栏与 Dock；此前正常。用户同时质疑鼠标/键盘输入是否仍被阻断。
-- **根因**：为解决「`CGShieldingWindowLevel` 窗口无法被 `screencapture` 捕获」（同 #6 记录的取证限制）以便自我验证特效画面，我在 `ScreenMaskController.makePanel` 加了 `GIVEMEABREAK_DEBUG` 时降级到 `.floating` 的旁路。`.floating` 仅为 **3**，而屏蔽层级约 **21 亿**——降级后遮罩沉到菜单栏/Dock 之下。根因不是写错常量，而是**为调试便利在生产代码里改了功能语义**：遮罩的核心作用就是「压过一切」，任何削弱层级的旁路都直接摧毁该作用。输入阻断机制（`ignoresMouseEvents = false` + `collectionBehavior` + Esc 本地监听）实际未受影响，但层级下沉后用户无法区分二者，合理地一并质疑。
+- **根因**：为解决「`CGShieldingWindowLevel` 窗口无法被 `screencapture` 捕获」（同 #4 记录的取证限制）以便自我验证特效画面，我在 `ScreenMaskController.makePanel` 加了 `GIVEMEABREAK_DEBUG` 时降级到 `.floating` 的旁路。`.floating` 仅为 **3**，而屏蔽层级约 **21 亿**——降级后遮罩沉到菜单栏/Dock 之下。根因不是写错常量，而是**为调试便利在生产代码里改了功能语义**：遮罩的核心作用就是「压过一切」，任何削弱层级的旁路都直接摧毁该作用。输入阻断机制（`ignoresMouseEvents = false` + `collectionBehavior` + Esc 本地监听）实际未受影响，但层级下沉后用户无法区分二者，合理地一并质疑。
 - **处理方式**：删除该旁路，层级恒为 `CGShieldingWindowLevel`，并在原处留注释说明「曾踩此坑、勿再加调试降级」。
 - **后续防范**：
   - **取证手段不得改动生产语义**。窗口层级、事件吞吐、`collectionBehavior` 这类「功能即语义」的属性禁止设调试旁路；需要取证时用 `CGWindowListCopyWindowInfo` 核验层级/尺寸（#7、#11 已建立此方法论）+ 请用户肉眼确认，而非降级窗口去迁就截图工具。
@@ -167,12 +166,28 @@
 
 - **表因**：用户反馈休息遮罩与手动遮罩期间 GPU、CPU 占用过高。离屏实测（M4 · macOS 27.0.1 · 双屏 2940×1912 + LG 4K；整机功耗取电池遥测 `AccumulatedSystemLoad` 约 60s 窗口）：4 组主力特效 GPU 82–100%、整机 16.4–22.5 W（默认「涟漪光球」22.5 W / 99.8%，且只跑到 31.5/60 fps），降档后仍 15–18.4 W；空闲仅 7.1–10.2 W。
 - **根因**：v0.1.10 特效是全屏逐像素程序化渲染——每帧对约 1000 万像素 × 2 屏（原生 2x × SSAA 1.4–1.5）求多阶 fbm 噪声，片元算力结构性饱和。降档无解：去 SSAA + 30fps 后涟漪光球仍 18.4 W / 74.5%、丝绸流光 15.0 W / 99.6%。当时验收只覆盖清晰度与主线程每帧成本（像素上限仅防掉帧），从未做整机功耗基准。
-- **处理方式**：遮罩背景改为「跟随系统壁纸」——当前壁纸为航拍则由单个共享 `AVPlayer` 静音循环播放本机同一段 `.mov`（Media Engine 硬件解码，多屏一路），否则按屏显示桌面静帧；Metal 特效（`Overlay/MaskEffects/*`、`MaskEffect`、`ScreenMaskSettings`、`config.screenMask`）整体移除，`schemaVersion` 保持 10（删字段双向兼容；升版会令降级的旧版经 `ConfigStore.migrate` 回退默认、抹掉全部配置）。实测航拍 1 路解码 7.3 W / GPU 15% / 59.8 fps，与空闲持平；2 路解码 / 已下载航拍 9.2 / 9.6 W 仍在空闲噪声带内。离屏核验：播放期间 Now Playing 仍为 QQ 音乐、`pmset` 无本进程断言、一个 `AVPlayer` 驱动两层 `AVPlayerLayer` 帧一致。设计见 [设计文档 §8.5](../docs/give-me-a-break-design.md#85-遮罩背景跟随系统壁纸取代-v0110-metal-特效)。
+- **处理方式**：遮罩背景改为「跟随系统壁纸」——当前壁纸为航拍则由单个共享 `AVPlayer` 静音循环播放本机同一段 `.mov`（Media Engine 硬件解码，多屏一路），否则按屏显示桌面静帧；Metal 特效（`Overlay/MaskEffects/*`、`MaskEffect`、`ScreenMaskSettings`、`config.screenMask`）整体移除，`schemaVersion` 保持 10（删字段双向兼容；升版会令降级的旧版经 `ConfigStore.migrate` 回退默认、抹掉全部配置）。实测航拍 1 路解码 7.3 W / GPU 15% / 59.8 fps，与空闲持平；2 路解码 / 已下载航拍 9.2 / 9.6 W 仍在空闲噪声带内。离屏核验：播放期间 Now Playing 仍为 QQ 音乐、`pmset` 无本进程断言、一个 `AVPlayer` 驱动两层 `AVPlayerLayer` 帧一致。设计见 [设计文档 §8](../docs/give-me-a-break-design.md#8-遮罩背景跟随系统壁纸)。
 - **后续防范**：
   - **全屏逐像素程序化渲染（Metal 着色器、SwiftUI `Canvas` / `TimelineView` 动画等）上线前须过离屏功耗基准**：整机 W + GPU% + 实得帧率，对照空闲噪声带，不达标不发布；能用视频表达的动态画面优先硬件解码视频。
   - **基准一律离屏**：`MTLTexture` 离屏渲染、`AVPlayerItemVideoOutput` 取帧、`CARenderer` 回读核验；**禁止在用户工作时开在屏全屏窗口测量**——遮罩层级盖住一切、打断工作，且 `screencapture` 本就截不到（见 #4、#13）。
   - 后台视频播放须同验三项副作用：不抢「正在播放」（不用 AVKit / `AVPlayerView`，保 QQ 音乐媒体键联动）、不持电源断言（`preventsDisplaySleepDuringVideoPlayback = false`）、多屏共享一路解码。
 - **同类影响**：任何全屏 / 多屏持续渲染的视觉效果（屏保式背景、动态壁纸、粒子 / 噪声特效）；以及「画质验收通过即上线、能耗未量化」的一切视觉特性。
+- **实测对照数据**（离屏测量，帧率 `a / b` 为实得 / 目标；原载设计文档，随文档重排迁至此处）：
+
+  | 背景 | 整机功耗 | GPU | 帧率 |
+  |---|---|---|---|
+  | 空闲（两次基线） | 7.1 / 10.2 W | 14–16% | — |
+  | Metal 涟漪光球（原默认） | 22.5 W | 99.8% | 31.5 / 60 |
+  | Metal 丝绸流光 | 16.4 W | 99.9% | 13 / 60 |
+  | Metal 冷雾纤丝 | 17.5 W | 93.7% | 51 |
+  | Metal 水波光斑 | 19.7 W | 81.8% | 60 |
+  | Metal 字雨微光 | 7.4 W | 21% | 30 |
+  | Metal 涟漪光球降档（无 SSAA + 30fps） | 18.4 W | 74.5% | 30 |
+  | Metal 丝绸流光降档（无 SSAA + 30fps） | 15.0 W | 99.6% | 17 |
+  | **系统航拍 Golden Gate（1 路解码）** | **7.3 W** | **15%** | **59.8** |
+  | 系统航拍 2 路解码 / 已下载「金门海峡日落」 | 9.2 / 9.6 W | 12 / 19% | 59.6 / 59.9 |
+
+  字雨微光低耗源于无 SSAA + 限 30fps，仅为 5 组之一；航拍 1 路解码时 `VTDecoder` CPU 约 4%。
 
 ## #16 本机 CLT macOS 27 SDK 构建失败：SwiftUIMacros 插件缺失（`@State` 宏）
 
