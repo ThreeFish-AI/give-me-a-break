@@ -265,8 +265,8 @@ flowchart LR
     end
     IDX --> P
     P -->|aerials| A
-    P -->|"default / plist 缺失或损坏"| D
-    P -->|"其他（图片 / 纯色 / 动态）"| STL
+    P -->|default| D
+    P -->|"其他（图片 / 纯色 / 动态）或 plist 缺失 / 损坏"| STL
     DEF --> D
     A -->|是| VID
     A -->|"否（含未下载）"| STL
@@ -303,10 +303,11 @@ flowchart LR
 | 时机 | 行为 |
 |---|---|
 | 初始化 | 静音、禁外接播放、`preventsDisplaySleepDuringVideoPlayback = false`（显示器断言唯一归属 `IdleSleepGuard`）、`actionAtItemEnd = .none` |
-| `begin(source:reduceMotion:)`（面板构建前） | 静帧 → 释放 item；视频 → 同 URL 直接续播，URL 变更或曾失败才重建 item；「减弱动态效果」下不调 `play()`，停在首帧、零持续解码 |
+| `begin(source:)`（面板构建前） | 静帧 → 释放 item；视频 → 同 URL 直接续播，URL 变更或曾失败才重建 item；读取系统「减弱动态效果」并由 observer 保持实时，开启时不播放、定格回首帧、零持续解码 |
 | 播放到尾 | 手动 `seek(to: .zero)` 循环（不用 `AVPlayerLooper`：双 item 预载致内存尖峰） |
 | `end()`（遮罩收起） | 立即暂停（淡出期间定格），0.6s 后释放 item；代际令牌令期间的再次 `begin()` 作废该释放——「立即休息」撤手动遮罩、升休息遮罩时无缝交接，不重建解码 |
-| 熄屏 / 亮屏 | `screensDidSleep` 暂停解码，`screensDidWake` 续播（画面不可见即停工<sup>[[23]](#ref23)</sup>） |
+| 熄屏 / 亮屏 | `screensDidSleep` 暂停解码，`screensDidWake` 续播（画面不可见即停工<sup>[[23]](#ref23)</sup>）。无论遮罩是否已激活均记录熄屏态——工作日志提示超时、会议门控结束都是墙钟驱动，可能在熄屏中升起遮罩，此时不开始播放 |
+| 「减弱动态效果」切换 | 实时生效（`NSWorkspace.accessibilityDisplayOptionsDidChangeNotification`）：开启即暂停并回首帧，关闭后续播 |
 | 系统唤醒 | `recheckHealth()`：item 失败 → 标记失败；就绪却停着 → 续播 |
 | 加载失败 | `AVPlayerItem.status == .failed` → 发布 `failed`，视图回退静帧 + NSLog |
 
