@@ -97,11 +97,12 @@ func mergeBusyIntervals(_:) -> [DateRange]  // 纯函数，端点相接合并（
 - **边缘 case**：U2 会议恰在阈值点不触发瞬间休息；U3 背靠背会议跨接缝；U4 会议跨窗口边界→offDuty 优先；U7 休息被会议打断→abort-and-reset；U9 同态幂等（showOverlay 仅一次）。
 - **健壮性**：U10 advance 限幅；U5 AFK 冻结累加器；U6 睡眠不回灌；U11 fast-forward 短推进/长冻结。
 - **持久化**：config/state round-trip、缺失文件回退默认、损坏 JSON 不崩溃、schema 迁移（含 v7→v8 `agent`/AgentSettings 与 v8→v9 `power`/PowerSettings 缺字段补默认、子字段容错、未知 `mode` rawValue 回退不拖垮整份配置、往返一致）。
+- **遮罩背景解析**（`SystemWallpaperCases`，§8.5）：`Index.plist` 解析（Linked / Desktop / 默认 / 垃圾数据）、`assetID` UUID 白名单与恶意 ID、航拍目录新→旧回落、默认航拍探测、`resolve` 回退链。
 
 ## 6. 已验证 / 待实机核实
 
 ✅ 已无头验证：编译链接、91 单元测试、`.app` 装配签名、引擎启动与 phase 判定、DEBUG 周期遮罩 show/dismiss、持久化落盘、工作日志提示拦截 + `completeDeferredRest` rebase + 报告渲染幂等、优雅降级（权限未授时）；`LockShortcutMonitor`/`ScreenMaskController` 新代码编译链接通过、`.app` 签名后二进制内含相应符号、Info.plist 新增 `NSInputMonitoringUsageDescription` 键校验通过。
-⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建；**「防止睡眠」两种防护范围下 `pmset -g assertions` 是否分别可见 1 条 / 2 条对应断言，关闭与退出应用后断言是否消失**。
+⏳ 待真机核实（需用户授权 + 真实环境）：Accessibility 授予后 QQ 音乐播放/暂停；完全日历访问后 Google 会议推迟；macOS 26 `canBecomeKey` 稳定性；工作日志提示窗在多屏/全屏应用前的可见性与焦点；**输入监控授权后（重启 App 生效）Control+Command+Q 是否正确改为进入屏幕遮罩而非真正锁屏**；未授权时是否正确降级为仅菜单可用；手动遮罩与计划性休息触发时序的互斥表现；多屏热插拔期间手动遮罩的重建；**「防止睡眠」两种防护范围下 `pmset -g assertions` 是否分别可见 1 条 / 2 条对应断言，关闭与退出应用后断言是否消失**；**遮罩背景跟随系统壁纸的在屏观感**（航拍淡入、静帧按屏、暗纱下文案可读、熄屏 / 唤醒续播；功耗与帧率已离屏实测，见 §8.5）。
 
 ## 7. 工作日志（休息前记录 + 周期报告）
 
@@ -215,38 +216,120 @@ tick() 检测 eff.showOverlay（.working → .resting）
 
 ⚠️ **CLT SDK 注记（[issue #2](../.agents/issue.md) 同类）**：本 SDK 的 HIToolbox 头文件已不含 `RegisterEventHotKey` 声明，仅 `HIToolbox.tbd` 导出符号；Swift `import Carbon.HIToolbox` 仍可编译链接。已在独立无授权进程中探针验证 `InstallEventHandler`/`RegisterEventHotKey` 返回 `noErr`（零权限可用）。Carbon 文档已被 Apple 归档：[Documentation Archive](https://developer.apple.com/library/archive/navigation/index.html?filter=carbon)。
 
-### 8.5 遮罩特效引擎（v0.1.10 · 高清动效屏保）
+### 8.5 遮罩背景：跟随系统壁纸（取代 v0.1.10 Metal 特效）
 
-遮罩不再是静态深色渐变，而是 5 组**程序化高清动效**，手动遮罩与休息遮罩共用同一背景（`MaskEffectBackground` 为单一事实源，两处视觉恒一致）。
+手动遮罩与休息遮罩共用同一背景（`MaskBackground` 为单一事实源，两处视觉恒一致），与桌面所见一致：当前壁纸为系统航拍（Aerial）<sup>[[17]](#ref17)</sup> → 静音循环播放本机同一段 `.mov`；否则 → 按屏显示桌面静帧。v0.1.10 的 5 组 Metal 程序化特效（`Overlay/MaskEffects/*`、`MaskEffect`、`ScreenMaskSettings`、`DayPlanConfig.screenMask`）已整体移除。
 
-**特效阵容**（源流为 [reactbits.dev](https://reactbits.dev) 的 MIT 组件，移植时按「清爽舒雅 · 波光流转」重构）：
+**决策依据（实测）**：M4 MacBook Pro · macOS 27.0.1 · 双屏（内建 2940×1912 + LG 4K），全部离屏测量；整机功耗取电池遥测 `AccumulatedSystemLoad` 约 60s 窗口均值，空闲噪声带 7.1–10.2 W；帧率 `a / b` 为实得 / 目标。
 
-| 配置值 | 名称 | 形态 | 源流 |
+| 背景 | 整机功耗 | GPU | 帧率 |
 |---|---|---|---|
-| `orb` | 涟漪光球（默认） | 半透明光球呼吸，球面流纹如水面波光流转 | Orb（球面流纹重构） |
-| `fibers` | 冷雾纤丝 | 雾蓝纤丝低频摆动，层层脊线漂出银白微光 | GhostFibers |
-| `letterRain` | 字雨微光 | 字符点阵极淡闪烁，亮带自上而下巡回 | LetterGlitch（着色器化） |
-| `caustics` | 水波光斑 | 池底焦散网纹，光斑明暗流转 | 原创（迭代折叠焦散） |
-| `silk` | 丝绸流光 | 缎面褶皱流淌高光，泛薄荷与冰紫 | 原创（fbm 二次域扭曲） |
+| 空闲（两次基线） | 7.1 / 10.2 W | 14–16% | — |
+| Metal 涟漪光球（原默认） | 22.5 W | 99.8% | 31.5 / 60 |
+| Metal 丝绸流光 | 16.4 W | 99.9% | 13 / 60 |
+| Metal 冷雾纤丝 | 17.5 W | 93.7% | 51 |
+| Metal 水波光斑 | 19.7 W | 81.8% | 60 |
+| Metal 字雨微光 | 7.4 W | 21% | 30 |
+| Metal 涟漪光球降档（无 SSAA + 30fps） | 18.4 W | 74.5% | 30 |
+| Metal 丝绸流光降档（无 SSAA + 30fps） | 15.0 W | 99.6% | 17 |
+| **系统航拍 Golden Gate（1 路解码）** | **7.3 W** | **15%** | **59.8** |
+| 系统航拍 2 路解码 / 已下载「金门海峡日落」 | 9.2 / 9.6 W | 12 / 19% | 59.6 / 59.9 |
 
-**渲染架构**（`Sources/GiveMeABreakIntegrations/Overlay/MaskEffects/`）：
+- **Metal 的成本是结构性的**：每帧对约 1000 万像素 × 2 屏（原生 2x × SSAA 1.4–1.5）逐像素求多阶 fbm 噪声，片元算力被吃满；降档（去 SSAA + 30fps）后涟漪光球仍 18.4 W / 74.5%、丝绸流光仍 99.6%，调参无解。字雨微光低耗源于无 SSAA + 限 30fps，仅为 5 组之一。
+- **航拍视频近乎零成本**：HEVC 由 Media Engine 硬件解码<sup>[[22]](#ref22)</sup>，GPU 只做合成——1 路解码 7.3 W 与空闲持平（`VTDecoder` CPU 约 4%）；2 路解码与更高码率的已下载航拍仍落在空闲噪声带内。
 
-- **MTKView 而非 SwiftUI `Shader`**：`isPaused` 提供真暂停（「减弱动态效果」下保留末帧静帧，零开销）；`preferredFramesPerSecond` 可按特效降帧；`drawableSize` 可显式钳制。每帧主线程成本仅「写 4 个 uniform + 1 次 draw」，双击 Esc 退出延迟零回归。
-- **着色器运行时编译**：CLT 不含 `xcrun metal`（需完整 Xcode），且 `swift build` 不编译 `.metal`、Makefile 装配的 `.app` 不含 SPM 资源 bundle。故以 Swift 字符串常量存源码，`device.makeLibrary(source:)` 首次遮罩升起时编译（实测 Apple M4 约 95ms，被 0.4s 淡入完全掩盖），与「零打包资产」哲学一致（同 `AmbientSoundPlayer` 合成粉噪音）。
-- **分辨率无关**：全部为全屏三角形 + 片元着色器逐像素合成，噪声亦程序生成（零纹理）。构图以短边归一化 → 4K/8K 构图一致。
-- **清晰度三要素**：① 取满 `backingScaleFactor`（此前钳到 2 是主要损失点）；② SSAA 超采样（1.4–1.5×，字形类特效刻意为 1——直绘更锐）；③ `detail()` 高频细节层为高光/脊线补颗粒纹理，成本远低于给所有 fbm 加阶数。
-- **性能护栏**：后备缓冲总像素上限 1000 万，超出等比降采样（宁降分辨率不掉帧）；字雨微光限 30fps。
-- **降级链**：`MTLCreateSystemDefaultDevice()` 为 nil 或编译失败 → NSLog + 回退深色渐变，**绝不出现黑屏/空遮罩**（遮罩是强制性 UI，渲染失败不能削弱其遮蔽作用）。
-- **多屏相位**：进程级单一时间纪元（`CACurrentMediaTime()` 静态基准），各屏独立 MTKView 同相位；屏幕热插拔重建视图后时间轴连续不跳变。
+**为何不直接复用系统渲染器**：① 宿主 `WallpaperAerialsExtension.appex` 需私有 entitlement `com.apple.private.wallpaper.extension-host`，第三方拿不到授权它的 provisioning profile<sup>[[19]](#ref19)</sup>；② `ScreenSaverEngine` 任意按键 / 移动指针即退出<sup>[[18]](#ref18)</sup>，与遮罩期间由本 App 接管键盘冲突；③ `NSWorkspace.desktopImageURL(for:)` 对航拍只返回一张静帧 HEIC<sup>[[21]](#ref21)</sup>，系统也无列举壁纸文件的公开 API，`Index.plist` 属可随时变更的实现细节<sup>[[20]](#ref20)</sup>。故沿先例<sup>[[21]](#ref21)</sup>自行解析 `Index.plist` 定位视频、以 AVFoundation 播放，并把「私有布局可能变更」收敛为一条确定的降级路径（静帧）。
 
-**文案**：普通文本（30pt 细体圆角，白色 85% 不透明），保持静止以保证可读性。
+**解析链**（`Sources/GiveMeABreakEngine/SystemWallpaper.swift`：纯函数，文件系统谓词注入，可单测）：
 
-曾实现过粒子聚字层（reactbits ParticleText 移植：CoreText 栅格化 → 网格采样 → 光点自目标位就近散开后聚拢，运动为时间的纯函数），但**已移除**——遮罩文案的第一要务是「读得清」，而 30pt 小字号下粒子必须细到亚像素才不糊笔画，可读性与观感均不及普通文本。移植期间沉淀的两条经验仍记录于此，以备后来者：
+```mermaid
+flowchart LR
+    subgraph IN["输入"]
+        IDX["Index.plist<br/>AllSpacesAndDisplays<br/>Linked / Desktop · Choices[0]"]
+        DEF["DefaultDesktop.heic<br/>解析符号链接"]
+        DIMG["desktopImageURL(for:)<br/>按屏"]
+        RM["减弱动态效果"]
+    end
+    subgraph RES["解析 SystemWallpaper（纯函数）"]
+        P{"Provider"}
+        A{"assetID 为严格 UUID<br/>且 videos/assetID.mov 已下载"}
+        D{"位于 Wallpapers/.default<br/>且同目录有 .mov"}
+        VID(["video(URL)"])
+        STL(["still"])
+    end
+    subgraph OUT["呈现 MaskBackground（自底向上）"]
+        G["① 深色渐变（恒在底层兜底）"]
+        AV["② AerialLayerView<br/>共享 AVPlayer · 静音循环"]
+        SW["② StillWallpaperView<br/>后台缩略解码"]
+        SC["③ 暗纱 + MaskCaption"]
+    end
+    IDX --> P
+    P -->|aerials| A
+    P -->|default| D
+    P -->|"其他（图片 / 纯色 / 动态）或 plist 缺失 / 损坏"| STL
+    DEF --> D
+    A -->|是| VID
+    A -->|"否（含未下载）"| STL
+    D -->|是| VID
+    D -->|否| STL
+    VID --> AV
+    STL --> SW
+    DIMG --> SW
+    AV -.->|加载失败| SW
+    RM -.->|停在首帧| AV
+    classDef input fill:#2d5a3a,color:#fff,stroke:#7fc98a
+    classDef core fill:#1f3a5a,color:#fff,stroke:#7fa8c9
+    classDef video fill:#5a4a2d,color:#fff,stroke:#c9b27f
+    classDef still fill:#3a4a5a,color:#fff,stroke:#7fa8c9
+    classDef base fill:#4a4a4a,color:#fff,stroke:#b0b0b0
+    class IDX,DEF,DIMG,RM input
+    class P,A,D core
+    class VID,AV video
+    class STL,SW still
+    class G,SC base
+```
 
-- **小字号粒子化的三条硬约束**（偏离任一条字形即不可辨）：① 采样步长须锚定**屏幕像素**而非字号（按字号缩放会使每字只剩十余个点）；② 光点半径须**略小于**采样步长（大于则糊成实心字，远小于则笔画断开）；③ 散布与漂移幅度须以**字号**为基准且远小于笔画宽（按 DPR 缩放会把字抖散）。
-- **坐标系注记**：以 `premultipliedLast` 建的 `CGBitmapContext` 下，`CTLineDraw` 的输出在缓冲中**已自上而下正立**（行号 0 即画面顶部），与 SwiftUI `Canvas` 的 Y 向下同向。故既不做 CTM 翻转，采样时也不翻转行号——任一处多翻一次都会使文案上下镜像（曾两次踩中，最终以离线逐行打印位图 alpha 定案）。
+色彩语义：绿=输入、蓝=解析判定、琥珀=视频路径、蓝灰=静帧路径、中性灰=兜底与可读性层；前景 `#fff` + 深色填充（同 §2.1）。
 
-**验证取证**：`CGShieldingWindowLevel` 的窗口无法被 `screencapture` 捕获（见 [issue.md](../.agents/issue.md)）。⚠️ **切勿以「DEBUG 时降低窗口层级」换取截图便利**——`.floating` 仅为 3，而屏蔽层级约 21 亿，降级后菜单栏与 Dock 均盖不住，等于用调试便利换掉了遮罩的核心作用（本次已踩中，见 [issue.md](../.agents/issue.md) 同类记录）。取证应用 `CGWindowListCopyWindowInfo` 核验层级 + 用户肉眼确认。
+- **航拍视频目录**：macOS 26+ 为 `~/Library/Application Support/com.apple.wallpaper/aerials/videos/<assetID>.mov`，macOS 14/15 为 `/Library/Application Support/com.apple.idleassetsd/Customer/4KSDR240FPS/<assetID>.mov`，按新→旧探测；选中航拍但未下载 → 静帧（不回落默认航拍）。
+- **系统默认壁纸**：如 macOS 27 默认壁纸即航拍，同目录内置免下载的 `Golden Gate.mov`；不写死文件名，默认壁纸为静帧的系统版本（如 macOS 14）自然判否。
+- **防路径穿越（双关冗余）**：`assetID` 须为严格 UUID（8-4-4-4-12）；拼接结果须仍直属视频目录。
+- **版权边界**：只播放用户本机已有文件，不下载、不打包、不分发（航拍内容归 Apple<sup>[[24]](#ref24)</sup>）。
+
+**呈现**（`Sources/GiveMeABreakIntegrations/Overlay/MaskBackground/`）：`AerialLayerView` 把 `AVPlayerLayer` 挂到共享播放器，首帧就绪前透明、就绪后 0.6s 淡入；`StillWallpaperView` 取本屏 `desktopImageURL(for:)`，后台 `CGImageSource` 按本屏物理像素缩略解码后 0.4s 淡入；暗纱为中心重、四周轻的径向渐变，`MaskCaption` 文案另加阴影——实拍画面明亮，二者保白字可读。
+
+**共享播放器生命周期**（`MaskBackdropPlayer`，单实例由 `AppRoot` 注入两控制器，同 `MaskInputGuard` 范式；仅主线程使用）：
+
+| 时机 | 行为 |
+|---|---|
+| 初始化 | 静音、禁外接播放、`preventsDisplaySleepDuringVideoPlayback = false`（显示器断言唯一归属 `IdleSleepGuard`）、`actionAtItemEnd = .none` |
+| `begin(source:)`（面板构建前） | 静帧 → 释放 item；视频 → 同 URL 直接续播，URL 变更或曾失败才重建 item；读取系统「减弱动态效果」并由 observer 保持实时，开启时不播放、定格回首帧、零持续解码 |
+| 播放到尾 | 手动 `seek(to: .zero)` 循环（不用 `AVPlayerLooper`：双 item 预载致内存尖峰） |
+| `end()`（遮罩收起） | 立即暂停（淡出期间定格），0.6s 后释放 item；代际令牌令期间的再次 `begin()` 作废该释放——「立即休息」撤手动遮罩、升休息遮罩时无缝交接，不重建解码 |
+| 熄屏 / 亮屏 | `screensDidSleep` 暂停解码，`screensDidWake` 续播（画面不可见即停工<sup>[[23]](#ref23)</sup>）。无论遮罩是否已激活均记录熄屏态——工作日志提示超时、会议门控结束都是墙钟驱动，可能在熄屏中升起遮罩，此时不开始播放 |
+| 「减弱动态效果」切换 | 实时生效（`NSWorkspace.accessibilityDisplayOptionsDidChangeNotification`）：开启即暂停并回首帧，关闭后续播 |
+| 系统唤醒 | `recheckHealth()`：item 失败 → 标记失败；就绪却停着 → 续播 |
+| 加载失败 | `AVPlayerItem.status == .failed` → 发布 `failed`，视图回退静帧 + NSLog |
+
+**不变量**：
+
+1. **渐变恒在底层**：视频首帧未就绪、静帧解码中或失败、视频加载失败——任一情况下屏上至少是深色渐变，绝无黑屏 / 透明遮罩（遮罩是强制性 UI，背景失败不能削弱遮蔽作用）。
+2. **升起遮罩不阻塞主线程**：解析仅读约 0.4KB plist + 几次 stat（微秒级）；静帧在后台解码；视频就绪后异步淡入。双击 Esc 响应零回归。
+3. **全局一路解码**：一个 `AVPlayer` 驱动各屏 `AVPlayerLayer`，解码量不随屏数增长，多屏天然同相位（离屏 `CARenderer` 回读两层帧一致）。
+4. **不扰系统**：静音且不用 AVKit / `AVPlayerView`，不接管「正在播放」（实测播放期间 Now Playing 仍为 QQ 音乐，休息音乐媒体键联动不受影响）；不持电源断言（`pmset -g assertions` 无本进程条目，与「防止睡眠」正交）。
+
+**配置兼容**：`schemaVersion` 保持 10。删字段对新旧版本双向兼容（新版解码忽略旧配置的 `screenMask` 键；回退旧版时缺键补默认）；若升版本号，降级回旧版的应用会在 `ConfigStore.migrate` 判「高于本版本」而回退默认、抹掉全部配置。设置「通用」页只读显示「遮罩背景：跟随系统壁纸」+ 当前解析结果，并提供「打开墙纸设置…」。
+
+**已知限制**：
+
+- 分屏 / 分 Space 单独设置的壁纸不区分（取「全部显示器」选择；静帧按屏正确）。
+- 航拍须先由系统下载（系统设置 → 墙纸）；未下载 → 静帧。
+- 依赖私有布局（`Index.plist` 结构、视频目录），系统升级可能变更 → 降级静帧。
+- macOS 27 上 `desktopImageURL(for:)` 对纯色壁纸也可能返回 `DefaultDesktop.heic`（系统行为），此时静帧显示默认壁纸。
+
+v0.1.10 Metal 特效（着色器运行时编译、SSAA、降级链）及更早的粒子聚字层的实现细节与踩坑经验，见 `Overlay/MaskEffects/` 删除前的 git 历史。
+
+**验证取证**：`CGShieldingWindowLevel` 的窗口无法被 `screencapture` 捕获（见 [issue.md](../.agents/issue.md)）。⚠️ **切勿以「DEBUG 时降低窗口层级」换取截图便利**——`.floating` 仅为 3，而屏蔽层级约 21 亿，降级后菜单栏与 Dock 均盖不住，等于用调试便利换掉了遮罩的核心作用（v0.1.10 曾踩中，见 [issue #13](../.agents/issue.md)）。取证应用 `CGWindowListCopyWindowInfo` 核验层级 + 用户肉眼确认。功耗 / 帧率一律离屏测量（`MTLTexture` / `AVPlayerItemVideoOutput` / `CARenderer` 回读），不在用户工作时开在屏全屏窗口（见 [issue #15](../.agents/issue.md)）。
 
 ## References
 
@@ -266,3 +349,11 @@ tick() 检测 eff.showOverlay（.working → .resting）
 <a id="ref14"></a>[14] Apple Inc., "CGEvent.tapCreate(tap:place:options:eventsOfInterest:callback:userInfo:) — Quartz Event Services," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgevent/tapcreate(tap:place:options:eventsofinterest:callback:userinfo:)
 <a id="ref15"></a>[15] Apple Inc., "CGPreflightListenEventAccess() / CGRequestListenEventAccess() — Input Monitoring Privacy Access," *Core Graphics Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/coregraphics/cgpreflightlisteneventaccess() ; https://developer.apple.com/documentation/coregraphics/cgrequestlisteneventaccess()
 <a id="ref16"></a>[16] Apple Inc., "IOPMAssertionCreateWithName — Power Management Assertions," *IOKit Developer Documentation*, 2026. [Online]. Available: https://developer.apple.com/documentation/iokit/1557134-iopmassertioncreatewithname
+<a id="ref17"></a>[17] Apple Inc., "Customize the wallpaper on your Mac," *Mac User Guide*. [Online]. Available: https://support.apple.com/guide/mac-help/mchlp3013/mac
+<a id="ref18"></a>[18] Apple Inc., "Use a screen saver on your Mac," *Mac User Guide*. [Online]. Available: https://support.apple.com/guide/mac-help/mchl4b68853d/mac
+<a id="ref19"></a>[19] Quinn "The Eskimo!", "Add permissions for private entitlement," *Apple Developer Forums*, Jun. 2024. [Online]. Available: https://developer.apple.com/forums/thread/756747
+<a id="ref20"></a>[20] Quinn "The Eskimo!", "Sonoma: Is It No Longer Possible to Fetch Wallpaper File Names?," *Apple Developer Forums*, Aug. 2024. [Online]. Available: https://developer.apple.com/forums/thread/761394
+<a id="ref21"></a>[21] zazdrew, "Show the desktop wallpaper, Aerials included, behind the lock screen," *sorkila/lockpaw PR #21*, GitHub. [Online]. Available: https://github.com/sorkila/lockpaw/pull/21
+<a id="ref22"></a>[22] Apple Inc., "Working with HEIF and HEVC," *WWDC17 Session 511*, 2017. [Online]. Available: https://developer.apple.com/videos/play/wwdc2017/511/
+<a id="ref23"></a>[23] Apple Inc., "Notify Your App When Visibility Changes," *Energy Efficiency Guide for Mac Apps*. [Online]. Available: https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/WorkWhenVisible.html
+<a id="ref24"></a>[24] Apple Inc., "Software License Agreement for macOS Tahoe 26." [Online]. Available: https://www.apple.com/legal/sla/docs/macOSTahoe.pdf

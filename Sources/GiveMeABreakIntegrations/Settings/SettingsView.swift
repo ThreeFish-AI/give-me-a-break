@@ -74,6 +74,8 @@ struct SettingsView: View {
     @State private var showingResetConfirm: Bool = false
     /// 已安装的候选编辑器（Agentic AI 页「在…中打开」下拉数据源）；视图出现时探测一次。
     @State private var installedEditors: [ClaudeSettingsLauncher.InstalledEditor] = []
+    /// 遮罩背景当前解析结果（只读展示）；「通用」页出现时读取。
+    @State private var wallpaperSource: SystemWallpaperSource?
     private let onApply: (DayPlanConfig) -> Void
     private let onCancel: () -> Void
     private let onToggleLogin: (Bool) -> Void
@@ -176,7 +178,7 @@ struct SettingsView: View {
     @ViewBuilder
     private func content(for tab: SettingsTab) -> some View {
         switch tab {
-        case .general:   Form { generalSection; maskEffectSection; aboutSection }  // 通用：开机自启 + 遮罩特效 + 关于
+        case .general:   Form { generalSection; maskBackgroundSection; aboutSection }  // 通用：开机自启 + 遮罩背景 + 关于
         case .power:     Form { powerSection }                       // 电源：防止空闲睡眠/熄屏（IOKit 断言，与休息/工作/遮罩引擎零耦合）
         case .schedule:  Form { workWindowsSection; rhythmSection }  // 作息：工作时段 + 节律（何时工作、工作多久休息一次）
         case .sound:     Form { soundSection }                       // 休息音效：休息时听什么（自定义音频 / 白噪音 / QQ 音乐）
@@ -205,27 +207,45 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - 遮罩特效（手动遮罩与休息遮罩共用的视觉表现）
+    // MARK: - 遮罩背景（手动遮罩与休息遮罩共用；跟随系统壁纸，只读）
 
-    private var maskEffectSection: some View {
+    private var maskBackgroundSection: some View {
         Section {
-            Picker("背景特效", selection: $draft.screenMask.effect) {
-                ForEach(MaskEffect.allCases, id: \.self) { fx in
-                    Text(MaskEffectCatalog.displayName(fx)).tag(fx)
+            LabeledContent("背景", value: "跟随系统壁纸")
+
+            if let wallpaperSource {
+                Text(Self.maskBackgroundCaption(wallpaperSource))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("打开墙纸设置…") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension") {
+                    NSWorkspace.shared.open(url)
                 }
             }
-            .pickerStyle(.menu)
-            .accessibilityHint(MaskEffectCatalog.summary(draft.screenMask.effect))
-
-            Text(MaskEffectCatalog.summary(draft.screenMask.effect))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .accessibilityHint("在系统设置中更换桌面壁纸，遮罩背景随之变化")
         } header: {
-            Text("遮罩特效")
+            Text("遮罩背景")
         } footer: {
-            Text("作用于「屏幕遮罩」（菜单 / ⌃⌥⌘K / ⌃⌘Q）与定时休息遮罩两处，下次遮罩升起时生效。"
-                 + "全部为程序化渲染，4K/8K 下同样清晰；系统开启「减弱动态效果」时自动静帧，"
-                 + "Metal 不可用时自动回退为深色渐变。")
+            Text("作用于「屏幕遮罩」（菜单 / ⌃⌥⌘K / ⌃⌘Q）与定时休息遮罩两处，每次遮罩升起时读取系统当前壁纸；"
+                 + "系统开启「减弱动态效果」时航拍定格为首帧。")
+        }
+        .onAppear { wallpaperSource = SystemWallpaper.current() }
+        // 本页引导用户去「打开墙纸设置…」换壁纸；回到本 App 时重读，避免展示过时解析结果
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            wallpaperSource = SystemWallpaper.current()
+        }
+    }
+
+    private static func maskBackgroundCaption(_ source: SystemWallpaperSource) -> String {
+        switch source {
+        case .video(let url) where SystemWallpaper.isBuiltinDefault(url):
+            return "当前为系统默认航拍：遮罩静音循环播放同一段 4K 视频（硬件解码，近乎零 GPU 开销）"
+        case .video:
+            return "当前为系统航拍：遮罩静音循环播放同一段视频（硬件解码，近乎零 GPU 开销）"
+        case .still:
+            return "当前壁纸非航拍（或所选航拍尚未下载、壁纸选择暂无法解析）：遮罩显示系统当前壁纸"
         }
     }
 

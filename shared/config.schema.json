@@ -186,22 +186,8 @@
     },
     "screenMask": {
       "type": "object",
-      "description": "屏幕遮罩视觉配置（手动遮罩与休息遮罩共用）。引擎不消费，携带即忽略。v10 新增。",
-      "additionalProperties": false,
-      "properties": {
-        "effect": {
-          "type": "string",
-          "description": "背景特效（程序化渲染，分辨率无关）。未知值回退 orb。",
-          "enum": [
-            "orb",
-            "fibers",
-            "letterRain",
-            "caustics",
-            "silk"
-          ],
-          "default": "orb"
-        }
-      }
+      "description": "已废弃（遮罩背景改为跟随系统壁纸，见 docs §8.5）：旧配置可能携带此键，应用忽略；新版本不再写出。",
+      "additionalProperties": true
     }
   }
 }
