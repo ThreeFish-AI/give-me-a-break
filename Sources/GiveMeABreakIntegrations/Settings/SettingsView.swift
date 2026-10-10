@@ -232,16 +232,20 @@ struct SettingsView: View {
                  + "系统开启「减弱动态效果」时航拍定格为首帧。")
         }
         .onAppear { wallpaperSource = SystemWallpaper.current() }
+        // 本页引导用户去「打开墙纸设置…」换壁纸；回到本 App 时重读，避免展示过时解析结果
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            wallpaperSource = SystemWallpaper.current()
+        }
     }
 
     private static func maskBackgroundCaption(_ source: SystemWallpaperSource) -> String {
         switch source {
-        case .video(let url) where url.path.hasPrefix("/System/Library/Wallpapers/"):
+        case .video(let url) where SystemWallpaper.isBuiltinDefault(url):
             return "当前为系统默认航拍：遮罩静音循环播放同一段 4K 视频（硬件解码，近乎零 GPU 开销）"
         case .video:
             return "当前为系统航拍：遮罩静音循环播放同一段视频（硬件解码，近乎零 GPU 开销）"
         case .still:
-            return "当前壁纸为静态图片（或所选航拍尚未下载）：遮罩显示同款静帧"
+            return "当前壁纸非航拍（或所选航拍尚未下载、壁纸选择暂无法解析）：遮罩显示系统当前壁纸"
         }
     }
 

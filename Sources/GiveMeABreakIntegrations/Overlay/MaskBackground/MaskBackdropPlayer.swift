@@ -14,6 +14,9 @@ final class MaskBackdropPlayer: ObservableObject {
 
     private var active = false
     private var reduceMotion = false
+    /// 显示器当前是否熄屏。无论遮罩是否激活都记录——熄屏期间升起的遮罩不得开始播放
+    /// （工作日志提示超时、会议门控结束都是墙钟驱动，可能在熄屏中触发遮罩）。
+    private var screensAsleep = false
     private var currentURL: URL?
     private var statusObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
@@ -29,13 +32,27 @@ final class MaskBackdropPlayer: ObservableObject {
         player.actionAtItemEnd = .none
         let nc = NSWorkspace.shared.notificationCenter
         workspaceObservers = [
-            // 熄屏期间画面不可见，停解码省电；亮屏后续播
+            // 熄屏即停工：无论遮罩是否已激活都记录熄屏态，停解码省电；亮屏后续播
             nc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                guard let self, self.active else { return }
+                guard let self else { return }
+                self.screensAsleep = true
                 self.player.pause()
             },
             nc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.screensAsleep = false
                 self?.playIfAllowed()
+            },
+            // 「减弱动态效果」实时生效：遮罩可持续整个休息时长，不能只在升起时快照一次
+            nc.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                self.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                guard self.active else { return }
+                if self.reduceMotion {
+                    self.player.pause()
+                    self.player.seek(to: .zero)  // 定格回首帧
+                } else {
+                    self.playIfAllowed()
+                }
             },
         ]
     }
@@ -43,16 +60,21 @@ final class MaskBackdropPlayer: ObservableObject {
     // MARK: - 生命周期（与两处 show/dismiss 对称成对）
 
     /// 遮罩升起：先于面板构建调用，首帧尽早就绪。
-    func begin(source: SystemWallpaperSource, reduceMotion: Bool) {
+    /// 「减弱动态效果」在此读取一次并由 observer 保持实时（单一事实源在系统值，不经形参注入）。
+    func begin(source: SystemWallpaperSource) {
         active = true
-        self.reduceMotion = reduceMotion
+        reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         generation += 1
         guard case .video(let url) = source else {
             release()  // 静帧：无需解码
             return
         }
         if url != currentURL || failed { load(url) }  // 同一视频则直接续播，画面不跳变
-        playIfAllowed()  // 减弱动态效果：不播放，暂停的播放器停在首帧，零持续解码
+        if reduceMotion {
+            player.seek(to: .zero)  // 定格首帧（沿用上一次的播放位置不算「首帧」），零持续解码
+        } else {
+            playIfAllowed()
+        }
     }
 
     /// 遮罩收起：立即暂停（0.3s 淡出期间定格），稍后释放解码资源。
@@ -73,7 +95,7 @@ final class MaskBackdropPlayer: ObservableObject {
         guard active, let item = player.currentItem else { return }
         if item.status == .failed {
             markFailed(item.error)
-        } else if !reduceMotion, item.status == .readyToPlay, player.rate == 0 {
+        } else if !reduceMotion, !screensAsleep, item.status == .readyToPlay, player.rate == 0 {
             player.play()
         }
     }
@@ -81,7 +103,7 @@ final class MaskBackdropPlayer: ObservableObject {
     // MARK: - 内部
 
     private func playIfAllowed() {
-        guard active, !reduceMotion, player.currentItem != nil else { return }
+        guard active, !reduceMotion, !screensAsleep, player.currentItem != nil else { return }
         player.play()
     }
 

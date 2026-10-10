@@ -12,7 +12,7 @@ public enum SystemWallpaperSource: Equatable, Sendable {
 
 /// 「跟随系统壁纸」解析核心：纯函数，文件系统谓词全部注入（同 `validateCodingProxySettings` 范式），可单测。
 ///
-/// 依据的均为 macOS **未公开的私有布局**，故每一步失败都降级为静帧，绝不让遮罩失效：
+/// 依据的均为 macOS **未公开的私有布局**，故每一步失败都降级为静帧（即系统当前壁纸图，不臆断为别的壁纸），绝不让遮罩失效：
 /// - 当前选择：`~/Library/Application Support/com.apple.wallpaper/Store/Index.plist` →
 ///   `AllSpacesAndDisplays.{Linked|Desktop}.Content.Choices[0]`；`Provider` 为航拍时，
 ///   `Configuration`（二进制 plist）内含 `assetID`（先例：sorkila/lockpaw PR #21）。
@@ -109,16 +109,26 @@ public enum SystemWallpaper {
                                           contentsOf: (URL) -> [URL]) -> URL? {
         guard let image = resolvedDefaultDesktop?.standardizedFileURL else { return nil }
         let dir = image.deletingLastPathComponent()
-        guard dir.path == defaultWallpaperDirectory.standardizedFileURL.path else { return nil }
+        guard isDefaultWallpaperDirectory(dir) else { return nil }
         return contentsOf(dir)
             .filter { $0.pathExtension.lowercased() == "mov" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .first
     }
 
+    /// `url` 是否为系统内置默认航拍（即 `defaultAerialVideo` 的产物）。
+    /// 供 UI 区分「系统默认航拍」与「用户选定航拍」；与 `defaultAerialVideo` 共用同一目录比较，调用方不必各写一份路径前缀。
+    public static func isBuiltinDefault(_ url: URL) -> Bool {
+        isDefaultWallpaperDirectory(url.standardizedFileURL.deletingLastPathComponent())
+    }
+
+    private static func isDefaultWallpaperDirectory(_ dir: URL) -> Bool {
+        dir.path == defaultWallpaperDirectory.standardizedFileURL.path
+    }
+
     /// 决定遮罩背景：航拍视频，或桌面静帧。
     /// - Parameters:
-    ///   - choice: 当前壁纸选择；nil 表示 `Index.plist` 缺失或无法解析。
+    ///   - choice: 当前壁纸选择；nil 表示 `Index.plist` 缺失或无法解析 → 静帧（不臆断为默认航拍）。
     ///   - aerialVideoDirectories: 航拍视频目录（`liveAerialVideoDirectories`）。
     ///   - defaultAerialVideo: 系统默认航拍的内置视频（`defaultAerialVideo(...)`）；nil 表示本系统无。
     ///   - fileExists: 文件存在性谓词。
@@ -133,12 +143,14 @@ public enum SystemWallpaper {
                   let url = aerialVideo(assetID: id, in: aerialVideoDirectories, fileExists: fileExists)
             else { return .still }
             return .video(url)
-        case defaultProvider?, nil:
-            // 系统默认，或 Index.plist 缺失/损坏：默认壁纸是航拍且内置视频可读时播放
+        case defaultProvider?:
+            // 系统默认：默认壁纸是航拍且内置视频可读时播放
             guard let url = defaultAerialVideo, fileExists(url) else { return .still }
             return .video(url)
         default:
-            return .still  // 图片 / 动态 / 纯色等非航拍壁纸
+            // 图片 / 动态 / 纯色等非航拍壁纸；choice 为 nil（Index.plist 缺失或无法解析）亦落此：
+            // 读不到选择就不替用户臆断，沿用系统当前壁纸图
+            return .still
         }
     }
 

@@ -41,7 +41,7 @@ final class LiveOverlayController: OverlayController {
         }
         // 每次升起读一次系统壁纸；播放器先于面板启动，首帧尽早就绪
         source = SystemWallpaper.current()
-        backdrop.begin(source: source, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        backdrop.begin(source: source)
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
