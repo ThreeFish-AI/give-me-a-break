@@ -20,18 +20,18 @@ final class WorkLogReportWindowController {
             self?.window?.close()
         }
 
+        // 每次重建 NSHostingController：强制 SwiftUI 新视图树，`@State`（scope/sheet/pendingDelete）干净初始化，
+        // 规避 root 身份不变导致的状态残留（同其它控制器）。
         if window == nil {
-            let hosting = NSHostingController(rootView: view)
-            let w = NSWindow(contentViewController: hosting)
+            let w = NSWindow()
             w.title = "工作日志"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             w.contentMinSize = NSSize(width: 600, height: 460)
             w.setContentSize(NSSize(width: 720, height: 560))
             w.isReleasedWhenClosed = false
             window = w
-        } else {
-            (window?.contentViewController as? NSHostingController<WorkLogReportView>)?.rootView = view
         }
+        window?.contentViewController = NSHostingController(rootView: view)
 
         // 显式居中到主屏可见区（弃 center()，issue #7）
         if let screen = NSScreen.main {

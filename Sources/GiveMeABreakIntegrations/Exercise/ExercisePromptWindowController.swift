@@ -15,31 +15,38 @@ final class ExercisePromptWindowController: NSObject, NSWindowDelegate {
     private var onSubmit: (([ExerciseSet], String?) -> Void)?
     private var onSkip: (() -> Void)?
 
-    /// 固定自动放行兜底（秒）：到点未操作即等同跳过，防窗口悬空。
-    private let autoDismissSeconds: TimeInterval = 180
+    /// 自动放行等待时长（秒）：到点未操作即等同跳过，防窗口悬空。由 AppRoot 从
+    /// `config.exercisePromptTimeoutSeconds` 注入（v7 起可配，0=永久等待）。
+    private var autoDismissSeconds: TimeInterval = 180
 
     override init() { super.init() }
 
     /// 弹出提示。`onSubmit`/`onSkip` 由 AppRoot 提供：前者落库运动记录，后者计跳过。
+    /// `exerciseTypes` 为 Picker 数据源（配置注册表）；`timeoutSeconds`：>0 自动放行秒数，0 永久等待。
     func present(restStartedAt: Date,
                  restEndedAt: Date,
+                 exerciseTypes: [String],
+                 timeoutSeconds: TimeInterval,
                  onSubmit: @escaping ([ExerciseSet], String?) -> Void,
                  onSkip: @escaping () -> Void) {
         guard !presenting else { return }
         presenting = true
         self.onSubmit = onSubmit
         self.onSkip = onSkip
+        self.autoDismissSeconds = timeoutSeconds
 
         let view = ExercisePromptView(
             restStartedAt: restStartedAt,
             restEndedAt: restEndedAt,
+            types: exerciseTypes,
             onSubmit: { [weak self] sets, note in self?.submit(sets: sets, note: note) },
             onSkip: { [weak self] in self?.skip() }
         )
 
+        // 每次重建 NSHostingController：强制 SwiftUI 新视图树，@State（drafts/note）干净初始化，
+        // 规避「上次输入残留」（root 身份不变导致 @State 不重置的 SwiftUI 已知行为）。
         if window == nil {
-            let hosting = NSHostingController(rootView: view)
-            let w = NSWindow(contentViewController: hosting)
+            let w = NSWindow()
             w.title = "记录运动"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
@@ -47,9 +54,8 @@ final class ExercisePromptWindowController: NSObject, NSWindowDelegate {
             w.delegate = self  // 红色关闭按钮经 windowWillClose 等同「跳过」
             w.setContentSize(NSSize(width: 460, height: 360))
             window = w
-        } else {
-            (window?.contentViewController as? NSHostingController<ExercisePromptView>)?.rootView = view
         }
+        window?.contentViewController = NSHostingController(rootView: view)
 
         centerOnMainScreen()
         NSApp.activate(ignoringOtherApps: true)

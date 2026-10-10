@@ -1,10 +1,15 @@
 # Dependabot：监控 GitHub Actions 第三方 action 的版本升级（便于跟进 SHA pin 更新）。
 # 本项目 SPM 零运行时依赖，故不配 swift ecosystem；github-actions ecosystem 价值最高——
 # 工作流中的 action 均以 commit SHA pin，Dependabot 能识别并提出更新 SHA 的新 PR。
+#
+# target-branch 指向工作分支 feature/1.x.x：master 自 v0.1.1 起仅为归档（停在旧版 workflow），
+# 以 master 为基线会产生「改动早已在 feature 分支落地」的重复 PR（2026-10-10 一次关闭 5 个，
+# 见 #74–#78）；指向 feature/1.x.x 后升级 PR 直接基于真实主干提出。
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    target-branch: "feature/1.x.x"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

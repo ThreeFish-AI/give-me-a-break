@@ -11,7 +11,19 @@ import GiveMeABreakEngine
 final class LiveOverlayController: OverlayController {
     var onRequestEarlyExit: (() -> Void)?
 
+    /// 键盘白名单拦截器（与手动遮罩共享同一实例；两者互斥，见 ScreenMaskController 同名注释）。
+    private let inputGuard: MaskInputGuard
+    /// 航拍背景共享播放器（与手动遮罩共享同一实例，理由同上）。
+    private let backdrop: MaskBackdropPlayer
+
+    init(inputGuard: MaskInputGuard, backdrop: MaskBackdropPlayer) {
+        self.inputGuard = inputGuard
+        self.backdrop = backdrop
+    }
+
     private var panels: [OverlayPanel] = []
+    /// 本次升起解析出的背景来源（热插拔重建沿用；共享播放器不中断）。
+    private var source: SystemWallpaperSource = .still
     private var escMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var currentDeadline: Date?
@@ -27,17 +39,23 @@ final class LiveOverlayController: OverlayController {
         viewModel = OverlayViewModel(deadline: restDeadline) { [weak self] in
             self?.confirmEarlyExit()
         }
+        // 每次升起读一次系统壁纸；播放器先于面板启动，首帧尽早就绪
+        source = SystemWallpaper.current()
+        backdrop.begin(source: source)
         for screen in NSScreen.screens {
             panels.append(makePanel(screen: screen))
         }
         installEscMonitor()
         observeScreens()
         NSApp.activate(ignoringOtherApps: true)
+        inputGuard.begin()  // 末句启用：与 ScreenMaskController.show 对称
         NSLog("[GiveMeABreak][overlay] show：\(panels.count) 屏，deadline=\(restDeadline)")
     }
 
     func dismiss() {
         guard !panels.isEmpty else { return }  // 幂等
+        inputGuard.end()  // 首句停用：与 ScreenMaskController.dismiss 对称
+        backdrop.end()    // 立即暂停（淡出期间定格），稍后释放解码资源
         removeEscMonitor()
         removeScreenObserver()
         for panel in panels {
@@ -74,7 +92,8 @@ final class LiveOverlayController: OverlayController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications]
 
         // resting 期间 viewModel 必非 nil（show 创建、dismiss 才置 nil）；多屏共享同一实例
-        let hosting = NSHostingView(rootView: OverlayContentView(viewModel: viewModel!))
+        let background = MaskBackground(screen: screen, source: source, backdrop: backdrop)
+        let hosting = NSHostingView(rootView: OverlayContentView(viewModel: viewModel!, background: background))
         panel.contentView = hosting
         panel.setFrame(screen.frame, display: true)  // 显式 setFrame（macOS 15 已知零 frame 回退）
         panel.alphaValue = 0
@@ -133,6 +152,7 @@ final class LiveOverlayController: OverlayController {
     }
 
     private func rebuildPanels() {
+        // 热插拔重建不经 show/dismiss，遮罩从未离开屏幕——键盘拦截保持激活（不变量）。
         for p in panels { p.orderOut(nil) }
         panels.removeAll()
         for screen in NSScreen.screens {

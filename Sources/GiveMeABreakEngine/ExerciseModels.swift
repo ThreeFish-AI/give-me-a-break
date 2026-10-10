@@ -86,3 +86,33 @@ public struct ExerciseEntry: Codable, Equatable, Sendable {
 
 /// 预设运动类型（UI 选择器复用；用户亦可自定义其他类型）。
 public let defaultExerciseTypes: [String] = ["胯下击掌", "提膝击掌", "深蹲", "俯卧撑"]
+
+// MARK: - 纯函数（可单测，零时间依赖）
+
+/// 运动补录的默认时段：`[now − restDuration, now]`。
+///
+/// 语义为「补刚才那段休息里做的运动」，故以**当前时刻**为终点、以单次休息时长为跨度回溯，
+/// 而非沿用上一条记录的 `endedAt`（那是「紧接续写」语义，属另一入口）。
+/// `now` 由调用方注入（可测）；`restDurationSeconds` 非负裁剪，避免负跨度。
+public func exerciseBackfillDefaultRange(now: Date, restDurationSeconds: TimeInterval) -> (start: Date, end: Date) {
+    let span = max(0, restDurationSeconds)
+    return (start: now.addingTimeInterval(-span), end: now)
+}
+
+/// 计算保存一条运动记录后，应追加进配置注册表的新类型列表。
+///
+/// - 仅追加 `current` 中不存在、且 `sets` 中非空白的新类型；去重、保序（按 `sets` 出现顺序）。
+/// - 返回 nil 表示无新增（调用方据此跳过写盘，避免无谓持久化）。
+/// - 抽为纯函数便于单测，落库侧（AppRoot）据此 `engine.updateConfig` + `configStore.saveConfig`。
+public func appendedExerciseTypes(current: [String], sets: [ExerciseSet]) -> [String]? {
+    let existing = Set(current)
+    var added: [String] = []
+    var seen: Set<String> = []
+    for s in sets {
+        let t = s.type.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, !existing.contains(t), !seen.contains(t) else { continue }
+        seen.insert(t)
+        added.append(t)
+    }
+    return added.isEmpty ? nil : current + added
+}

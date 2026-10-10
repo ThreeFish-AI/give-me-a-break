@@ -14,10 +14,12 @@ final class ExerciseBackfillWindowController {
         self.onSave = onSave
     }
 
-    /// 弹出补录窗。`defaultStart`：建议起始（通常为上一条记录的 `endedAt`，或默认 50 分钟前）。
-    func show(defaultStart: Date) {
+    /// 弹出补录窗。`defaultStart/defaultEnd`：建议时段（由 AppRoot 按 `[now − restDuration, now]` 计算）。
+    /// `exerciseTypes`：Picker 数据源（配置注册表）。
+    func show(defaultStart: Date, defaultEnd: Date, exerciseTypes: [String]) {
         let view = ExerciseEntryFormView(
-            mode: .create(defaultStart: defaultStart, defaultEnd: Date()),
+            mode: .create(defaultStart: defaultStart, defaultEnd: defaultEnd),
+            types: exerciseTypes,
             onSubmit: { [weak self] entry in
                 self?.onSave(entry)
                 self?.window?.close()
@@ -25,18 +27,18 @@ final class ExerciseBackfillWindowController {
             onCancel: { [weak self] in self?.window?.close() }
         )
 
+        // 每次重建 NSHostingController：强制 SwiftUI 新视图树，@State（时段/drafts/note）干净初始化，
+        // 规避「上次补录内容残留」（root 身份不变导致 @State 不重置）。
         if window == nil {
-            let hosting = NSHostingController(rootView: view)
-            let w = NSWindow(contentViewController: hosting)
+            let w = NSWindow()
             w.title = "补录运动记录"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.level = .floating
             w.setContentSize(NSSize(width: 460, height: 460))
             window = w
-        } else {
-            (window?.contentViewController as? NSHostingController<ExerciseEntryFormView>)?.rootView = view
         }
+        window?.contentViewController = NSHostingController(rootView: view)
 
         centerOnMainScreen()
         NSApp.activate(ignoringOtherApps: true)

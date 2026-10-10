@@ -1,4 +1,5 @@
 import SwiftUI
+import GiveMeABreakEngine
 
 /// 遮罩共享状态：确认 UI 内嵌于遮罩面板内部，与遮罩同处 CGShieldingWindowLevel，
 /// 从根上消除「确认对话框被遮罩遮挡」的层级问题（替代 NSAlert.runModal 默认低层级模态窗，
@@ -17,19 +18,18 @@ final class OverlayViewModel: ObservableObject {
     }
 }
 
-/// 休息遮罩内容：舒缓渐变背景 + 大字倒计时 + Esc 确认双态。
+/// 休息遮罩内容：系统壁纸背景 + 大字倒计时 + Esc 确认双态。
+/// 背景与手动遮罩共用 `MaskBackground`（单一事实源），故两处视觉一致；
+/// 倒计时与确认 UI 叠加于其上，可读性由其内置暗纱 + 文案阴影保证。
 /// 倒计时态显示剩余时间与 Esc 提示；确认态显示「继续休息 / 直接退出」按钮。
 struct OverlayContentView: View {
     @ObservedObject var viewModel: OverlayViewModel
+    /// 本屏背景；由 `LiveOverlayController` 按屏构造传入。
+    let background: MaskBackground
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.04, green: 0.05, blue: 0.09),
-                         Color(red: 0.09, green: 0.06, blue: 0.14)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .opacity(0.97)
+            background
 
             if viewModel.isConfirming {
                 confirmView
@@ -50,6 +50,7 @@ struct OverlayContentView: View {
             Text("Give me a break")
                 .font(.system(size: 34, weight: .light, design: .rounded))
                 .foregroundStyle(.white.opacity(0.85))
+                .maskTextShadow()
 
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remain = max(0, viewModel.deadline.timeIntervalSince(context.date))
@@ -57,11 +58,12 @@ struct OverlayContentView: View {
                     .font(.system(size: 130, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())
+                    .maskTextShadow()
             }
 
             Text("双击 Esc 直接结束休息")
                 .font(.system(size: 16))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.7))
         }
     }
 
@@ -70,11 +72,13 @@ struct OverlayContentView: View {
             Text("提前结束休息？")
                 .font(.system(size: 30, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
+                .maskTextShadow()
 
             Text("休息尚未到时，提前结束将重置计时器。")
                 .font(.system(size: 17))
                 .foregroundStyle(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
+                .maskTextShadow()
 
             HStack(spacing: 18) {
                 // 「继续休息」绑回车默认动作（软强制倾向保留休息）
@@ -88,7 +92,7 @@ struct OverlayContentView: View {
 
             Text("按 Esc 取消，返回休息")
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.7))
         }
     }
 
