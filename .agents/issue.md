@@ -162,3 +162,22 @@
 - **处理方式**：照 #11/Settings 范式迁移：承载层 `NSHostingView` + `sizingOptions = []`（视图适配窗口，切断尺寸反压）；复用分支只换 `contentView` 不动 frame；恢复帧后 `clampToVisibleScreen` 屏内收口（min 补足 + 离屏压回，#7 语义）；每次 show 新建 hosting 视图保 `@State` 干净初始化（#9）与日志「关即退订、开即重拉快照」订阅语义。**一次性换 autosave 键**（`CodingProxyConsoleWindow` → `-v2`）：缺陷版本每次 show 必写缩水值、存量记录无幸存好值，保留旧键会让升级用户首开仍见 680×420；换键首开回默认 840×540 居中，残留旧键 defaults 条目无害。
 - **后续防范**：`.resizable` 窗口禁用 NSHostingController 作 contentViewController（`preferredContentSize` 跟随机制与「尺寸归用户所有」互斥，承载一律 NSHostingView + `sizingOptions = []`）；autosave 键被缺陷尺寸污染后应换键作废而非保留；**验证「frame 恢复」须同时断言「被恢复值本身合法」（不小于期望尺寸），仅比对「恢复 == 保存」会给污染值放行**。
 - **同类影响**：`WorkLogReportWindowController`（min 600×460）与 `CombinedReportWindowController`（min 620×480）同为 resizable + 每次 show 重赋 contentViewController 范式，存在同款「每次打开压回 contentMinSize」缺陷（无 autosave、每次重新居中，不涉及持久化污染）；固定尺寸弹窗不受影响。待后续按同范式迁移。
+
+## #15 遮罩 Metal 特效 GPU 满载（82–100%，15–22.5 W）→ 改为跟随系统壁纸
+
+- **表因**：用户反馈休息遮罩与手动遮罩期间 GPU、CPU 占用过高。离屏实测（M4 · macOS 27.0.1 · 双屏 2940×1912 + LG 4K；整机功耗取电池遥测 `AccumulatedSystemLoad` 约 60s 窗口）：4 组主力特效 GPU 82–100%、整机 16.4–22.5 W（默认「涟漪光球」22.5 W / 99.8%，且只跑到 31.5/60 fps），降档后仍 15–18.4 W；空闲仅 7.1–10.2 W。
+- **根因**：v0.1.10 特效是全屏逐像素程序化渲染——每帧对约 1000 万像素 × 2 屏（原生 2x × SSAA 1.4–1.5）求多阶 fbm 噪声，片元算力结构性饱和。降档无解：去 SSAA + 30fps 后涟漪光球仍 18.4 W / 74.5%、丝绸流光 15.0 W / 99.6%。当时验收只覆盖清晰度与主线程每帧成本（像素上限仅防掉帧），从未做整机功耗基准。
+- **处理方式**：遮罩背景改为「跟随系统壁纸」——当前壁纸为航拍则由单个共享 `AVPlayer` 静音循环播放本机同一段 `.mov`（Media Engine 硬件解码，多屏一路），否则按屏显示桌面静帧；Metal 特效（`Overlay/MaskEffects/*`、`MaskEffect`、`ScreenMaskSettings`、`config.screenMask`）整体移除，`schemaVersion` 保持 10（删字段双向兼容；升版会令降级的旧版经 `ConfigStore.migrate` 回退默认、抹掉全部配置）。实测航拍 1 路解码 7.3 W / GPU 15% / 59.8 fps，与空闲持平；2 路解码 / 已下载航拍 9.2 / 9.6 W 仍在空闲噪声带内。离屏核验：播放期间 Now Playing 仍为 QQ 音乐、`pmset` 无本进程断言、一个 `AVPlayer` 驱动两层 `AVPlayerLayer` 帧一致。设计见 [设计文档 §8.5](../docs/give-me-a-break-design.md#85-遮罩背景跟随系统壁纸取代-v0110-metal-特效)。
+- **后续防范**：
+  - **全屏逐像素程序化渲染（Metal 着色器、SwiftUI `Canvas` / `TimelineView` 动画等）上线前须过离屏功耗基准**：整机 W + GPU% + 实得帧率，对照空闲噪声带，不达标不发布；能用视频表达的动态画面优先硬件解码视频。
+  - **基准一律离屏**：`MTLTexture` 离屏渲染、`AVPlayerItemVideoOutput` 取帧、`CARenderer` 回读核验；**禁止在用户工作时开在屏全屏窗口测量**——遮罩层级盖住一切、打断工作，且 `screencapture` 本就截不到（见 #4、#13）。
+  - 后台视频播放须同验三项副作用：不抢「正在播放」（不用 AVKit / `AVPlayerView`，保 QQ 音乐媒体键联动）、不持电源断言（`preventsDisplaySleepDuringVideoPlayback = false`）、多屏共享一路解码。
+- **同类影响**：任何全屏 / 多屏持续渲染的视觉效果（屏保式背景、动态壁纸、粒子 / 噪声特效）；以及「画质验收通过即上线、能耗未量化」的一切视觉特性。
+
+## #16 本机 CLT macOS 27 SDK 构建失败：SwiftUIMacros 插件缺失（`@State` 宏）
+
+- **表因**：`swift build -c release` / `make test` 报 `external macro implementation type 'SwiftUIMacros.StateMacro' could not be found for macro 'State()'; plugin for module 'SwiftUIMacros' not found`，并级联出 `cannot find '$draft' in scope` 等错误（`$draft` 是 `@State` 生成的投影属性，宏展开失败即不存在）。
+- **根因**：Command Line Tools 的默认 SDK 已是 `MacOSX27.0.sdk`（`MacOSX.sdk` 软链指向它），其中 SwiftUI 的 `@State` 改由宏实现；而 CLT 工具链的宏插件目录 `/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins` 只有 `libObservationMacros` / `libSwiftMacros` 与 `testing`，**不含 `SwiftUIMacros`**。与 #1（Swift Testing 宏插件缺失）同族：SDK 声明了宏，工具链却没带对应插件。最小复现：单文件 `@State var x = 0` 经 `swiftc -typecheck` 即报同错，`SDKROOT` 指向 26.5 SDK 后通过。
+- **处理方式**：构建 / 测试显式指定本机仍在的 26.5 SDK（其 `@State` 仍是传统 property wrapper）：`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift build -c release`；`make` 目标同样前缀（如 `SDKROOT=… make test`，recipe 内的 `swift build` / `swift run` 继承该环境变量）。不改代码、不改 `Package.swift`。
+- **后续防范**：CLT 升级后先 `ls /Library/Developer/CommandLineTools/SDKs` 确认旧 SDK 仍在（若被移除，需装完整 Xcode 或等 CLT 补齐插件）；遇 `plugin for module '…Macros' not found` 先查 SDK 与工具链是否错配，勿改业务代码绕开宏。CI 不受影响：`ci.yml` / `release.yml` 的 macOS job 跑在 `macos-15` runner，用其默认完整 Xcode（16.4 / Swift 6.0.x，见 release.yml 注释），不经本机 CLT 的 27 SDK。
+- **同类影响**：本机所有用 `@State` 的 SwiftUI 目标（设置、工作日志、运动记录、Coding Proxy 控制台等窗口）；任何「CLT 默认 SDK 领先于其工具链所带宏插件」的组合，其他框架宏同理先核对插件目录。
