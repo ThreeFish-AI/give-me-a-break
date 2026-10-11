@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 1260 638" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14" style="width: 1260px; height: 638px; min-width: 0px;" width="1260" height="638" xmlns="http://www.w3.org/2000/svg"><style>
+<svg viewBox="0 0 1260 774" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14" style="width: 1260px; height: 774px; min-width: 0px;" width="1260" height="774" xmlns="http://www.w3.org/2000/svg"><style>
 /*
 JetBrains Mono variable WOFF2 subsets from Google Fonts service revision v24.
 These fixed bytes are shared by the viewer and its SVG/raster exports.
@@ -407,7 +407,7 @@ svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] { ani
 svg[data-theme="light"] { --bg: #f4f5f7; --grid: #e9edf2; --canvas-dot: #d9dee5; --text: #111827; --text-muted: #5b6474; --text-dim: #9aa3b2; --text-faint: #6b7280; --panel: #ffffff; --panel-border: #e5e7eb; --lane-fill: rgba(248, 250, 252, 0.65); --lane-stroke: #cbd5e1; --arrow: #94a3b8; --arrow-emphasis: #059669; --mask: #ffffff; --frontend-fill: rgba(34, 211, 238, 0.15); --frontend-stroke: #0891b2; --backend-fill: rgba(52, 211, 153, 0.18); --backend-stroke: #059669; --database-fill: rgba(167, 139, 250, 0.2); --database-stroke: #7c3aed; --cloud-fill: rgba(251, 191, 36, 0.18); --cloud-stroke: #d97706; --security-fill: rgba(251, 113, 133, 0.15); --security-stroke: #e11d48; --messagebus-fill: rgba(251, 146, 60, 0.15); --messagebus-stroke: #ea580c; --external-fill: rgba(148, 163, 184, 0.18); --external-stroke: #64748b; --toolbar-bg: rgba(255, 255, 255, 0.92); --toolbar-border: #cbd5e1; --toolbar-text: #334155; --toolbar-hover: #ffffff; --toolbar-menu-bg: #ffffff; }
 svg[data-theme="dark"] { --bg: #020617; --grid: #1e293b; --canvas-dot: rgba(148, 163, 184, 0.16); --text: #ffffff; --text-muted: #94a3b8; --text-dim: #475569; --text-faint: #7d8da1; --panel: rgba(15, 23, 42, 0.5); --panel-border: #1e293b; --lane-fill: rgba(15, 23, 42, 0.22); --lane-stroke: #334155; --arrow: #64748b; --arrow-emphasis: #34d399; --mask: #0f172a; --frontend-fill: rgba(8, 51, 68, 0.4); --frontend-stroke: #22d3ee; --backend-fill: rgba(6, 78, 59, 0.4); --backend-stroke: #34d399; --database-fill: rgba(76, 29, 149, 0.4); --database-stroke: #a78bfa; --cloud-fill: rgba(120, 53, 15, 0.3); --cloud-stroke: #fbbf24; --security-fill: rgba(136, 19, 55, 0.4); --security-stroke: #fb7185; --messagebus-fill: rgba(251, 146, 60, 0.3); --messagebus-stroke: #fb923c; --external-fill: rgba(30, 41, 59, 0.5); --external-stroke: #94a3b8; --toolbar-bg: rgba(15, 23, 42, 0.8); --toolbar-border: #334155; --toolbar-text: #e2e8f0; --toolbar-hover: rgba(15, 23, 42, 0.95); --toolbar-menu-bg: #0f172a; }
 rect.c-bg-rect { fill: var(--bg); }
-</style><rect x="0" y="0" width="1260" height="638" class="c-bg-rect"/>
+</style><rect x="0" y="0" width="1260" height="774" class="c-bg-rect"/>
         <title id="archify-diagram-title">Give me a break 应用架构总览</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
@@ -433,444 +433,444 @@ rect.c-bg-rect { fill: var(--bg); }
         <rect width="100%" height="100%" fill="url(#grid)"/>
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="GiveMeABreakEngine · 纯核心（零平台依赖）" x="402" y="192" width="416" height="124" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="GiveMeABreakEngine · 纯核心（零平台依赖）" x="402" y="578" width="416" height="124" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" x="10" y="48" width="1210" height="522" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" x="10" y="182" width="1210" height="378" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="GiveMeABreak · @main 壳" x="10" y="60" width="210" height="114" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="GiveMeABreak · @main 壳" x="402" y="50" width="210" height="114" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
         <g data-graph-role="automatic-crossover" style="--step:0">
-          <path data-graph-role="automatic-crossover-underlay" d="M 190 122 L 205 122 Q 213 122 213 130 L 213 249 Q 213 257 221 257 L 236 257" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="app" data-edge-to="approot" data-edge-label="装配启动" data-edge-key="0" data-edge-id="app_assemble" data-composition-points="190,122;213,122;213,257;236,257" data-composition-crossover="halo" d="M 190 122 L 205 122 Q 213 122 213 130 L 213 249 Q 213 257 221 257 L 236 257" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 432 112 L 24 112 Q 16 112 16 120 L 16 371 Q 16 379 24 379 L 40 379" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="app" data-edge-to="approot" data-edge-label="装配启动" data-edge-key="0" data-edge-id="app_assemble" data-composition-points="432,112;16,112;16,379;40,379" data-composition-crossover="halo" data-composition-independent="true" d="M 432 112 L 24 112 Q 16 112 16 120 L 16 371 Q 16 379 24 379 L 40 379" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:1">
-          <path data-graph-role="automatic-crossover-underlay" d="M 200 254 L 205 254 Q 210 254 210 259 L 210 265 Q 210 273 218 273 L 218 273 Q 226 273 226 265 L 226 262 Q 226 257 231 257 L 236 257" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="settings" data-edge-to="approot" data-edge-label="草稿应用" data-edge-key="1" data-edge-id="settings_apply" data-composition-points="200,254;210,254;210,273;226,273;226,257;236,257" data-composition-crossover="halo" d="M 200 254 L 205 254 Q 210 254 210 259 L 210 265 Q 210 273 218 273 L 218 273 Q 226 273 226 265 L 226 262 Q 226 257 231 257 L 236 257" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 111 276 L 111 344" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="settings" data-edge-to="approot" data-edge-label="草稿应用" data-edge-key="1" data-edge-id="settings_apply" data-composition-points="111,276;111,344" data-composition-crossover="halo" data-composition-independent="true" d="M 111 276 L 111 344" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:2">
-          <path data-graph-role="automatic-crossover-underlay" d="M 406 250 L 422 250 Q 430 250 430 242 L 430 206 Q 430 198 438 198 L 495 198 Q 503 198 503 206 L 503 222" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="approot" data-edge-to="engine" data-edge-key="2" data-edge-id="approot_engine" data-composition-points="406,250;430,250;430,198;503,198;503,222" data-composition-crossover="halo" data-composition-independent="true" d="M 406 250 L 422 250 Q 430 250 430 242 L 430 206 Q 430 198 438 198 L 495 198 Q 503 198 503 206 L 503 222" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 125 414 L 125 698 Q 125 706 133 706 L 495 706 Q 503 706 503 698 L 503 682" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="approot" data-edge-to="engine" data-edge-key="2" data-edge-id="approot_engine" data-composition-points="125,414;125,706;503,706;503,682" data-composition-crossover="halo" data-composition-independent="true" d="M 125 414 L 125 698 Q 125 706 133 706 L 495 706 Q 503 706 503 698 L 503 682" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:3">
-          <path data-graph-role="automatic-crossover-underlay" d="M 432 266 L 416 266 Q 408 266 408 274 L 408 274 Q 408 282 416 282 L 422 282 Q 430 282 430 274 L 430 272 Q 430 264 422 264 L 406 264" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="engine" data-edge-to="approot" data-edge-key="3" data-edge-id="engine_callbacks" data-composition-points="432,266;408,266;408,282;430,282;430,264;406,264" data-composition-crossover="halo" data-composition-independent="true" d="M 432 266 L 416 266 Q 408 266 408 274 L 408 274 Q 408 282 416 282 L 422 282 Q 430 282 430 274 L 430 272 Q 430 264 422 264 L 406 264" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 432 645 L 147 645 Q 139 645 139 637 L 139 414" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="engine" data-edge-to="approot" data-edge-key="3" data-edge-id="engine_callbacks" data-composition-points="432,645;139,645;139,414" data-composition-crossover="halo" data-composition-independent="true" d="M 432 645 L 147 645 Q 139 645 139 637 L 139 414" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:4">
-          <path data-graph-role="automatic-crossover-underlay" d="M 507 154 L 507 170 Q 507 178 515 178 L 525 178 Q 533 178 533 186 L 533 190 Q 533 198 525 198 L 525 198 Q 517 198 517 206 L 517 222" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="heartbeat" data-edge-to="engine" data-edge-label="tick 1Hz" data-edge-key="4" data-edge-id="tick" data-composition-points="507,154;507,178;533,178;533,198;517,198;517,222" data-composition-crossover="halo" d="M 507 154 L 507 170 Q 507 178 515 178 L 525 178 Q 533 178 533 186 L 533 190 Q 533 198 525 198 L 525 198 Q 517 198 517 206 L 517 222" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 311 540 L 311 651 Q 311 659 319 659 L 432 659" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="heartbeat" data-edge-to="engine" data-edge-label="tick 1Hz" data-edge-key="4" data-edge-id="tick" data-composition-points="311,540;311,659;432,659" data-composition-crossover="halo" data-composition-independent="true" d="M 311 540 L 311 651 Q 311 659 319 659 L 432 659" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:5">
-          <path data-graph-role="automatic-crossover-underlay" d="M 376 122 L 392 122 Q 400 122 400 130 L 400 190 Q 400 198 408 198 L 509 198 Q 517 198 517 206 L 517 222" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="sensors" data-edge-to="engine" data-edge-label="AFK / isAsleep" data-edge-key="5" data-edge-id="sense" data-composition-points="376,122;400,122;400,198;517,198;517,222" data-composition-crossover="halo" d="M 376 122 L 392 122 Q 400 122 400 130 L 400 190 Q 400 198 408 198 L 509 198 Q 517 198 517 206 L 517 222" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 489 540 L 489 608" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="sensors" data-edge-to="engine" data-edge-label="AFK / isAsleep" data-edge-key="5" data-edge-id="sense" data-composition-points="489,540;489,608" data-composition-crossover="halo" data-composition-independent="true" d="M 489 540 L 489 608" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:6">
-          <path data-graph-role="automatic-crossover-underlay" d="M 904 154 L 904 190 Q 904 198 896 198 L 525 198 Q 517 198 517 206 L 517 222" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="calendar" data-edge-to="engine" data-edge-label="忙碌区间" data-edge-key="6" data-edge-id="meetings" data-composition-points="904,154;904,198;517,198;517,222" data-composition-crossover="halo" d="M 904 154 L 904 190 Q 904 198 896 198 L 525 198 Q 517 198 517 206 L 517 222" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 708 540 L 708 566 Q 708 574 700 574 L 511 574 Q 503 574 503 582 L 503 608" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="calendar" data-edge-to="engine" data-edge-label="忙碌区间" data-edge-key="6" data-edge-id="meetings" data-composition-points="708,540;708,574;503,574;503,608" data-composition-crossover="halo" data-composition-independent="true" d="M 708 540 L 708 566 Q 708 574 700 574 L 511 574 Q 503 574 503 582 L 503 608" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:7">
-          <path data-graph-role="automatic-crossover-underlay" d="M 602 252 L 628 252" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="engine" data-edge-to="stores" data-edge-key="7" data-edge-id="persist" data-composition-points="602,252;628,252" data-composition-crossover="halo" data-composition-independent="true" d="M 602 252 L 628 252" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 602 645 L 628 645" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="engine" data-edge-to="stores" data-edge-key="7" data-edge-id="persist" data-composition-points="602,645;628,645" data-composition-crossover="halo" data-composition-independent="true" d="M 602 645 L 628 645" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:8">
-          <path data-graph-role="automatic-crossover-underlay" d="M 602 259 L 608.5 259 Q 615 259 615 265.5 L 615 379.5 Q 615 386 621.5 386 L 628 386" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="engine" data-edge-to="overlay" data-edge-label="show / dismiss" data-edge-key="8" data-edge-id="show_overlay" data-composition-points="602,259;615,259;615,386;628,386" data-composition-crossover="halo" d="M 602 259 L 608.5 259 Q 615 259 615 265.5 L 615 379.5 Q 615 386 621.5 386 L 628 386" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 531 608 L 531 592 Q 531 584 539 584 L 903 584 Q 911 584 911 576 L 911 540" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="engine" data-edge-to="overlay" data-edge-label="show / dismiss" data-edge-key="8" data-edge-id="show_overlay" data-composition-points="531,608;531,584;911,584;911,540" data-composition-crossover="halo" data-composition-independent="true" d="M 531 608 L 531 592 Q 531 584 539 584 L 903 584 Q 911 584 911 576 L 911 540" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:9">
-          <path data-graph-role="automatic-crossover-underlay" d="M 517 222 L 517 206 Q 517 198 525 198 L 792 198 Q 800 198 800 206 L 800 378 Q 800 386 808 386 L 824 386" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="engine" data-edge-to="music" data-edge-label="start / pause" data-edge-key="9" data-edge-id="play_music" data-composition-points="517,222;517,198;800,198;800,386;824,386" data-composition-crossover="halo" data-composition-independent="true" d="M 517 222 L 517 206 Q 517 198 525 198 L 792 198 Q 800 198 800 206 L 800 378 Q 800 386 808 386 L 824 386" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 517 682 L 517 698 Q 517 706 525 706 L 1097 706 Q 1105 706 1105 698 L 1105 540" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="engine" data-edge-to="music" data-edge-label="start / pause" data-edge-key="9" data-edge-id="play_music" data-composition-points="517,682;517,706;1105,706;1105,540" data-composition-crossover="halo" data-composition-independent="true" d="M 517 682 L 517 698 Q 517 706 525 706 L 1097 706 Q 1105 706 1105 698 L 1105 540" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:10">
-          <path data-graph-role="automatic-crossover-underlay" d="M 628 386 L 612 386 Q 604 386 604 378 L 604 359 Q 604 351 596 351 L 525 351 Q 517 351 517 343 L 517 296" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="overlay" data-edge-to="engine" data-edge-label="Esc 确认退出" data-edge-key="10" data-edge-id="early_exit" data-composition-points="628,386;604,386;604,351;517,351;517,296" data-composition-crossover="halo" d="M 628 386 L 612 386 Q 604 386 604 378 L 604 359 Q 604 351 596 351 L 525 351 Q 517 351 517 343 L 517 296" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 897 540 L 897 556 Q 897 564 889 564 L 525 564 Q 517 564 517 572 L 517 608" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="overlay" data-edge-to="engine" data-edge-label="Esc 确认退出" data-edge-key="10" data-edge-id="early_exit" data-composition-points="897,540;897,564;517,564;517,608" data-composition-crossover="halo" data-composition-independent="true" d="M 897 540 L 897 556 Q 897 564 889 564 L 525 564 Q 517 564 517 572 L 517 608" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:11">
-          <path data-graph-role="automatic-crossover-underlay" d="M 190 386 L 205 386 Q 213 386 213 378 L 213 265 Q 213 257 221 257 L 236 257" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="hotkeys" data-edge-to="approot" data-edge-label="⌃⌥⌘R / ⌃⌥⌘K" data-edge-key="11" data-edge-id="hotkey_actions" data-composition-points="190,386;213,386;213,257;236,257" data-composition-crossover="halo" data-composition-independent="true" d="M 190 386 L 205 386 Q 213 386 213 378 L 213 265 Q 213 257 221 257 L 236 257" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 703 276 L 703 292 Q 703 300 695 300 L 397 300 Q 389 300 389 308 L 389 312 Q 389 320 381 320 L 147 320 Q 139 320 139 328 L 139 344" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="hotkeys" data-edge-to="approot" data-edge-label="⌃⌥⌘R / ⌃⌥⌘K" data-edge-key="11" data-edge-id="hotkey_actions" data-composition-points="703,276;703,300;389,300;389,320;139,320;139,344" data-composition-crossover="halo" data-composition-independent="true" d="M 703 276 L 703 292 Q 703 300 695 300 L 397 300 Q 389 300 389 308 L 389 312 Q 389 320 381 320 L 147 320 Q 139 320 139 328 L 139 344" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:12">
-          <path data-graph-role="automatic-crossover-underlay" d="M 386 386 L 432 386" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="lock" data-edge-to="screenmask" data-edge-key="12" data-edge-id="lock_hijack" data-composition-points="386,386;432,386" data-composition-crossover="halo" data-composition-independent="true" d="M 386 386 L 432 386" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 899 276 L 899 302 Q 899 310 891 310 L 520 310 Q 512 310 512 318 L 512 344" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="lock" data-edge-to="screenmask" data-edge-key="12" data-edge-id="lock_hijack" data-composition-points="899,276;899,310;512,310;512,344" data-composition-crossover="halo" data-composition-independent="true" d="M 899 276 L 899 302 Q 899 310 891 310 L 520 310 Q 512 310 512 318 L 512 344" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:13">
-          <path data-graph-role="automatic-crossover-underlay" d="M 406 257 L 412.5 257 Q 419 257 419 263.5 L 419 379.5 Q 419 386 425.5 386 L 432 386" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="approot" data-edge-to="screenmask" data-edge-label="遮罩编排" data-edge-key="13" data-edge-id="mask_orchestrate" data-composition-points="406,257;419,257;419,386;432,386" data-composition-crossover="halo" d="M 406 257 L 412.5 257 Q 419 257 419 263.5 L 419 379.5 Q 419 386 425.5 386 L 432 386" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 210 374 L 432 374" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="approot" data-edge-to="screenmask" data-edge-label="遮罩编排" data-edge-key="13" data-edge-id="mask_orchestrate" data-composition-points="210,374;432,374" data-composition-crossover="halo" data-composition-independent="true" d="M 210 374 L 432 374" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:14">
-          <path data-graph-role="automatic-crossover-underlay" d="M 236 257 L 220 257 Q 212 257 212 249 L 212 165 Q 212 157 220 157 L 802 157 Q 810 157 810 165 L 810 302 Q 810 310 818 310 L 901 310 Q 909 310 909 302 L 909 286" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="approot" data-edge-to="wlwin" data-edge-label="提示窗接线" data-edge-key="14" data-edge-id="prompt_windows" data-composition-points="236,257;212,257;212,157;810,157;810,310;909,310;909,286" data-composition-crossover="halo" d="M 236 257 L 220 257 Q 212 257 212 249 L 212 165 Q 212 157 220 157 L 802 157 Q 810 157 810 165 L 810 302 Q 810 310 818 310 L 901 310 Q 909 310 909 302 L 909 286" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 125 344 L 125 318 Q 125 310 133 310 L 509 310 Q 517 310 517 302 L 517 276" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="approot" data-edge-to="wlwin" data-edge-label="提示窗接线" data-edge-key="14" data-edge-id="prompt_windows" data-composition-points="125,344;125,310;517,310;517,276" data-composition-crossover="halo" data-composition-independent="true" d="M 125 344 L 125 318 Q 125 310 133 310 L 509 310 Q 517 310 517 302 L 517 276" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:15">
-          <path data-graph-role="automatic-crossover-underlay" d="M 628 386 L 612 386 Q 604 386 604 394 L 604 432 Q 604 440 596 440 L 522 440 Q 514 440 514 448 L 514 486" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="overlay" data-edge-to="guard" data-edge-label="共享注入" data-edge-key="15" data-edge-id="guard_rest" data-composition-points="628,386;604,386;604,440;514,440;514,486" data-composition-crossover="halo" data-composition-independent="true" d="M 628 386 L 612 386 Q 604 386 604 394 L 604 432 Q 604 440 596 440 L 522 440 Q 514 440 514 448 L 514 486" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 824 508 L 809 508 Q 801 508 801 500 L 801 384 Q 801 376 793 376 L 778 376" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="overlay" data-edge-to="guard" data-edge-label="共享注入" data-edge-key="15" data-edge-id="guard_rest" data-composition-points="824,508;801,508;801,376;778,376" data-composition-crossover="halo" data-composition-independent="true" d="M 824 508 L 809 508 Q 801 508 801 500 L 801 384 Q 801 376 793 376 L 778 376" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:16">
-          <path data-graph-role="automatic-crossover-underlay" d="M 500 418 L 500 486" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="screenmask" data-edge-to="guard" data-edge-label="共享注入" data-edge-key="16" data-edge-id="guard_manual" data-composition-points="500,418;500,486" data-composition-crossover="halo" data-composition-independent="true" d="M 500 418 L 500 486" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 592 390 L 628 390" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="screenmask" data-edge-to="guard" data-edge-label="共享注入" data-edge-key="16" data-edge-id="guard_manual" data-composition-points="592,390;628,390" data-composition-crossover="halo" data-composition-independent="true" d="M 592 390 L 628 390" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:17">
-          <path data-graph-role="automatic-crossover-underlay" d="M 715 418 L 715 486" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="overlay" data-edge-to="backdrop" data-edge-label="背景" data-edge-key="17" data-edge-id="backdrop_rest" data-composition-points="715,418;715,486" data-composition-crossover="halo" data-composition-independent="true" d="M 715 418 L 715 486" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 904 476 L 904 408" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="overlay" data-edge-to="backdrop" data-edge-label="背景" data-edge-key="17" data-edge-id="backdrop_rest" data-composition-points="904,476;904,408" data-composition-crossover="halo" data-composition-independent="true" d="M 904 476 L 904 408" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:18">
-          <path data-graph-role="automatic-crossover-underlay" d="M 592 386 L 602 386 Q 610 386 610 394 L 610 510 Q 610 518 618 518 L 628 518" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="screenmask" data-edge-to="backdrop" data-edge-label="背景" data-edge-key="18" data-edge-id="backdrop_manual" data-composition-points="592,386;610,386;610,518;628,518" data-composition-crossover="halo" data-composition-independent="true" d="M 592 386 L 602 386 Q 610 386 610 394 L 610 510 Q 610 518 618 518 L 628 518" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 592 376 L 608 376 Q 616 376 616 368 L 616 349 Q 616 341 624 341 L 792 341 Q 800 341 800 349 L 800 368 Q 800 376 808 376 L 824 376" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="screenmask" data-edge-to="backdrop" data-edge-label="背景" data-edge-key="18" data-edge-id="backdrop_manual" data-composition-points="592,376;616,376;616,341;800,341;800,376;824,376" data-composition-crossover="halo" data-composition-independent="true" d="M 592 376 L 608 376 Q 616 376 616 368 L 616 349 Q 616 341 624 341 L 792 341 Q 800 341 800 349 L 800 368 Q 800 376 808 376 L 824 376" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
 
         <!-- Components -->
         <g id="node-app" data-node-id="app" data-node-label="GiveMeABreakApp" tabindex="0" role="button" aria-label="聚焦GiveMeABreakApp，@main 壳 · AppDelegate, GiveMeABreak · @main 壳" aria-pressed="false" data-node-kind="backend" data-node-sublabel="@main 壳 · AppDelegate" data-node-context="GiveMeABreak · @main 壳">
           <title>GiveMeABreakApp · @main 壳 · AppDelegate · GiveMeABreak · @main 壳</title>
-          <rect x="40" y="90" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="40" y="90" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 96) scale(0.6875)">
+          <rect x="432" y="80" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="432" y="80" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(438 86) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="115" y="120" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GiveMeABreakApp</text>
-        <text x="115" y="136" class="t-muted" font-size="9" text-anchor="middle">@main 壳 · AppDelegate</text>
+          <text data-node-label="" x="507" y="110" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GiveMeABreakApp</text>
+        <text x="507" y="126" class="t-muted" font-size="9" text-anchor="middle">@main 壳 · AppDelegate</text>
         </g>
 
         <g id="node-heartbeat" data-node-id="heartbeat" data-node-label="HeartbeatTimer" tabindex="0" role="button" aria-label="聚焦HeartbeatTimer，主线程 1Hz tick, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="主线程 1Hz tick" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>HeartbeatTimer · 主线程 1Hz tick · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="432" y="90" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="432" y="90" width="150" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(438 96) scale(0.6875)">
+          <rect x="236" y="476" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="236" y="476" width="150" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(242 482) scale(0.6875)">
             <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
             <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
             <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
             <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="507" y="120" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">HeartbeatTimer</text>
-        <text x="507" y="136" class="t-muted" font-size="9" text-anchor="middle">主线程 1Hz tick</text>
+          <text data-node-label="" x="311" y="506" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">HeartbeatTimer</text>
+        <text x="311" y="522" class="t-muted" font-size="9" text-anchor="middle">主线程 1Hz tick</text>
         </g>
 
         <g id="node-statusitem" data-node-id="statusitem" data-node-label="StatusItemController" tabindex="0" role="button" aria-label="聚焦StatusItemController，叶子图标 · 状态行 · 菜单, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="叶子图标 · 状态行 · 菜单" data-node-tag="每秒 setPhase（心跳驱动）" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>StatusItemController · 叶子图标 · 状态行 · 菜单 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit） · 每秒 setPhase（心跳驱动）</title>
-          <rect x="628" y="90" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="628" y="90" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(634 96) scale(0.6875)">
+          <rect x="236" y="212" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="236" y="212" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(242 218) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="708" y="120" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">StatusItemController</text>
-        <text x="708" y="136" class="t-muted" font-size="9" text-anchor="middle">叶子图标 · 状态行 · 菜单</text>
-        <text x="708" y="146" class="t-frontend" font-size="7" text-anchor="middle">每秒 setPhase（心跳驱动）</text>
+          <text data-node-label="" x="316" y="242" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">StatusItemController</text>
+        <text x="316" y="258" class="t-muted" font-size="9" text-anchor="middle">叶子图标 · 状态行 · 菜单</text>
+        <text x="316" y="268" class="t-frontend" font-size="7" text-anchor="middle">每秒 setPhase（心跳驱动）</text>
         </g>
 
         <g id="node-calendar" data-node-id="calendar" data-node-label="LiveCalendarProvider" tabindex="0" role="button" aria-label="聚焦LiveCalendarProvider，EventKit · calDAV+busy · 限流, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="EventKit · calDAV+busy · 限流" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>LiveCalendarProvider · EventKit · calDAV+busy · 限流 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="824" y="90" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="824" y="90" width="160" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(830 96) scale(0.6875)">
+          <rect x="628" y="476" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="628" y="476" width="160" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(634 482) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
-          <text data-node-label="" x="904" y="120" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveCalendarProvider</text>
-        <text x="904" y="136" class="t-muted" font-size="8.7" text-anchor="middle">EventKit · calDAV+busy · 限流</text>
+          <text data-node-label="" x="708" y="506" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveCalendarProvider</text>
+        <text x="708" y="522" class="t-muted" font-size="8.7" text-anchor="middle">EventKit · calDAV+busy · 限流</text>
         </g>
 
         <g id="node-settings" data-node-id="settings" data-node-label="SettingsWindowController" tabindex="0" role="button" aria-label="聚焦SettingsWindowController，7 页签 · 草稿-应用, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="7 页签 · 草稿-应用" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>SettingsWindowController · 7 页签 · 草稿-应用 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="40" y="222" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="40" y="222" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 228) scale(0.6875)">
+          <rect x="40" y="212" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="40" y="212" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 218) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="120" y="252" class="t-primary" font-size="10.5" font-weight="600" text-anchor="middle">SettingsWindowController</text>
-        <text x="120" y="268" class="t-muted" font-size="9" text-anchor="middle">7 页签 · 草稿-应用</text>
+          <text data-node-label="" x="120" y="242" class="t-primary" font-size="10.5" font-weight="600" text-anchor="middle">SettingsWindowController</text>
+        <text x="120" y="258" class="t-muted" font-size="9" text-anchor="middle">7 页签 · 草稿-应用</text>
         </g>
 
         <g id="node-approot" data-node-id="approot" data-node-label="AppRoot" tabindex="0" role="button" aria-label="聚焦AppRoot，装配根 · 生命周期/心跳冻结编排, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="装配根 · 生命周期/心跳冻结编排" data-node-tag="单一装配点" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>AppRoot · 装配根 · 生命周期/心跳冻结编排 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit） · 单一装配点</title>
-          <rect x="236" y="222" width="170" height="70" rx="6" class="c-mask"/>
-          <rect x="236" y="222" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(242 228) scale(0.6875)">
+          <rect x="40" y="344" width="170" height="70" rx="6" class="c-mask"/>
+          <rect x="40" y="344" width="170" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 350) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="321" y="255" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">AppRoot</text>
-        <text x="321" y="271" class="t-muted" font-size="9" text-anchor="middle">装配根 · 生命周期/心跳冻结编排</text>
-        <text x="321" y="284" class="t-backend" font-size="7" text-anchor="middle">单一装配点</text>
+          <text data-node-label="" x="125" y="377" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">AppRoot</text>
+        <text x="125" y="393" class="t-muted" font-size="9" text-anchor="middle">装配根 · 生命周期/心跳冻结编排</text>
+        <text x="125" y="406" class="t-backend" font-size="7" text-anchor="middle">单一装配点</text>
         </g>
 
         <g id="node-engine" data-node-id="engine" data-node-label="LiveGiveMeABreakEngine" tabindex="0" role="button" aria-label="聚焦LiveGiveMeABreakEngine，advance · evaluate · transition, GiveMeABreakEngine · 纯核心（零平台依赖）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="advance · evaluate · transition" data-node-tag="单一事实源" data-node-context="GiveMeABreakEngine · 纯核心（零平台依赖）">
           <title>LiveGiveMeABreakEngine · advance · evaluate · transition · GiveMeABreakEngine · 纯核心（零平台依赖） · 单一事实源</title>
-          <rect x="432" y="222" width="170" height="74" rx="6" class="c-mask"/>
-          <rect x="432" y="222" width="170" height="74" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(438 228) scale(0.6875)">
+          <rect x="432" y="608" width="170" height="74" rx="6" class="c-mask"/>
+          <rect x="432" y="608" width="170" height="74" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(438 614) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="517" y="257" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveGiveMeABreakEngine</text>
-        <text x="517" y="273" class="t-muted" font-size="8.7" text-anchor="middle">advance · evaluate · transition</text>
-        <text x="517" y="288" class="t-backend" font-size="7" text-anchor="middle">单一事实源</text>
+          <text data-node-label="" x="517" y="643" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveGiveMeABreakEngine</text>
+        <text x="517" y="659" class="t-muted" font-size="8.7" text-anchor="middle">advance · evaluate · transition</text>
+        <text x="517" y="674" class="t-backend" font-size="7" text-anchor="middle">单一事实源</text>
         </g>
 
         <g id="node-stores" data-node-id="stores" data-node-label="持久化 Store ×3" tabindex="0" role="button" aria-label="聚焦持久化 Store ×3，config · engine-state · 日志, GiveMeABreakEngine · 纯核心（零平台依赖）" aria-pressed="false" data-node-kind="database" data-node-sublabel="config · engine-state · 日志" data-node-context="GiveMeABreakEngine · 纯核心（零平台依赖）">
           <title>持久化 Store ×3 · config · engine-state · 日志 · GiveMeABreakEngine · 纯核心（零平台依赖）</title>
-          <rect x="628" y="222" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="628" y="222" width="160" height="64" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(634 228) scale(0.6875)">
+          <rect x="628" y="608" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="628" y="608" width="160" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(634 614) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="708" y="252" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">持久化 Store ×3</text>
-        <text x="708" y="268" class="t-muted" font-size="9" text-anchor="middle">config · engine-state · 日志</text>
+          <text data-node-label="" x="708" y="638" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">持久化 Store ×3</text>
+        <text x="708" y="654" class="t-muted" font-size="9" text-anchor="middle">config · engine-state · 日志</text>
         </g>
 
         <g id="node-wlwin" data-node-id="wlwin" data-node-label="WorkLog / Exercise 窗口族" tabindex="0" role="button" aria-label="聚焦WorkLog / Exercise 窗口族，提示 · 补录 · 报告 · 综合报告, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="提示 · 补录 · 报告 · 综合报告" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>WorkLog / Exercise 窗口族 · 提示 · 补录 · 报告 · 综合报告 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="824" y="222" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="824" y="222" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(830 228) scale(0.6875)">
+          <rect x="432" y="212" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="432" y="212" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(438 218) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="909" y="252" class="t-primary" font-size="10.8" font-weight="600" text-anchor="middle">WorkLog / Exercise 窗口族</text>
-        <text x="909" y="268" class="t-muted" font-size="9" text-anchor="middle">提示 · 补录 · 报告 · 综合报告</text>
+          <text data-node-label="" x="517" y="242" class="t-primary" font-size="10.8" font-weight="600" text-anchor="middle">WorkLog / Exercise 窗口族</text>
+        <text x="517" y="258" class="t-muted" font-size="9" text-anchor="middle">提示 · 补录 · 报告 · 综合报告</text>
         </g>
 
         <g id="node-hotkeys" data-node-id="hotkeys" data-node-label="GlobalHotkeyCenter" tabindex="0" role="button" aria-label="聚焦GlobalHotkeyCenter，⌃⌥⌘R / ⌃⌥⌘K · 零权限, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="external" data-node-sublabel="⌃⌥⌘R / ⌃⌥⌘K · 零权限" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>GlobalHotkeyCenter · ⌃⌥⌘R / ⌃⌥⌘K · 零权限 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="40" y="354" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="40" y="354" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 360) scale(0.6875)">
+          <rect x="628" y="212" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="628" y="212" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(634 218) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="115" y="384" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GlobalHotkeyCenter</text>
-        <text x="115" y="400" class="t-muted" font-size="9" text-anchor="middle">⌃⌥⌘R / ⌃⌥⌘K · 零权限</text>
+          <text data-node-label="" x="703" y="242" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GlobalHotkeyCenter</text>
+        <text x="703" y="258" class="t-muted" font-size="9" text-anchor="middle">⌃⌥⌘R / ⌃⌥⌘K · 零权限</text>
         </g>
 
         <g id="node-lock" data-node-id="lock" data-node-label="LockShortcutMonitor" tabindex="0" role="button" aria-label="聚焦LockShortcutMonitor，⌃⌘Q 劫持 · CGEventTap, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="security" data-node-sublabel="⌃⌘Q 劫持 · CGEventTap" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>LockShortcutMonitor · ⌃⌘Q 劫持 · CGEventTap · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="236" y="354" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="236" y="354" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(242 360) scale(0.6875)">
+          <rect x="824" y="212" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="824" y="212" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(830 218) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" x="311" y="384" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LockShortcutMonitor</text>
-        <text x="311" y="400" class="t-muted" font-size="9" text-anchor="middle">⌃⌘Q 劫持 · CGEventTap</text>
+          <text data-node-label="" x="899" y="242" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LockShortcutMonitor</text>
+        <text x="899" y="258" class="t-muted" font-size="9" text-anchor="middle">⌃⌘Q 劫持 · CGEventTap</text>
         </g>
 
         <g id="node-screenmask" data-node-id="screenmask" data-node-label="ScreenMaskController" tabindex="0" role="button" aria-label="聚焦ScreenMaskController，手动遮罩 · 冻结工作计时, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="手动遮罩 · 冻结工作计时" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>ScreenMaskController · 手动遮罩 · 冻结工作计时 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="432" y="354" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="432" y="354" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(438 360) scale(0.6875)">
+          <rect x="432" y="344" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="432" y="344" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(438 350) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="512" y="384" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ScreenMaskController</text>
-        <text x="512" y="400" class="t-muted" font-size="9" text-anchor="middle">手动遮罩 · 冻结工作计时</text>
+          <text data-node-label="" x="512" y="374" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ScreenMaskController</text>
+        <text x="512" y="390" class="t-muted" font-size="9" text-anchor="middle">手动遮罩 · 冻结工作计时</text>
         </g>
 
         <g id="node-overlay" data-node-id="overlay" data-node-label="LiveOverlayController" tabindex="0" role="button" aria-label="聚焦LiveOverlayController，休息遮罩 · 屏蔽层级多屏面板, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="休息遮罩 · 屏蔽层级多屏面板" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>LiveOverlayController · 休息遮罩 · 屏蔽层级多屏面板 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="628" y="354" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="628" y="354" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(634 360) scale(0.6875)">
+          <rect x="824" y="476" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="824" y="476" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(830 482) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="708" y="384" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveOverlayController</text>
-        <text x="708" y="400" class="t-muted" font-size="9" text-anchor="middle">休息遮罩 · 屏蔽层级多屏面板</text>
+          <text data-node-label="" x="904" y="506" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveOverlayController</text>
+        <text x="904" y="522" class="t-muted" font-size="9" text-anchor="middle">休息遮罩 · 屏蔽层级多屏面板</text>
         </g>
 
         <g id="node-music" data-node-id="music" data-node-label="LiveMusicController" tabindex="0" role="button" aria-label="聚焦LiveMusicController，三轨：自定义音频 / 粉噪音 / QQ 音乐, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="external" data-node-sublabel="三轨：自定义音频 / 粉噪音 / QQ 音乐" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>LiveMusicController · 三轨：自定义音频 / 粉噪音 / QQ 音乐 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="824" y="354" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="824" y="354" width="170" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(830 360) scale(0.6875)">
+          <rect x="1020" y="476" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="1020" y="476" width="170" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1026 482) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="909" y="384" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveMusicController</text>
-        <text x="909" y="400" class="t-muted" font-size="7.7" text-anchor="middle">三轨：自定义音频 / 粉噪音 / QQ 音乐</text>
+          <text data-node-label="" x="1105" y="506" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LiveMusicController</text>
+        <text x="1105" y="522" class="t-muted" font-size="7.7" text-anchor="middle">三轨：自定义音频 / 粉噪音 / QQ 音乐</text>
         </g>
 
         <g id="node-codingproxy" data-node-id="codingproxy" data-node-label="CodingProxy 托管" tabindex="0" role="button" aria-label="聚焦CodingProxy 托管，Foundation.Process + 控制台, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Foundation.Process + 控制台" data-node-tag="approot apply(agent.codingProxy)" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>CodingProxy 托管 · Foundation.Process + 控制台 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit） · approot apply(agent.codingProxy)</title>
-          <rect x="1020" y="354" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="1020" y="354" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1026 360) scale(0.6875)">
+          <rect x="1020" y="344" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="1020" y="344" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1026 350) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="1105" y="384" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CodingProxy 托管</text>
-        <text x="1105" y="400" class="t-muted" font-size="9" text-anchor="middle">Foundation.Process + 控制台</text>
-        <text x="1105" y="410" class="t-backend" font-size="7" text-anchor="middle">approot apply(agent.codingProxy)</text>
+          <text data-node-label="" x="1105" y="374" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CodingProxy 托管</text>
+        <text x="1105" y="390" class="t-muted" font-size="9" text-anchor="middle">Foundation.Process + 控制台</text>
+        <text x="1105" y="400" class="t-backend" font-size="7" text-anchor="middle">approot apply(agent.codingProxy)</text>
         </g>
 
         <g id="node-power" data-node-id="power" data-node-label="IdleSleepGuard" tabindex="0" role="button" aria-label="聚焦IdleSleepGuard，IOKit 电源断言 · 与调度正交, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="IOKit 电源断言 · 与调度正交" data-node-tag="approot apply(config.power)" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>IdleSleepGuard · IOKit 电源断言 · 与调度正交 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit） · approot apply(config.power)</title>
-          <rect x="40" y="486" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="40" y="486" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 492) scale(0.6875)">
+          <rect x="1020" y="212" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="1020" y="212" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1026 218) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="115" y="516" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IdleSleepGuard</text>
-        <text x="115" y="532" class="t-muted" font-size="8.7" text-anchor="middle">IOKit 电源断言 · 与调度正交</text>
-        <text x="115" y="542" class="t-backend" font-size="7" text-anchor="middle">approot apply(config.power)</text>
+          <text data-node-label="" x="1095" y="242" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IdleSleepGuard</text>
+        <text x="1095" y="258" class="t-muted" font-size="8.7" text-anchor="middle">IOKit 电源断言 · 与调度正交</text>
+        <text x="1095" y="268" class="t-backend" font-size="7" text-anchor="middle">approot apply(config.power)</text>
         </g>
 
         <g id="node-sensors" data-node-id="sensors" data-node-label="SystemSensors" tabindex="0" role="button" aria-label="聚焦SystemSensors，AFK 秒数 · isAsleep, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="external" data-node-sublabel="AFK 秒数 · isAsleep" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>SystemSensors · AFK 秒数 · isAsleep · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="236" y="90" width="140" height="64" rx="6" class="c-mask"/>
-          <rect x="236" y="90" width="140" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(242 96) scale(0.6875)">
+          <rect x="432" y="476" width="140" height="64" rx="6" class="c-mask"/>
+          <rect x="432" y="476" width="140" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(438 482) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="306" y="120" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SystemSensors</text>
-        <text x="306" y="136" class="t-muted" font-size="9" text-anchor="middle">AFK 秒数 · isAsleep</text>
+          <text data-node-label="" x="502" y="506" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SystemSensors</text>
+        <text x="502" y="522" class="t-muted" font-size="9" text-anchor="middle">AFK 秒数 · isAsleep</text>
         </g>
 
         <g id="node-guard" data-node-id="guard" data-node-label="MaskInputGuard" tabindex="0" role="button" aria-label="聚焦MaskInputGuard，HID 白名单 · 30min 看门狗, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="security" data-node-sublabel="HID 白名单 · 30min 看门狗" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>MaskInputGuard · HID 白名单 · 30min 看门狗 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="432" y="486" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="432" y="486" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(438 492) scale(0.6875)">
+          <rect x="628" y="344" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="628" y="344" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(634 350) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" x="507" y="516" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MaskInputGuard</text>
-        <text x="507" y="532" class="t-muted" font-size="9" text-anchor="middle">HID 白名单 · 30min 看门狗</text>
+          <text data-node-label="" x="703" y="374" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MaskInputGuard</text>
+        <text x="703" y="390" class="t-muted" font-size="9" text-anchor="middle">HID 白名单 · 30min 看门狗</text>
         </g>
 
         <g id="node-backdrop" data-node-id="backdrop" data-node-label="MaskBackdropPlayer" tabindex="0" role="button" aria-label="聚焦MaskBackdropPlayer，共享 AVPlayer · 跟随壁纸, GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="共享 AVPlayer · 跟随壁纸" data-node-context="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
           <title>MaskBackdropPlayer · 共享 AVPlayer · 跟随壁纸 · GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</title>
-          <rect x="628" y="486" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="628" y="486" width="150" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(634 492) scale(0.6875)">
+          <rect x="824" y="344" width="150" height="64" rx="6" class="c-mask"/>
+          <rect x="824" y="344" width="150" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(830 350) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="703" y="516" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MaskBackdropPlayer</text>
-        <text x="703" y="532" class="t-muted" font-size="9" text-anchor="middle">共享 AVPlayer · 跟随壁纸</text>
+          <text data-node-label="" x="899" y="374" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MaskBackdropPlayer</text>
+        <text x="899" y="390" class="t-muted" font-size="9" text-anchor="middle">共享 AVPlayer · 跟随壁纸</text>
         </g>
 
         <!-- Connection labels -->
         <g data-edge-from="app" data-edge-to="approot" data-edge-label="装配启动" data-edge-key="0" data-edge-id="app_assemble">
-          <rect x="245.8" y="162" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="270" y="172" class="t-edge-default" font-size="8" text-anchor="middle">装配启动</text>
+          <rect x="199.8" y="92" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="224" y="102" class="t-edge-default" font-size="8" text-anchor="middle">装配启动</text>
         </g>
         <g data-edge-from="settings" data-edge-to="approot" data-edge-label="草稿应用" data-edge-key="1" data-edge-id="settings_apply">
-          <rect x="223.8" y="202" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="248" y="212" class="t-edge-default" font-size="8" text-anchor="middle">草稿应用</text>
+          <rect x="56.599999999999994" y="303" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="80.8" y="313" class="t-edge-default" font-size="8" text-anchor="middle">草稿应用</text>
         </g>
 
 
         <g data-edge-from="heartbeat" data-edge-to="engine" data-edge-label="tick 1Hz" data-edge-key="4" data-edge-id="tick">
-          <rect x="530.8" y="166" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="555" y="176" class="t-edge-default" font-size="8" text-anchor="middle">tick 1Hz</text>
+          <rect x="256.6" y="592.5" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="280.8" y="602.5" class="t-edge-default" font-size="8" text-anchor="middle">tick 1Hz</text>
         </g>
         <g data-edge-from="sensors" data-edge-to="engine" data-edge-label="AFK / isAsleep" data-edge-key="5" data-edge-id="sense">
-          <rect x="371.4" y="170" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="410" y="180" class="t-edge-default" font-size="8" text-anchor="middle">AFK / isAsleep</text>
+          <rect x="405.79999999999995" y="567" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="444.4" y="577" class="t-edge-default" font-size="8" text-anchor="middle">AFK / isAsleep</text>
         </g>
         <g data-edge-from="calendar" data-edge-to="engine" data-edge-label="忙碌区间" data-edge-key="6" data-edge-id="meetings">
-          <rect x="687.8" y="162" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="712" y="172" class="t-edge-default" font-size="8" text-anchor="middle">忙碌区间</text>
+          <rect x="581.3" y="546" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="605.5" y="556" class="t-edge-default" font-size="8" text-anchor="middle">忙碌区间</text>
         </g>
 
         <g data-edge-from="engine" data-edge-to="overlay" data-edge-label="show / dismiss" data-edge-key="8" data-edge-id="show_overlay">
-          <rect x="557.4" y="310" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="596" y="320" class="t-edge-default" font-size="8" text-anchor="middle">show / dismiss</text>
+          <rect x="824.9" y="594" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="863.5" y="604" class="t-edge-default" font-size="8" text-anchor="middle">show / dismiss</text>
         </g>
         <g data-edge-from="engine" data-edge-to="music" data-edge-label="start / pause" data-edge-key="9" data-edge-id="play_music">
-          <rect x="622.3" y="178" width="72.4" height="14" rx="3" class="c-mask"/>
-          <text x="658.5" y="188" class="t-edge-default" font-size="8" text-anchor="middle">start / pause</text>
+          <rect x="774.8" y="686" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="811" y="696" class="t-edge-default" font-size="8" text-anchor="middle">start / pause</text>
         </g>
         <g data-edge-from="overlay" data-edge-to="engine" data-edge-label="Esc 确认退出" data-edge-key="10" data-edge-id="early_exit">
-          <rect x="666.2" y="316" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="700" y="326" class="t-edge-dashed" font-size="8" text-anchor="middle">Esc 确认退出</text>
+          <rect x="768.2" y="544" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="802" y="554" class="t-edge-dashed" font-size="8" text-anchor="middle">Esc 确认退出</text>
         </g>
         <g data-edge-from="hotkeys" data-edge-to="approot" data-edge-label="⌃⌥⌘R / ⌃⌥⌘K" data-edge-key="11" data-edge-id="hotkey_actions">
-          <rect x="181.6" y="301.5" width="62.8" height="14" rx="3" class="c-mask"/>
-          <text x="213" y="311.5" class="t-edge-default" font-size="8" text-anchor="middle">⌃⌥⌘R / ⌃⌥⌘K</text>
+          <rect x="593.1" y="280" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="624.5" y="290" class="t-edge-default" font-size="8" text-anchor="middle">⌃⌥⌘R / ⌃⌥⌘K</text>
         </g>
 
         <g data-edge-from="approot" data-edge-to="screenmask" data-edge-label="遮罩编排" data-edge-key="13" data-edge-id="mask_orchestrate">
-          <rect x="435.8" y="320" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="460" y="330" class="t-edge-default" font-size="8" text-anchor="middle">遮罩编排</text>
+          <rect x="296.8" y="354" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="321" y="364" class="t-edge-default" font-size="8" text-anchor="middle">遮罩编排</text>
         </g>
         <g data-edge-from="approot" data-edge-to="wlwin" data-edge-label="提示窗接线" data-edge-key="14" data-edge-id="prompt_windows">
-          <rect x="292" y="176" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="321" y="186" class="t-edge-default" font-size="8" text-anchor="middle">提示窗接线</text>
+          <rect x="292" y="290" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="321" y="300" class="t-edge-default" font-size="8" text-anchor="middle">提示窗接线</text>
         </g>
         <g data-edge-from="overlay" data-edge-to="guard" data-edge-label="共享注入" data-edge-key="15" data-edge-id="guard_rest">
-          <rect x="534.8" y="420" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="559" y="430" class="t-edge-default" font-size="8" text-anchor="middle">共享注入</text>
+          <rect x="776.8" y="422" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="801" y="432" class="t-edge-default" font-size="8" text-anchor="middle">共享注入</text>
         </g>
         <g data-edge-from="screenmask" data-edge-to="guard" data-edge-label="共享注入" data-edge-key="16" data-edge-id="guard_manual">
-          <rect x="445.6" y="445" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="469.8" y="455" class="t-edge-default" font-size="8" text-anchor="middle">共享注入</text>
+          <rect x="585.8" y="418" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="610" y="428" class="t-edge-default" font-size="8" text-anchor="middle">共享注入</text>
         </g>
         <g data-edge-from="overlay" data-edge-to="backdrop" data-edge-label="背景" data-edge-key="17" data-edge-id="backdrop_rest">
-          <rect x="679" y="445" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="694" y="455" class="t-edge-default" font-size="8" text-anchor="middle">背景</text>
+          <rect x="889" y="456" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="904" y="466" class="t-edge-default" font-size="8" text-anchor="middle">背景</text>
         </g>
         <g data-edge-from="screenmask" data-edge-to="backdrop" data-edge-label="背景" data-edge-key="18" data-edge-id="backdrop_manual">
-          <rect x="574" y="445" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="589" y="455" class="t-edge-default" font-size="8" text-anchor="middle">背景</text>
+          <rect x="693" y="321" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="708" y="331" class="t-edge-default" font-size="8" text-anchor="middle">背景</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
         <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="GiveMeABreakEngine · 纯核心（零平台依赖）">
-          <rect data-graph-role="structural-frame-label-mask" x="406" y="202" width="231.4" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="410" y="215" class="t-cloud" font-size="9" font-weight="600">GiveMeABreakEngine · 纯核心（零平台依赖）</text>
+          <rect data-graph-role="structural-frame-label-mask" x="406" y="588" width="231.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="410" y="601" class="t-cloud" font-size="9" font-weight="600">GiveMeABreakEngine · 纯核心（零平台依赖）</text>
         </g>
 
         <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）">
-          <rect data-graph-role="structural-frame-label-mask" x="14" y="52" width="366.4" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="18" y="65" class="t-cloud" font-size="9" font-weight="600">GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</text>
+          <rect data-graph-role="structural-frame-label-mask" x="14" y="192" width="366.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="18" y="205" class="t-cloud" font-size="9" font-weight="600">GiveMeABreakIntegrations · 平台集成（AppKit / CGEvent / EventKit）</text>
         </g>
 
         <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="GiveMeABreak · @main 壳">
-          <rect data-graph-role="structural-frame-label-mask" x="14" y="70" width="134.2" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="18" y="83" class="t-cloud" font-size="9" font-weight="600">GiveMeABreak · @main 壳</text>
+          <rect data-graph-role="structural-frame-label-mask" x="406" y="60" width="134.2" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="410" y="73" class="t-cloud" font-size="9" font-weight="600">GiveMeABreak · @main 壳</text>
         </g>
 
         <!-- Legend -->
         <g data-legend="">
-          <text x="40" y="602" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="frontend" data-legend-x="40" data-legend-baseline="622" data-legend-width="63">
-            <rect x="40" y="613" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
-            <text x="62" y="622" class="t-muted" font-size="10" font-weight="500">前端</text>
+          <text x="40" y="738" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="frontend" data-legend-x="40" data-legend-baseline="758" data-legend-width="63">
+            <rect x="40" y="749" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="758" class="t-muted" font-size="10" font-weight="500">前端</text>
           </g>
-          <g data-legend-semantic-kind="backend" data-legend-x="125" data-legend-baseline="622" data-legend-width="63">
-            <rect x="125" y="613" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="147" y="622" class="t-muted" font-size="10" font-weight="500">后端</text>
+          <g data-legend-semantic-kind="backend" data-legend-x="125" data-legend-baseline="758" data-legend-width="63">
+            <rect x="125" y="749" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="147" y="758" class="t-muted" font-size="10" font-weight="500">后端</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-x="210" data-legend-baseline="622" data-legend-width="73">
-            <rect x="210" y="613" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="232" y="622" class="t-muted" font-size="10" font-weight="500">数据库</text>
+          <g data-legend-semantic-kind="database" data-legend-x="210" data-legend-baseline="758" data-legend-width="73">
+            <rect x="210" y="749" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="232" y="758" class="t-muted" font-size="10" font-weight="500">数据库</text>
           </g>
-          <g data-legend-semantic-kind="cloud" data-legend-x="305" data-legend-baseline="622" data-legend-width="73">
-            <rect x="305" y="613" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
-            <text x="327" y="622" class="t-muted" font-size="10" font-weight="500">云服务</text>
+          <g data-legend-semantic-kind="cloud" data-legend-x="305" data-legend-baseline="758" data-legend-width="73">
+            <rect x="305" y="749" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="327" y="758" class="t-muted" font-size="10" font-weight="500">云服务</text>
           </g>
-          <g data-legend-semantic-kind="security" data-legend-x="400" data-legend-baseline="622" data-legend-width="63">
-            <rect x="400" y="613" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
-            <text x="422" y="622" class="t-muted" font-size="10" font-weight="500">安全</text>
+          <g data-legend-semantic-kind="security" data-legend-x="400" data-legend-baseline="758" data-legend-width="63">
+            <rect x="400" y="749" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="422" y="758" class="t-muted" font-size="10" font-weight="500">安全</text>
           </g>
-          <g data-legend-semantic-kind="messagebus" data-legend-x="485" data-legend-baseline="622" data-legend-width="83">
-            <rect x="485" y="613" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
-            <text x="507" y="622" class="t-muted" font-size="10" font-weight="500">消息总线</text>
+          <g data-legend-semantic-kind="messagebus" data-legend-x="485" data-legend-baseline="758" data-legend-width="83">
+            <rect x="485" y="749" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
+            <text x="507" y="758" class="t-muted" font-size="10" font-weight="500">消息总线</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-x="590" data-legend-baseline="622" data-legend-width="83">
-            <rect x="590" y="613" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="612" y="622" class="t-muted" font-size="10" font-weight="500">外部系统</text>
+          <g data-legend-semantic-kind="external" data-legend-x="590" data-legend-baseline="758" data-legend-width="83">
+            <rect x="590" y="749" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="612" y="758" class="t-muted" font-size="10" font-weight="500">外部系统</text>
           </g>
         </g>
       </svg>

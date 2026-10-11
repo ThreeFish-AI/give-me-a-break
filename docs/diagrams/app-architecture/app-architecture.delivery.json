@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "3eb81b40-06b4-431d-a7fa-e54882de5ff7",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/cm.huang/conductor/workspaces/give-me-a-break/pyongyang/docs/diagrams/app-architecture/app-architecture.json",
+  "output": "/Users/cm.huang/conductor/workspaces/give-me-a-break/pyongyang/docs/diagrams/app-architecture/app-architecture.html",
+  "specification": {
+    "sha256": "c337021aae0bd8eee26c99ea5ce8817c11916a404841fd610142528a75ca3230",
+    "bytes": 13210
+  },
+  "artifact": {
+    "sha256": "a1d3ad5e66b78563003871a75b9e01f10e4219aa1ac2bb0c7a36d69dd51a9926",
+    "bytes": 795251
+  }
+}
