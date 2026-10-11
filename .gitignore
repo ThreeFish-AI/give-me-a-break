@@ -1,10 +1,6 @@
 .DS_Store
 *.pem
 
-# Runtime local config (secrets + per-deployment overrides)
-# Match at any depth to cover all cwd scenarios (see yaml_loader.get_local_config_path)
-config.local.yaml
-
 # Temp files
 .temp/
 .playwright-mcp/

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 知识索引同步校验（项目特有语义，AGENTS.md「知识索引同步」要求）。
+# 知识索引同步校验（项目特有语义，用户级全局规约「知识索引同步」要求）。
 # 校验 .agents/knowledge-map.md 中所有 markdown 相对链接 ](path) 指向的文件确实存在。
 # 设计要点：
 #   - 仅匹配 ](path) 真链接，排除反引号代码路径 `Sources/...`（knowledge-map 关键代码位置表用反引号）。

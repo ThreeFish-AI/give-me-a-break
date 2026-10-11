@@ -1,0 +1,297 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "多平台 Release 流水线（3 个具名 job）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/release-pipeline/release-pipeline.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "b3e67885f8c283d07c6f9478083f7572c90eb6cd",
+      "link_mode": "local-only"
+    }
+  },
+  "lanes": [
+    {
+      "id": "trigger",
+      "label": "触发"
+    },
+    {
+      "id": "macos",
+      "label": "macos job（macos-15）"
+    },
+    {
+      "id": "win",
+      "label": "windows job（windows-latest）"
+    },
+    {
+      "id": "rel",
+      "label": "release job（ubuntu · needs 双 job）"
+    }
+  ],
+  "phases": [
+    {
+      "id": "ph_build",
+      "label": "构建",
+      "fromCol": 1,
+      "toCol": 1
+    },
+    {
+      "id": "ph_sign",
+      "label": "签名与门禁",
+      "fromCol": 2,
+      "toCol": 3
+    },
+    {
+      "id": "ph_ship",
+      "label": "汇聚发布",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "mainPath": [
+    "tag",
+    "build",
+    "sign",
+    "verify_gate",
+    "upload_mac",
+    "collect",
+    "gh_release"
+  ],
+  "nodes": [
+    {
+      "id": "tag",
+      "lane": "trigger",
+      "col": 0,
+      "type": "external",
+      "label": "push tag v*",
+      "sublabel": "或 dispatch",
+      "width": 160,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 11,
+          "end_line": 35
+        }
+      ]
+    },
+    {
+      "id": "build",
+      "lane": "macos",
+      "col": 1,
+      "type": "backend",
+      "label": "make app",
+      "sublabel": "tag==Info.plist 强校验",
+      "width": 160,
+      "sources": [
+        {
+          "path": ".github/actions/verify-version/action.yml"
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 40
+        }
+      ]
+    },
+    {
+      "id": "sign",
+      "lane": "macos",
+      "col": 2,
+      "type": "security",
+      "label": "条件签名链",
+      "sublabel": "③ Developer ID / ③b 自签 / ④ 公证",
+      "width": 170,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 76
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 102,
+          "end_line": 137
+        }
+      ]
+    },
+    {
+      "id": "verify_gate",
+      "lane": "macos",
+      "col": 3,
+      "type": "backend",
+      "label": "校验与 ad-hoc 门禁",
+      "sublabel": "实签 adhoc 即 fail",
+      "tag": "ALLOW_ADHOC_RELEASE",
+      "width": 170,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 200,
+          "end_line": 208
+        }
+      ]
+    },
+    {
+      "id": "upload_mac",
+      "lane": "macos",
+      "col": 4,
+      "type": "backend",
+      "label": "upload macos-zip",
+      "sublabel": "+ markers",
+      "width": 150,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 183,
+          "end_line": 195
+        }
+      ]
+    },
+    {
+      "id": "publish",
+      "lane": "win",
+      "col": 1,
+      "type": "backend",
+      "label": "dotnet publish",
+      "sublabel": "win-x64 自包含",
+      "width": 150,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 229
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 253
+        }
+      ]
+    },
+    {
+      "id": "upload_win",
+      "lane": "win",
+      "col": 3,
+      "type": "backend",
+      "label": "upload win64.zip",
+      "sublabel": "无签名",
+      "width": 150,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 257
+        }
+      ]
+    },
+    {
+      "id": "collect",
+      "lane": "rel",
+      "col": 4,
+      "type": "backend",
+      "label": "download + 校验 marker",
+      "sublabel": "signing ∈ devid/selfsign/adhoc",
+      "width": 170,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 268,
+          "end_line": 310
+        }
+      ]
+    },
+    {
+      "id": "gh_release",
+      "lane": "rel",
+      "col": 5,
+      "type": "cloud",
+      "label": "GitHub Release",
+      "sublabel": "一次挂双 asset",
+      "width": 180,
+      "sources": [
+        {
+          "path": ".github/workflows/release.yml",
+          "line": 310,
+          "end_line": 355
+        }
+      ],
+      "tag": "Note 按签名态分支"
+    }
+  ],
+  "edges": [
+    {
+      "id": "tag_mac",
+      "from": "tag",
+      "to": "build",
+      "label": "触发"
+    },
+    {
+      "id": "tag_win",
+      "from": "tag",
+      "to": "publish",
+      "label": "触发"
+    },
+    {
+      "id": "b2s",
+      "from": "build",
+      "to": "sign"
+    },
+    {
+      "id": "s2v",
+      "from": "sign",
+      "to": "verify_gate"
+    },
+    {
+      "id": "v2u",
+      "from": "verify_gate",
+      "to": "upload_mac",
+      "label": "通过"
+    },
+    {
+      "id": "p2u",
+      "from": "publish",
+      "to": "upload_win"
+    },
+    {
+      "id": "um2c",
+      "from": "upload_mac",
+      "to": "collect"
+    },
+    {
+      "id": "uw2c",
+      "from": "upload_win",
+      "to": "collect"
+    },
+    {
+      "id": "c2r",
+      "from": "collect",
+      "to": "gh_release",
+      "label": "双 asset 齐备"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "触发与版本 SSOT",
+      "items": [
+        "push tag v* 或 workflow_dispatch（prerelease / skip_notarize）；concurrency release-<ref> 不取消进行中发布",
+        "Info.plist 为版本号唯一事实源，macOS / Windows 双 job 共享 verify-version action 强校验 tag == 版本"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "ad-hoc 发布门禁",
+      "items": [
+        "产物实签为 ad-hoc 即 fail（macos job 失败 → release job 永不执行），根治 secrets 漏配时的静默降级",
+        "逃生门 repo variable ALLOW_ADHOC_RELEASE=true 默认拒绝、settings 可审计",
+        "历史教训：v0.1.10 曾因 secrets 漏配以 ad-hoc 发布，TCC 授权升级失效复发（issue #5）"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "双 asset 收敛",
+      "items": [
+        "release job needs [macos, windows]：下载 marker + 双 zip，校验签名态后一次 softprops/action-gh-release 挂载全部 asset",
+        "Release Note 取 CHANGELOG 对应版本 + 按实签态（公证 / 自签 / ad-hoc）分支的安装指引",
+        "Windows 产物无签名：SmartScreen 首次告警 + 杀软可能误报（WH_KEYBOARD_LL / SendInput）"
+      ]
+    }
+  ]
+}
