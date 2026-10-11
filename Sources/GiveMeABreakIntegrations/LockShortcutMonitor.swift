@@ -5,7 +5,7 @@ import CoreGraphics
 /// 真正锁屏），转投 `onTriggered`（由 AppRoot 接线至手动屏幕遮罩）。与 AccessibilityChecker 的权限
 /// 模型正交——那里管的是*发送*合成事件（媒体键），这里需要的是*监听*系统级按键的「输入监控」权限。
 ///
-/// 已知边界（macOS 系统行为，非本实现缺陷，详见 docs/give-me-a-break-design.md §8）：
+/// 已知边界（macOS 系统行为，非本实现缺陷，详见 docs/give-me-a-break-design.md §7.3）：
 /// Secure Input 生效时全机 CGEventTap 静默失效；输入监控权限变更需重启 App 才生效。
 final class LockShortcutMonitor {
     var onTriggered: (() -> Void)?

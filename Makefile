@@ -19,7 +19,7 @@ SIGNING_IDENTITY ?= -
 # 本机私有覆写（gitignored）：SIGNING_IDENTITY := GiveMeABreak Release
 sinclude Makefile.local
 
-.PHONY: all build app icon run test test-integration clean sign run-debug
+.PHONY: all build app icon run test clean run-debug
 
 all: app
 
@@ -59,10 +59,6 @@ run-debug:
 ## 单元测试（无权限，CI 可跑；自建运行器，CLT 无 XCTest）
 test:
 	swift run GiveMeABreakTests
-
-## 集成测试（需权限/真机，本地手跑）
-test-integration:
-	swift test --filter GiveMeABreakIntegrationTests
 
 clean:
 	swift package clean

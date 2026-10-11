@@ -1,0 +1,194 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "遮罩背景解析链（跟随系统壁纸）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/mask-wallpaper-chain/mask-wallpaper-chain.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "b3e67885f8c283d07c6f9478083f7572c90eb6cd",
+      "link_mode": "local-only"
+    }
+  },
+  "lanes": [
+    {
+      "id": "sys",
+      "label": "系统输入"
+    },
+    {
+      "id": "resolve",
+      "label": "SystemWallpaper 解析（纯函数）"
+    },
+    {
+      "id": "render",
+      "label": "MaskBackground 呈现层"
+    }
+  ],
+  "mainPath": [
+    "idx",
+    "provider",
+    "video_check",
+    "aerial"
+  ],
+  "nodes": [
+    {
+      "id": "idx",
+      "lane": "sys",
+      "col": 0,
+      "type": "database",
+      "label": "Index.plist",
+      "sublabel": "壁纸选择记录",
+      "width": 150,
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/SystemWallpaper.swift",
+          "line": 64,
+          "end_line": 79,
+          "label": "choice(fromIndexPlist:)"
+        }
+      ]
+    },
+    {
+      "id": "provider",
+      "lane": "resolve",
+      "col": 1,
+      "type": "backend",
+      "label": "Provider 判定",
+      "sublabel": "aerials / default / 其他",
+      "width": 150,
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/SystemWallpaper.swift",
+          "line": 135,
+          "end_line": 160,
+          "label": "resolve(choice:…)"
+        }
+      ]
+    },
+    {
+      "id": "video_check",
+      "lane": "resolve",
+      "col": 2,
+      "type": "security",
+      "label": "本机航拍视频探测",
+      "sublabel": "assetID 严格 UUID 白名单",
+      "tag": "或 .default 同目录 .mov",
+      "width": 170,
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/SystemWallpaper.swift",
+          "line": 87,
+          "end_line": 101,
+          "label": "aerialVideo(assetID:)"
+        },
+        {
+          "path": "Sources/GiveMeABreakEngine/SystemWallpaper.swift",
+          "line": 107,
+          "end_line": 119,
+          "label": "defaultAerialVideo"
+        }
+      ]
+    },
+    {
+      "id": "still_view",
+      "lane": "render",
+      "col": 1,
+      "type": "frontend",
+      "label": "StillWallpaperView",
+      "sublabel": "静帧层 · 后台缩略解码",
+      "tag": "desktopImageURL 按屏取图",
+      "width": 170,
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskBackground/MaskBackground.swift",
+          "line": 123,
+          "end_line": 161,
+          "label": "StillWallpaperView"
+        }
+      ]
+    },
+    {
+      "id": "aerial",
+      "lane": "render",
+      "col": 3,
+      "type": "frontend",
+      "label": "AerialLayerView",
+      "sublabel": "视频层 · 共享 AVPlayer",
+      "tag": "减弱动态效果 → 定格首帧",
+      "width": 170,
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskBackground/MaskBackground.swift",
+          "line": 66,
+          "end_line": 82,
+          "label": "AerialLayerView"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "idx_choice",
+      "from": "idx",
+      "to": "provider",
+      "label": "Choices[0]",
+      "toSide": "top"
+    },
+    {
+      "id": "to_video_probe",
+      "from": "provider",
+      "to": "video_check",
+      "label": "aerials / default"
+    },
+    {
+      "id": "to_other",
+      "from": "provider",
+      "to": "still_view",
+      "label": "其他 / plist 缺失",
+      "toSide": "top"
+    },
+    {
+      "id": "probe_ok",
+      "from": "video_check",
+      "to": "aerial",
+      "label": "可得 · video(URL)"
+    },
+    {
+      "id": "probe_fail",
+      "from": "video_check",
+      "to": "still_view",
+      "label": "不可得（含未下载）",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "解析即纯函数",
+      "items": [
+        "全部判定在 SystemWallpaper 纯函数内完成（文件系统谓词注入，单测覆盖）",
+        "assetID 严格 UUID 白名单 + 拼接目录复核，双关防路径穿越",
+        "读不到选择不臆断：Index.plist 缺失 / 损坏一律回退静帧"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "呈现 z-序与回退链",
+      "items": [
+        "自底向上：① 深色渐变兜底（恒在，绝不空遮罩）→ ② 视频 / 静帧层 → ③ 径向暗纱 + MaskCaption（白字可读）",
+        "任一步不可得 → 静帧；静帧解码失败 → 保留深色渐变",
+        "航拍选中但未下载 → 静帧（不串到默认航拍）；多屏共享一个 AVPlayer，解码量不随屏数增长"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "系统边界",
+      "items": [
+        "「减弱动态效果」开启即暂停并定格首帧，实时生效；熄屏暂停、亮屏续播",
+        "只读本机已有文件，不下载、不打包、不分发"
+      ]
+    }
+  ]
+}

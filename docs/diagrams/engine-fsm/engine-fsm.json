@@ -1,0 +1,129 @@
+{
+  "schema_version": 2,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "调度引擎状态机（5 态 FSM）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/engine-fsm/engine-fsm.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "b3e67885f8c283d07c6f9478083f7572c90eb6cd",
+      "link_mode": "local-only"
+    }
+  },
+  "lanes": [
+    { "id": "main", "label": "节律主循环" },
+    { "id": "meeting", "label": "会议门控" },
+    { "id": "afk", "label": "AFK / 睡眠" }
+  ],
+  "states": [
+    {
+      "id": "off_duty",
+      "type": "start",
+      "label": "OFF_DUTY",
+      "sublabel": "非工作时段",
+      "tag": "下班",
+      "lane": "main",
+      "col": 0,
+      "sources": [
+        { "path": "Sources/GiveMeABreakEngine/Models.swift", "line": 351, "end_line": 356, "label": "EnginePhase 枚举" },
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 14, "end_line": 20, "label": "evaluate 谓词 1" }
+      ]
+    },
+    {
+      "id": "working",
+      "type": "active",
+      "label": "WORKING",
+      "sublabel": "workAccum 累加",
+      "tag": "工作",
+      "lane": "main",
+      "col": 2,
+      "sources": [
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 26, "label": "advance 累加器" },
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 14, "end_line": 20, "label": "evaluate 谓词 5" }
+      ]
+    },
+    {
+      "id": "resting",
+      "type": "waiting",
+      "label": "RESTING",
+      "sublabel": "强制休息 · 遮罩全部显示器",
+      "tag": "休息",
+      "lane": "main",
+      "col": 4,
+      "sources": [
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 69, "label": "transition 副作用" },
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 14, "end_line": 20, "label": "evaluate 谓词 4" }
+      ]
+    },
+    {
+      "id": "in_meeting",
+      "type": "waiting",
+      "label": "IN_MEETING",
+      "sublabel": "会议计为工作 · 休息后延",
+      "tag": "会议",
+      "lane": "meeting",
+      "col": 3,
+      "sources": [
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 14, "end_line": 20, "label": "evaluate 谓词 3" },
+        { "path": "Sources/GiveMeABreakEngine/Models.swift", "line": 351, "end_line": 356, "label": "EnginePhase 枚举" }
+      ]
+    },
+    {
+      "id": "idle",
+      "type": "neutral",
+      "label": "IDLE",
+      "sublabel": "累加器冻结",
+      "tag": "空闲",
+      "lane": "afk",
+      "col": 2,
+      "sources": [
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 14, "end_line": 20, "label": "evaluate 谓词 2" },
+        { "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 26, "label": "advance 冻结" }
+      ]
+    }
+  ],
+  "transitions": [
+    { "id": "enter_window", "from": "off_duty", "to": "working", "label": "进入工作窗口" },
+    { "id": "leave_window", "from": "working", "to": "off_duty", "label": "离开工作窗口" },
+    { "id": "threshold_rest", "from": "working", "to": "resting", "label": "阈值达成 · 无会议" },
+    { "id": "rest_end", "from": "resting", "to": "working", "label": "自然结束 / Esc 确认" },
+    { "id": "rest_window_end", "from": "resting", "to": "off_duty", "variant": "dashed" },
+    { "id": "meeting_start", "from": "working", "to": "in_meeting", "label": "会议开始" },
+    { "id": "meeting_end_work", "from": "in_meeting", "to": "working", "label": "会议结束 · 未达阈" },
+    { "id": "meeting_end_rest", "from": "in_meeting", "to": "resting", "label": "会议结束 · 已达阈" },
+    { "id": "meeting_leave", "from": "in_meeting", "to": "off_duty" },
+    { "id": "rest_interrupted", "from": "resting", "to": "in_meeting", "label": "会议打断", "variant": "dashed" },
+    { "id": "go_idle", "from": "working", "to": "idle", "label": "AFK / 睡眠" },
+    { "id": "input_resume", "from": "idle", "to": "working", "label": "输入恢复 · 对账 lastTickAt" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "谓词优先级（evaluate 纯函数）",
+      "items": [
+        "短路序：offDuty 压过一切 → idle → 会议 → 阈值 → working",
+        "触发休息不变量：workAccum ≥ workInterval 且无活跃会议",
+        "零时间依赖：全部时间经注入 Clock 进入快照，可虚拟时钟单测"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "中断与恢复",
+      "items": [
+        "会议计为工作时间，累加器在 IN_MEETING 续推",
+        "AFK / 睡眠期间累加器冻结，唤醒对账 lastTickAt 不回灌",
+        "advance 每 tick 限幅 ≤ 60s 防异常 tick"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "abort-and-reset（虚线边）",
+      "items": [
+        "休息被会议或窗口结束打断即整体复位本轮休息",
+        "复位不残留：不保留部分休息时长，下轮从零起算"
+      ]
+    }
+  ]
+}

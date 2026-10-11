@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Windows 全屏遮罩软强制流程",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/windows-overlay-flow/windows-overlay-flow.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "b3e67885f8c283d07c6f9478083f7572c90eb6cd",
+      "link_mode": "local-only"
+    }
+  },
+  "lanes": [
+    { "id": "engine", "label": "引擎与编排" },
+    { "id": "overlay", "label": "遮罩呈现（WPF）" },
+    { "id": "hook", "label": "低级键盘钩子" }
+  ],
+  "mainPath": ["engine_show", "show", "windows", "countdown", "confirm", "engine_exit", "dismiss"],
+  "nodes": [
+    { "id": "engine_show", "lane": "engine", "col": 0, "type": "backend", "label": "引擎副作用", "sublabel": "eff.showOverlay", "tag": "幂等", "width": 150,
+      "sources": [{ "path": "windows/GiveMeABreakEngine/Engine.cs" }] },
+    { "id": "engine_exit", "lane": "engine", "col": 4, "type": "backend", "label": "RequestEarlyRestExit", "sublabel": "清 forcedRest · 回调 Dismiss", "width": 170,
+      "sources": [{ "path": "windows/GiveMeABreakShell/AppRoot.cs", "line": 55 }] },
+    { "id": "show", "lane": "overlay", "col": 0, "type": "backend", "label": "Controller.Show", "sublabel": "幂等起显", "width": 150,
+      "sources": [{ "path": "windows/GiveMeABreakShell/Adapters/FullscreenOverlayController.cs", "line": 27, "end_line": 48 }] },
+    { "id": "windows", "lane": "overlay", "col": 1, "type": "frontend", "label": "每屏 OverlayWindow ×N", "sublabel": "WS_EX_TOPMOST · 无边框全屏", "width": 170,
+      "sources": [{ "path": "windows/GiveMeABreakShell/Overlay/OverlayWindow.xaml.cs", "line": 66, "end_line": 82 }] },
+    { "id": "countdown", "lane": "overlay", "col": 2, "type": "frontend", "label": "倒计时面板", "sublabel": "1Hz 刷新", "width": 150,
+      "sources": [{ "path": "windows/GiveMeABreakShell/Overlay/OverlayWindow.xaml.cs", "line": 22, "end_line": 33 }] },
+    { "id": "confirm", "lane": "overlay", "col": 3, "type": "frontend", "label": "确认面板", "sublabel": "继续休息 / 直接退出", "width": 160,
+      "sources": [{ "path": "windows/GiveMeABreakShell/Overlay/OverlayWindow.xaml", "line": 30, "end_line": 42 }] },
+    { "id": "dismiss", "lane": "overlay", "col": 4, "type": "frontend", "label": "Dismiss", "sublabel": "卸载钩子 + 关闭全部窗口", "width": 160,
+      "sources": [{ "path": "windows/GiveMeABreakShell/Adapters/FullscreenOverlayController.cs", "line": 50, "end_line": 66 }] },
+    { "id": "hook", "lane": "hook", "col": 2, "type": "security", "label": "WH_KEYBOARD_LL", "sublabel": "仅拦 Alt+Tab · Win 键", "tag": "Esc / Ctrl+Esc / Ctrl+Alt+Del 放行", "width": 180,
+      "sources": [{ "path": "windows/GiveMeABreakShell/Overlay/KeyboardLowLevelHook.cs", "line": 59, "end_line": 67 }] }
+  ],
+  "edges": [
+    { "id": "fire_show", "from": "engine_show", "to": "show", "label": "eff.showOverlay" },
+    { "id": "enum_monitors", "from": "show", "to": "windows", "label": "EnumDisplayMonitors" },
+    { "id": "start_countdown", "from": "windows", "to": "countdown", "label": "每屏一窗" },
+    { "id": "esc_once", "from": "countdown", "to": "confirm", "label": "单 Esc" },
+    { "id": "stay", "from": "confirm", "to": "countdown", "label": "继续休息" },
+    { "id": "esc_double", "from": "countdown", "to": "engine_exit", "label": "0.4s 双击 Esc 直退", "variant": "dashed" },
+    { "id": "exit_button", "from": "confirm", "to": "engine_exit", "label": "直接退出" },
+    { "id": "engine_dismiss", "from": "engine_exit", "to": "dismiss", "label": "transition 回调" },
+    { "id": "keys_pass", "from": "hook", "to": "countdown", "label": "放行按键至 WPF", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "rose", "title": "软强制与逃生口", "items": [
+      "WH_KEYBOARD_LL 只拦 Alt+Tab 与 Win 键——Ctrl+Esc 放行（LLKHF 无 Ctrl 标志，无法与纯 Esc 区分）",
+      "Ctrl+Alt+Del 为 SAS 内核序列，不可拦截，是刻意保留的逃生口",
+      "taskbar 偶现为 Windows 固有约束（无 CGShieldingWindowLevel 等价物）"] },
+    { "dot": "cyan", "title": "Esc 状态机", "items": [
+      "单 Esc 在倒计时 / 确认面板间切换；确认面板内 Esc 返回倒计时",
+      "0.4s 内双击 Esc 直接触发退出，不经确认面板",
+      "退出恒经 engine.RequestEarlyRestExit——控制器从不自行 Dismiss（对齐 macOS 版）"] },
+    { "dot": "amber", "title": "健壮性", "items": [
+      "headless / 枚举失败回退单 1920×1080 虚拟屏；钩子失败降级记日志",
+      "DisplaySettingsChanged 屏幕热插拔自动重建窗口",
+      "CI 烟测断言 OVERLAY_SHOW_(OK|FAIL)；真实覆盖 / 拦截归真机验收"] }
+  ]
+}

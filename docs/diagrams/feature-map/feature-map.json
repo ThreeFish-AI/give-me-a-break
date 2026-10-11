@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "核心能力一览（功能地图）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/feature-map/feature-map.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "4288240ad9c8ed80f7f5e3ba10302be140323816",
+      "link_mode": "local-only"
+    }
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 6,
+    "cellW": 150,
+    "cellH": 70,
+    "gapX": 46,
+    "gapY": 62
+  },
+  "components": [
+    {
+      "id": "rhythm",
+      "type": "backend",
+      "label": "强制作息节律",
+      "sublabel": "工作窗口内 50min → 休息 10min",
+      "tag": "纯函数谓词引擎",
+      "row": 0,
+      "col": 2,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/Engine.swift",
+          "line": 14,
+          "end_line": 20
+        }
+      ]
+    },
+    {
+      "id": "sensing",
+      "type": "external",
+      "label": "AFK · 睡眠感知",
+      "sublabel": "空闲冻结计时 · 唤醒不回灌",
+      "row": 0,
+      "col": 1,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/SystemSensors.swift"
+        }
+      ]
+    },
+    {
+      "id": "calendar_gate",
+      "type": "cloud",
+      "label": "Google 日历门控",
+      "sublabel": "会议计为工作 · 推迟休息",
+      "row": 0,
+      "col": 4,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/LiveCalendarProvider.swift"
+        }
+      ]
+    },
+    {
+      "id": "screen_mask",
+      "type": "frontend",
+      "label": "手动屏幕遮罩",
+      "sublabel": "⌃⌥⌘K · ⌃⌘Q 劫持 · 菜单",
+      "row": 1,
+      "col": 0,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/ScreenMaskController.swift"
+        }
+      ]
+    },
+    {
+      "id": "rest_mask",
+      "type": "frontend",
+      "label": "休息遮罩",
+      "sublabel": "全屏盖过一切 · Esc 确认",
+      "tag": "0.4s 双击直退",
+      "row": 1,
+      "col": 1,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/LiveOverlayController.swift",
+          "line": 91
+        }
+      ]
+    },
+    {
+      "id": "keyboard_guard",
+      "type": "security",
+      "label": "键盘白名单守护",
+      "sublabel": "HID 层吞系统组合键",
+      "row": 1,
+      "col": 2,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskInputGuard.swift",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "id": "watchdog",
+      "type": "security",
+      "label": "30 分钟看门狗",
+      "sublabel": "只读 WindowServer 真相",
+      "row": 1,
+      "col": 3,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskInputGuard.swift",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "id": "wallpaper",
+      "type": "frontend",
+      "label": "壁纸背景",
+      "sublabel": "航拍视频 / 桌面静帧",
+      "tag": "两遮罩共用 · 功耗≈空闲",
+      "row": 1,
+      "col": 4,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/Overlay/MaskBackground/MaskBackground.swift"
+        }
+      ]
+    },
+    {
+      "id": "custom_audio",
+      "type": "external",
+      "label": "自定义休息音频",
+      "sublabel": "本地文件循环 · 缺失回退",
+      "row": 2,
+      "col": 1,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/LiveMusicController.swift"
+        }
+      ]
+    },
+    {
+      "id": "pink_noise",
+      "type": "external",
+      "label": "内置粉噪音",
+      "sublabel": "预合成 8s 无缝循环",
+      "row": 2,
+      "col": 2,
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/AmbientSoundPlayer.swift"
+        }
+      ]
+    },
+    {
+      "id": "qq_music",
+      "type": "cloud",
+      "label": "QQ 音乐叠加",
+      "sublabel": "媒体键联动 Now Playing",
+      "row": 2,
+      "col": 3,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/LiveMusicController.swift",
+          "line": 5,
+          "end_line": 53
+        }
+      ]
+    },
+    {
+      "id": "work_log",
+      "type": "database",
+      "label": "工作日志",
+      "sublabel": "休息前 30 秒认知闭合",
+      "row": 3,
+      "col": 0,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/WorkLogStore.swift"
+        }
+      ]
+    },
+    {
+      "id": "reports",
+      "type": "database",
+      "label": "周期与综合报告",
+      "sublabel": "今日/周/月 + 周/月/季/年",
+      "row": 3,
+      "col": 2,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/CombinedReport.swift"
+        }
+      ]
+    },
+    {
+      "id": "exercise",
+      "type": "database",
+      "label": "运动记录",
+      "sublabel": "休息后录入 · 类型自动学习",
+      "row": 3,
+      "col": 4,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakEngine/ExerciseModels.swift"
+        }
+      ]
+    },
+    {
+      "id": "idle_sleep",
+      "type": "backend",
+      "label": "防止空闲睡眠",
+      "sublabel": "IOKit 断言 · 免权限",
+      "row": 4,
+      "col": 1,
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/IdleSleepGuard.swift"
+        }
+      ]
+    },
+    {
+      "id": "coding_proxy",
+      "type": "backend",
+      "label": "Coding Proxy 托管",
+      "sublabel": "随应用启停 · 日志控制台",
+      "row": 4,
+      "col": 3,
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GiveMeABreakIntegrations/CodingProxy/CodingProxyProcessController.swift"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "节律调度",
+      "wraps": [
+        "sensing",
+        "rhythm",
+        "calendar_gate"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "遮罩与守护（软强制）",
+      "wraps": [
+        "screen_mask",
+        "rest_mask",
+        "keyboard_guard",
+        "watchdog",
+        "wallpaper"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "休息体验 · 三轨音效",
+      "wraps": [
+        "custom_audio",
+        "pink_noise",
+        "qq_music"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "记录与报告",
+      "wraps": [
+        "work_log",
+        "reports",
+        "exercise"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "正交工具域（不参与调度）",
+      "wraps": [
+        "idle_sleep",
+        "coding_proxy"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "sense_freeze",
+      "from": "sensing",
+      "to": "rhythm",
+      "label": "冻结 / 续推"
+    },
+    {
+      "id": "gate_defer",
+      "from": "calendar_gate",
+      "to": "rhythm",
+      "label": "推迟休息"
+    },
+    {
+      "id": "rhythm_mask",
+      "from": "rhythm",
+      "to": "rest_mask",
+      "label": "到点强制休息"
+    },
+    {
+      "id": "mask_freeze",
+      "from": "screen_mask",
+      "to": "rhythm",
+      "label": "冻结计时",
+      "variant": "dashed"
+    },
+    {
+      "id": "mask_worklog",
+      "from": "rest_mask",
+      "to": "work_log",
+      "label": "休息前触发"
+    },
+    {
+      "id": "mask_exercise",
+      "from": "rest_mask",
+      "to": "exercise",
+      "label": "休息后触发"
+    },
+    {
+      "id": "log_reports",
+      "from": "work_log",
+      "to": "reports",
+      "label": "聚合"
+    },
+    {
+      "id": "ex_reports",
+      "from": "exercise",
+      "to": "reports",
+      "label": "聚合"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "软强制哲学",
+      "items": [
+        "摩擦而非硬锁：Esc 双击、看门狗、kill 始终可终止",
+        "键盘守护白名单仅放行裸 Esc / Return，媒体键不受影响"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "记录的循证",
+      "items": [
+        "工作日志 = 转换边界的认知闭合（Leroy 注意力残留 + 插值日记）",
+        "字段可选、回车即提交、到点自动放行，永不阻塞休息"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "正交域",
+      "items": [
+        "电源断言与子进程托管由 AppRoot 装配，引擎不消费其配置",
+        "子进程崩溃 / 退出不影响节律；意外退出不自动重启（防风暴）"
+      ]
+    }
+  ]
+}

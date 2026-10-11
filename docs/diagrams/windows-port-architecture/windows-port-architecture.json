@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Windows 移植架构（双原生 + 共享纯引擎语义）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/windows-port-architecture/windows-port-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:ThreeFish-AI/give-me-a-break.git",
+      "revision": "b3e67885f8c283d07c6f9478083f7572c90eb6cd",
+      "link_mode": "local-only"
+    }
+  },
+  "layout": { "mode": "grid", "cols": 4, "origin": [40, 90], "cellW": 170, "cellH": 72, "gapX": 48, "gapY": 66 },
+  "components": [
+    { "id": "schema", "type": "database", "label": "config.schema.json", "sublabel": "schemaVersion const 10 · 文档级 SSOT", "row": 0, "col": 0, "size": [180, 68],
+      "sources": [{ "path": "shared/config.schema.json", "line": 19 }] },
+    { "id": "fixtures", "type": "database", "label": "test-fixtures ×4", "sublabel": "evaluate / advance / side-effects / merge-busy", "row": 0, "col": 1, "size": [180, 68],
+      "sources": [{ "path": "shared/test-fixtures/evaluate.json" }] },
+    { "id": "cs_tests", "type": "backend", "label": "xUnit 测试工程 ×3", "sublabel": "CSharpTests / Win32Tests / GraphTests", "row": 0, "col": 3, "size": [180, 68],
+      "sources": [{ "path": "windows/GiveMeABreakEngine.CSharpTests/_Fixtures.cs", "line": 14 }] },
+    { "id": "swift_engine", "type": "backend", "label": "Swift 纯核心", "sublabel": "Sources/GiveMeABreakEngine · Foundation", "tag": "原始用例 · 期望值内联", "row": 1, "col": 0, "size": [180, 68],
+      "sources": [{ "path": "Sources/GiveMeABreakEngine/Engine.swift", "line": 14 }] },
+    { "id": "cs_engine", "type": "backend", "label": "GiveMeABreakEngine.cs", "sublabel": "net8.0 · 零依赖 · C# 重写 FSM", "tag": "schema v2 子集", "row": 1, "col": 1, "size": [180, 68],
+      "sources": [{ "path": "windows/GiveMeABreakEngine/Engine.cs" }] },
+    { "id": "cs_graph", "type": "cloud", "label": "Engine.Graph", "sublabel": "net8.0 · 解析 / 缓存 / Provider", "row": 1, "col": 2, "size": [180, 68],
+      "sources": [{ "path": "windows/GiveMeABreakEngine.Graph/GraphCalendarProvider.cs" }] },
+    { "id": "swift_platform", "type": "backend", "label": "Swift 平台层", "sublabel": "Integrations 38 文件 + @main 壳", "row": 2, "col": 0, "size": [180, 68],
+      "sources": [{ "path": "Sources/GiveMeABreakIntegrations/AppRoot.swift", "line": 59 }] },
+    { "id": "cs_win32", "type": "backend", "label": "Engine.Win32", "sublabel": "net8.0 · P/Invoke + Kellet 粉噪音", "row": 2, "col": 1, "size": [180, 68],
+      "sources": [{ "path": "windows/GiveMeABreakEngine.Win32/PinkNoiseGenerator.cs" }] },
+    { "id": "cs_shell", "type": "frontend", "label": "GiveMeABreakShell", "sublabel": "net8.0-windows · WPF + NAudio / H.NotifyIcon / MSAL", "row": 2, "col": 2, "size": [200, 68],
+      "sources": [{ "path": "windows/GiveMeABreakShell/AppRoot.cs" }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "shared/ · 跨平台单一事实源", "wraps": ["schema", "fixtures"] },
+    { "kind": "region", "label": "macOS 原生（Swift）", "wraps": ["swift_engine", "swift_platform"] },
+    { "kind": "region", "label": "Windows 原生（C#/.NET 8）· 7 csproj + 2 sln", "wraps": ["cs_engine", "cs_graph", "cs_win32", "cs_shell", "cs_tests"] }
+  ],
+  "connections": [
+    { "id": "schema_swift", "from": "schema", "to": "swift_engine", "label": "Codable · v10", "variant": "dashed" },
+    { "id": "schema_cs", "from": "schema", "to": "cs_engine", "label": "System.Text.Json · v2 子集", "variant": "dashed" },
+    { "id": "fixtures_cs", "from": "fixtures", "to": "cs_tests", "label": "黄金 fixture（仅 C# 消费）" },
+    { "id": "tests_engine", "from": "cs_tests", "to": "cs_engine", "label": "xUnit", "variant": "dashed" },
+    { "id": "swift_layering", "from": "swift_engine", "to": "swift_platform" },
+    { "id": "engine_graph", "from": "cs_engine", "to": "cs_graph" },
+    { "id": "engine_shell", "from": "cs_engine", "to": "cs_shell" },
+    { "id": "graph_shell", "from": "cs_graph", "to": "cs_shell" },
+    { "id": "win32_shell", "from": "cs_win32", "to": "cs_shell" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "共享层真相", "items": [
+      "config.schema.json 为文档级 SSOT：Swift 已至 v10，C# 停在 v2 子集（+GraphClientId）",
+      "macOS 写出的 v10 配置在 Windows 读取会被 ConfigStore.Migrate 回退为内存默认值（文件不改写；补齐镜像列为后续工作）",
+      "test-fixtures 仅 C# 端消费（锁纯函数决策）；Swift 端为原始用例，C# 时序测试逐条镜像之"] },
+    { "dot": "emerald", "title": "双原生策略", "items": [
+      "可共享的只有纯引擎语义；UI 壳与平台集成层注定双写（Swift 原生 / C# 原生）",
+      "WPF 永不跨平台；「顺便编译 Windows 版」在框架层面不可行（循证见 windows-port-design.md §2）",
+      "Engine.sln = Engine + Win32 + Graph + 3 测试工程；Shell.sln = Engine + Win32 + Graph + Shell（不含测试）"] },
+    { "dot": "amber", "title": "CI 验证分层", "items": [
+      "L1 双平台 dotnet test 证明纯引擎真跨平台",
+      "L2 WPF 壳编译 + publish；L3 headless 烟测断言启动/遮罩/降级标记",
+      "托盘可见、WASAPI 出声、真实 Graph、遮罩覆盖归 Windows 真机验收"] }
+  ]
+}
