@@ -12,7 +12,7 @@
 
 ## 设计哲学
 
-熵减：用「上下文驱动、最小干预、循证工程」原则，对抗每天作息的无序。完整设计与循证调研见 [设计文档](./docs/give-me-a-break-design.md)，协作规约见 [AGENTS.md](./AGENTS.md)。
+熵减：用「上下文驱动、最小干预、循证工程」原则，对抗每天作息的无序。完整设计与循证调研见 [设计文档](./docs/give-me-a-break-design.md)，协作规约沉淀于 [ThreeFish-AI/agents.md](https://github.com/ThreeFish-AI/agents.md)（本仓不设项目级副本）。
 
 ## 核心能力
 

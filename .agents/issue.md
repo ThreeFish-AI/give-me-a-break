@@ -11,7 +11,7 @@
 - **表因**：`import XCTest` 报 `no such module 'XCTest'`；`import Testing`（Swift Testing）报宏插件 `TestingMacros` not found。
 - **根因**：Command Line Tools（非完整 Xcode）不含 XCTest 框架与 Swift Testing 宏插件，二者均随 Xcode 附带。
 - **处理方式**：自建极简测试运行器——`tests/` 下可执行目标 `GiveMeABreakTests`，提供 `test(name){}` / `expect(...)` / `expectEqual(...)` + 计数 + 退出码，`make test` → `swift run GiveMeABreakTests` 驱动。语义对齐 XCTest，30 用例 <1s（当时；现行计数见[设计文档 §10](../docs/give-me-a-break-design.md#10-测试矩阵)）。
-- **后续防范**：若未来安装完整 Xcode，可平滑迁移回 XCTest（断言 API 一一对应）；AGENTS.md 已注明此适配。
+- **后续防范**：若未来安装完整 Xcode，可平滑迁移回 XCTest（断言 API 一一对应）；该适配当时已在 AGENTS.md 注明（该规约文件现已上收至用户级全局规约）。
 - **同类影响**：任何纯 CLT 环境的 Swift 项目均适用此方案，勿再尝试 `swift test` + XCTest。
 
 ## #2 CGEvent.subtype / CGEventSubtype 在 CLT SDK 不可写

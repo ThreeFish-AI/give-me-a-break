@@ -1,6 +1,6 @@
 # Give me a break 设计文档
 
-> macOS 强制作息应用的工程设计与循证依据。协作规约见 [AGENTS.md](../AGENTS.md)，快速上手见 [README](../README.md)。
+> macOS 强制作息应用的工程设计与循证依据。快速上手见 [README](../README.md)。
 
 ## 1. 设计目标
 

@@ -1,7 +1,7 @@
 # Give me a break Windows 移植技术方案
 
 > macOS 强制作息应用移植至 Windows 10/11 的工程设计。本方案原为可行性论证，规划的分阶段工作（纯核心重写、最小壳、全屏遮罩、Graph 日历、CI 多平台发布）已全部落地，现随主干持续演进——GitHub Release 的双平台安装包即出自本链路。
-> 关联：协作规约见 [AGENTS.md](../AGENTS.md)，应用主文档见 [README](../README.md)，macOS 原始设计见 [设计文档](./give-me-a-break-design.md)，发布链路见 [`.github/workflows/release.yml`](../.github/workflows/release.yml)。
+> 关联：应用主文档见 [README](../README.md)，macOS 原始设计见 [设计文档](./give-me-a-break-design.md)，发布链路见 [`.github/workflows/release.yml`](../.github/workflows/release.yml)。
 
 ## 1. 背景与核心结论
 

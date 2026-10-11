@@ -167,7 +167,7 @@ jobs:
           fi
           echo "RELEASE_ZIP=$RUNNER_TEMP/give-me-a-break-${RELEASE_VERSION}-macos.zip" >> "$GITHUB_ENV"
 
-      # ⑥ Verification Before Done —— 发布前自证三件套（AGENTS.md「交付前验证定式」）。
+      # ⑥ Verification Before Done —— 发布前自证三件套（用户级规约「交付前验证定式」）。
       - name: Verify codesign integrity（always，ad-hoc 也校验结构完整性）
         run: codesign --verify --deep --strict --verbose=2 GiveMeABreak.app
 
